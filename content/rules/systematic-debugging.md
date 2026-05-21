@@ -37,6 +37,7 @@ Required outputs of this phase:
 
 Tools to use:
 
+- **`vcloggetlasterror`** (`1c-data-mcp`, when the server is exposed in the session) — pull the most recent error from `ЖурналРегистрации` of the live IB without leaving the agent: timestamp, event, affected metadata object, data presentation, full description. Run it immediately after the user's repro attempt to confirm an error landed in the log and on what object. Limitation: only the single most recent record with `УровеньЖурналаРегистрации.Ошибка` in the last 24 h. Wider filters / older records → fall back to the Configurator's `ОтчетПоЖурналуРегистрации` or to a custom `ВыгрузитьЖурналРегистрации` wrapped in `vcexecutecode`.
 - **Configurator → Debug** (`Отладка → Подключиться`) to attach to the running session, capture the call stack, inspect locals.
 - **`ЖурналРегистрации`** filter by date range / user / event / metadata to find the failing call. For high-volume errors prefer `ВыгрузитьЖурналРегистрации` to a `ТаблицаЗначений` for offline analysis.
 - **Technological log** (`logcfg.xml`) for platform-level events (DBMS errors, deadlocks, lock conflicts, timeouts) when the application log is not enough.
@@ -76,6 +77,8 @@ Allowed experimental tools (read-only or scoped to a copy of the infobase):
 - **`ЗаписьЖурналаРегистрации("Debug.<Module>", УровеньЖурналаРегистрации.Информация, , , <Структура>)`** — temporary log lines, removed before the fix is committed.
 - **`ПоказатьЗначение(Неопределено, <Объект>)`** for client-side diagnostics; **`СообщитьПользователю` / `Сообщение.Сообщить()`** for server-side.
 - **read-only queries** in the configurator's `Console of queries` (`Консоль запросов`) against the failing data — never mutate.
+- **`validatequery`** → **`vcexecutequery`** (`1c-data-mcp`, when the server is exposed) — parse-check, then execute a falsifying query against the live IB without leaving the agent. Always read-only. Cheap evidence for a data-state hypothesis ("does this register really have a non-zero balance for this dimension set", "does this attribute really equal X for this reference").
+- **`vcexecutecode`** (`1c-data-mcp`, when exposed) — run a small **read-only** BSL fragment to verify a platform-version-specific or metadata-state hypothesis (type checks, `ЗначениеЗаполнено`, `Метаданные.НайтиПоПолномуИмени`, `ПолучитьФункциональнуюОпцию`). Default to read-only; **never** wrap `Записать()` / `Удалить()` / `НачалоТранзакции` / DML in `vcexecutecode` without explicit user consent and a rollback plan — and only on a copy IB. See `content/skills/mcp-1c-tools/docs/1c-data-mcp.md → Safety` for full rules.
 - **`КопироватьИнформационнуюБазу`** or a SQL snapshot **before** any destructive experiment. The rule is: experiments either run on a copy or do not run at all.
 
 Forbidden during experiments:

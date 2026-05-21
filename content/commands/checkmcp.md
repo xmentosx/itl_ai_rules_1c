@@ -19,8 +19,26 @@ The source of truth for images, ports, and environment variables is [docs.onerpa
 | `1c-code-metadata-mcp` | 8000 | `comol/1c_code_metadata_mcp:latest` | Metadata/code/forms/XSD | Yes — configuration dump |
 | `1c-graph-metadata-mcp` | 8006 | `comol/1c_graph_metadata_mcp:latest` | Graph search (Neo4j) | Yes — dump + Neo4j |
 | `1c-code-check-mcp` | 8007 | `comol/1c_code_checker_mcp:latest` | 1C:Assistant, ITS | No (Assistant token) |
+| `1c-data-mcp` | 80 / project | — (HTTP service on the infobase, **not** docker) | 1C data management and analysis (HTTP service published on the infobase itself) | Yes — `INFOBASE_PUBLISH_URL` in `.dev.env` + `mcp` HTTP service published on the infobase **with anonymous access** |
 
 > Exact image names may differ by version. If `docker pull` fails with `manifest unknown`, check the current list at [docs.onerpa.ru/mcp-servery-1c/servery.md](https://docs.onerpa.ru/mcp-servery-1c/servery.md).
+
+> `1c-data-mcp` is **not** a docker container — it is an HTTP service (`hs/mcp`) published on the project's infobase. The 1c-rules installer derives its URL from `INFOBASE_PUBLISH_URL` in `.dev.env`: `<INFOBASE_PUBLISH_URL_BASE>/hs/mcp` (trailing `/` and trailing locale segment like `/ru/`, `/en/` are stripped). Docker / `docker ps` / `docker run` steps in this file do not apply to it — instead, verify that the HTTP service `mcp` is published on the infobase and that the URL responds. If `INFOBASE_PUBLISH_URL` is empty when the installer runs, the MCP config will contain the literal placeholder `{INFOBASE_PUBLISH_URL}/hs/mcp` — fill in `.dev.env` and re-run `install.ps1 update` (or edit the MCP config manually).
+>
+> **Authentication.** The `1c-data-mcp` endpoint MUST be reachable WITHOUT a password — the MCP client does not send an `Authorization` header to `/hs/mcp`. If the publication requires Basic auth, the HTTP probe below returns **401** or **403** and the server's tools never appear in the agent's session. Fix in `default.vrd` of the web publication:
+>
+> ```xml
+> <!-- default.vrd — fragment that enables anonymous access for HTTP services -->
+> <point xmlns="http://v8.1c.ru/8.2/virtual-resource-system"
+>        xmlns:xs="http://www.w3.org/2001/XMLSchema"
+>        base="/zup_test_forconf"
+>        ib="File=&quot;C:\bases\zup_test_forconf&quot;;">
+>   <usr name="MCPUser" pwd=""/>           <!-- technical IB user without password -->
+>   <ws publishByDefault="true"/>          <!-- publish HTTP / Web services -->
+> </point>
+> ```
+>
+> `MCPUser` must exist in the infobase, have an empty password, and own a role that grants `Use` for the `mcp` HTTP service object plus `Read` for the metadata objects it touches. After editing `default.vrd`, restart the web server (`iisreset` for IIS; `apachectl restart` / `systemctl restart httpd|apache2` for Apache). The 1c-rules installer probes this URL automatically right after rendering the MCP config and surfaces a warning when it sees 401 / 403.
 
 ## Algorithm
 
@@ -66,6 +84,45 @@ foreach ($s in $servers) {
 ```
 
 Any HTTP response (even `405`/`400`/`406`) means a container is listening on the port — status **HTTP_OK**. Full timeout / `Connection refused` means **HTTP_DOWN**.
+
+For `1c-data-mcp` (HTTP service on the infobase, no docker container), check the URL rendered by the installer into the active client's MCP config:
+
+```powershell
+$infobasePublishUrl = (Select-String -Path '.dev.env' -Pattern '^INFOBASE_PUBLISH_URL=(.+)$' |
+    Select-Object -First 1).Matches.Groups[1].Value.Trim().TrimEnd('/')
+# Strip trailing locale segment (/ru, /en, /uk, …) — mirrors the installer.
+if ($infobasePublishUrl -match '/([a-z]{2,3})$' -and
+    @('ru','en','uk','kk','be','de','fr','es','it','pl','tr','vi','zh','ja',
+      'ka','lt','lv','hu','bg','ro','sk','cs','sl','hr','sr','et','fi','sv',
+      'no','da','nl','pt','el','az','hy','mn','mk','th','ko','ar','he') -contains $Matches[1]) {
+    $infobasePublishUrl = $infobasePublishUrl.Substring(0, $infobasePublishUrl.LastIndexOf('/'))
+}
+if (-not $infobasePublishUrl) {
+    Write-Host '1c-data-mcp                — INFOBASE_PUBLISH_URL пуст в .dev.env; пропустите проверку'
+} else {
+    $url = "$infobasePublishUrl/hs/mcp"
+    try {
+        $r = Invoke-WebRequest -Uri $url -Method Get -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+        $code = [int]$r.StatusCode
+    } catch {
+        $code = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 'down' }
+    }
+    Write-Host ("{0,-26} {1,-5} {2}" -f '1c-data-mcp', '-', $code)
+    switch -Regex ([string]$code) {
+        '^401$' { Write-Warning "1c-data-mcp ответил HTTP 401 — публикация требует Basic-аутентификацию. MCP-клиент НЕ передаёт пароль; в default.vrd добавьте <usr name=`"...`" pwd=`"`"/> (технический пользователь без пароля) и перезапустите веб-сервер." }
+        '^403$' { Write-Warning "1c-data-mcp ответил HTTP 403 — у пользователя по умолчанию нет прав на HTTP-сервис mcp. Добавьте роль с правом `Использование` на HTTP-сервис в назначения роли пользователя из default.vrd." }
+        '^(200|201|204|400|405|406)$' { } # endpoint reachable anonymously
+        '^404$' { Write-Warning "1c-data-mcp ответил HTTP 404 — HTTP-сервис `mcp` не опубликован на ИБ (либо не указано publishByDefault=`"true`" в default.vrd)." }
+    }
+}
+```
+
+For `1c-data-mcp`:
+
+- **`HTTP 401` / `HTTP 403`** = the publication requires authentication. The MCP client does not pass `Authorization`, so it cannot connect. Fix the publication (`default.vrd`) per the catalog note above and re-run `/checkmcp`. Docker steps below the snippet do **not** apply.
+- **`HTTP 404`** = the `mcp` HTTP service is not published on the infobase (Configurator → HTTP-сервисы → Опубликовать, or `publishByDefault="true"` in `default.vrd`).
+- **`HTTP_DOWN`** = the web publication itself is not running (IIS / Apache stopped, or the published path is wrong). Not a docker problem — start the web server / fix the published path.
+- **`HTTP 200` / `400` / `405` / `406`** = the endpoint is reachable anonymously; MCP transport-level handshake will continue from the agent on its own.
 
 ### Step 4. Check Docker state
 

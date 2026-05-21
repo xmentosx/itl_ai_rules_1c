@@ -656,6 +656,104 @@ function Read-McpServers {
     return $obj.servers
 }
 
+# Known UI locale codes that may appear as the trailing path segment of
+# INFOBASE_PUBLISH_URL (the web-publication URL is typically
+# `http://host/<infobase>/<locale>/`). The HTTP-service endpoint is served
+# under `<host>/<infobase>/hs/<service>` — without the locale subpath — so the
+# locale must be stripped before substituting into MCP server URL templates.
+$script:KnownInfobaseLocales = @(
+    'ru', 'en', 'uk', 'kk', 'be', 'de', 'fr', 'es', 'it', 'pl', 'tr',
+    'vi', 'zh', 'ja', 'ka', 'lt', 'lv', 'hu', 'bg', 'ro', 'sk', 'cs',
+    'sl', 'hr', 'sr', 'et', 'fi', 'sv', 'no', 'da', 'nl', 'pt', 'el',
+    'az', 'hy', 'mn', 'mk', 'th', 'ko', 'ar', 'he'
+)
+
+function Get-InfobasePublishUrlBase {
+    # Reads INFOBASE_PUBLISH_URL from `.dev.env` in the project root and
+    # normalizes it for use as the base URL of HTTP services published on the
+    # infobase:
+    #   1) trim whitespace, strip the trailing slash;
+    #   2) strip the trailing `/<locale>` segment when it matches a known
+    #      1C UI locale code from $script:KnownInfobaseLocales — HTTP services
+    #      live at `<base>/hs/<service>`, not under the locale subpath.
+    # Returns an empty string when `.dev.env` is missing, the key is absent,
+    # or the value is empty.
+    param([string]$Root)
+
+    $envPath = Join-Path $Root $script:DevEnvFileName
+    if (-not (Test-Path $envPath)) { return '' }
+
+    $keys = Read-DevEnvKeys -Path $envPath
+    if (-not $keys.Contains('INFOBASE_PUBLISH_URL')) { return '' }
+
+    $raw = [string]$keys['INFOBASE_PUBLISH_URL']
+    if ([string]::IsNullOrWhiteSpace($raw)) { return '' }
+
+    $url = $raw.Trim().TrimEnd('/')
+    if ($url -match '/([a-z]{2,3})$') {
+        if ($script:KnownInfobaseLocales -contains $Matches[1]) {
+            $url = $url.Substring(0, $url.LastIndexOf('/'))
+        }
+    }
+    return $url
+}
+
+function Resolve-McpServerPlaceholders {
+    # Substitutes {INFOBASE_PUBLISH_URL} in the `url` field of every server
+    # entry that contains it. Mutates the input collection. Returns the list
+    # of server ids whose placeholder could not be resolved because
+    # INFOBASE_PUBLISH_URL was empty / `.dev.env` was missing — the caller
+    # uses this to warn the user.
+    param(
+        [array]$Servers,
+        [string]$InfobaseBase
+    )
+    $unresolved = @()
+    foreach ($s in $Servers) {
+        if (-not $s.url) { continue }
+        if ($s.url -notmatch '\{INFOBASE_PUBLISH_URL\}') { continue }
+        if ($InfobaseBase) {
+            $s.url = $s.url.Replace('{INFOBASE_PUBLISH_URL}', $InfobaseBase)
+        }
+        else {
+            $unresolved += $s.id
+        }
+    }
+    return , $unresolved
+}
+
+function Test-McpHttpEndpoint {
+    # Probes an HTTP endpoint with a short timeout. Used to detect whether a
+    # 1C HTTP-service-based MCP server (`1c-data-mcp`) is reachable AND
+    # whether the publication allows anonymous access (no Basic auth) — the
+    # MCP client does not pass credentials, so HTTP 401 / 403 means the user
+    # must reconfigure the publication.
+    #
+    # Returns a hashtable:
+    #   Code      — HTTP status code (int) when the server responded with one,
+    #               or the string 'down' when the connection was refused /
+    #               timed out, or 'error' on any other client-side failure.
+    #   Reachable — $true if any HTTP response was received (even 4xx / 5xx).
+    param(
+        [string]$Url,
+        [int]$TimeoutSec = 3
+    )
+    try {
+        $r = Invoke-WebRequest -Uri $Url -Method Get -TimeoutSec $TimeoutSec -UseBasicParsing -ErrorAction Stop
+        return @{ Code = [int]$r.StatusCode; Reachable = $true }
+    }
+    catch {
+        if ($_.Exception -and $_.Exception.Response) {
+            try { return @{ Code = [int]$_.Exception.Response.StatusCode; Reachable = $true } } catch { }
+        }
+        # No HTTP response was received — the server is not listening, the
+        # name does not resolve, or the request timed out. From the
+        # installer's point of view all three are equivalent ("endpoint not
+        # reachable, not blocking install"), so report a single 'down' code.
+        return @{ Code = 'down'; Reachable = $false }
+    }
+}
+
 function ConvertTo-McpServersJsonDict {
     param([array]$Servers)
     $dict = [ordered]@{}
@@ -1793,6 +1891,63 @@ function Invoke-McpPhase {
         [System.Collections.IDictionary]$Manifest
     )
     $servers = Read-McpServers -Root $SourceRoot
+
+    # Substitute {INFOBASE_PUBLISH_URL} placeholders in server URLs from the
+    # project's .dev.env (Place-DevEnv runs earlier in the pipeline so the
+    # file is in place by now). Servers whose placeholder cannot be resolved
+    # keep the literal placeholder in the rendered config — the user sees a
+    # clear TODO marker and a warning telling them what to fill in.
+    $infobaseBase = Get-InfobasePublishUrlBase -Root $Root
+    $unresolved = Resolve-McpServerPlaceholders -Servers $servers -InfobaseBase $infobaseBase
+    if ($unresolved.Count -gt 0) {
+        Write-Warn ("  MCP config: следующие серверы используют плейсхолдер {INFOBASE_PUBLISH_URL}, но INFOBASE_PUBLISH_URL в .dev.env пуст: " + ($unresolved -join ', ') + '.')
+        Write-Warn '  Заполните INFOBASE_PUBLISH_URL в .dev.env (URL веб-публикации ИБ, напр. http://localhost/<infobase_name>/ru/) и запустите установщик повторно — MCP-конфиг будет перерендерен с подставленным URL.'
+    }
+
+    # Probe HTTP-service-based MCP servers (1c-data-mcp). The MCP HTTP client
+    # does not pass any Authorization header to /hs/<service>, so the 1C
+    # publication MUST allow anonymous access to the endpoint — otherwise the
+    # server returns HTTP 401 / 403 and the MCP tools simply do not appear in
+    # the agent's session. We probe right after substitution so the user is
+    # told at install time, not later when they wonder why `1c-data-mcp` is
+    # missing from the tool list.
+    foreach ($s in $servers) {
+        if (-not $s.url) { continue }
+        if ($s.url -match '\{INFOBASE_PUBLISH_URL\}') { continue }  # already warned above
+        if ($s.url -notmatch '/hs/') { continue }                   # only HTTP-service URLs
+        $probe = Test-McpHttpEndpoint -Url $s.url -TimeoutSec 3
+        switch -Regex ([string]$probe.Code) {
+            '^401$' {
+                Write-Warn ("  MCP config: " + $s.id + " — endpoint " + $s.url + " вернул HTTP 401 (требуется Basic-аутентификация).")
+                Write-Warn '  MCP-клиент НЕ передаёт логин/пароль на /hs/<service> — публикация ИБ должна разрешать анонимный доступ к этому HTTP-сервису:'
+                Write-Warn '    1. В default.vrd публикации укажите технического пользователя без пароля для HTTP-сервиса:'
+                Write-Warn '         <ws publishByDefault="true"/>'
+                Write-Warn '         <usr name="МCPПользователь" pwd=""/>   (или <usr name="" pwd=""/> для анонимного доступа, если в ИБ разрешены пустые пароли).'
+                Write-Warn '    2. Либо в админке кластера 1С разрешите пустые пароли и заведите пользователя ИБ без пароля с ролью, позволяющей вызов HTTP-сервиса mcp.'
+                Write-Warn '    3. После изменения публикации перезапустите веб-сервер (IIS / Apache) и повторите проверку: Invoke-WebRequest "' + $s.url + '" -Method Get -UseBasicParsing.'
+            }
+            '^403$' {
+                Write-Warn ("  MCP config: " + $s.id + " — endpoint " + $s.url + " вернул HTTP 403 (пользователь по умолчанию не имеет прав на HTTP-сервис).")
+                Write-Warn '  У пользователя, заданного в публикации (default.vrd → <usr name=...>), должны быть права на роль, разрешающую вызов HTTP-сервиса mcp.'
+            }
+            '^(200|201|204|405|406|400)$' {
+                Write-Info ("  MCP config: " + $s.id + " — endpoint " + $s.url + " отвечает анонимно (HTTP " + $probe.Code + '), OK.')
+            }
+            '^4\d{2}$' {
+                Write-Info ("  MCP config: " + $s.id + " — endpoint " + $s.url + " ответил HTTP " + $probe.Code + '. Проверьте, что HTTP-сервис `mcp` опубликован и не требует аутентификации.')
+            }
+            '^5\d{2}$' {
+                Write-Info ("  MCP config: " + $s.id + " — endpoint " + $s.url + " ответил HTTP " + $probe.Code + ' (ошибка сервера). Проверьте журнал веб-сервера и состояние ИБ.')
+            }
+            'down' {
+                Write-Info ("  MCP config: " + $s.id + " — endpoint " + $s.url + " не отвечает (веб-публикация не запущена или недоступна). Это не блокирует установку: повторите проверку через /checkmcp после старта публикации.")
+            }
+            default {
+                Write-Info ("  MCP config: " + $s.id + " — не удалось проверить endpoint " + $s.url + " (status=" + $probe.Code + '). Это не блокирует установку.')
+            }
+        }
+    }
+
     $installedIds = @($servers | ForEach-Object { $_.id })
     $Manifest.mcpServers = @($installedIds)
 
@@ -2301,17 +2456,21 @@ function Invoke-Init {
     Write-Section 'Phase 6d: OpenSpec project.md (1C autodetect)'
     Invoke-OpenSpecProjectMd -Root $Root -Manifest $manifest
 
-    Write-Section 'Phase 7: MCP'
+    # .dev.env must be placed BEFORE the MCP phase because some MCP server
+    # URLs in `content/mcp-servers.json` reference {INFOBASE_PUBLISH_URL} —
+    # the installer substitutes that placeholder from the freshly-written
+    # .dev.env when rendering per-tool MCP configs.
+    Write-Section 'Phase 7: .dev.env (project parameters, single source of truth)'
+    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
+
+    Write-Section 'Phase 8: MCP'
     Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
 
-    Write-Section 'Phase 8: AGENTS.md'
+    Write-Section 'Phase 8b: AGENTS.md'
     Update-AgentsMd -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
 
-    Write-Section 'Phase 8b: Root templates (USER-RULES.md, memory.md)'
+    Write-Section 'Phase 8c: Root templates (USER-RULES.md, memory.md)'
     Place-RootTemplates -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
-
-    Write-Section 'Phase 8c: .dev.env (project parameters, single source of truth)'
-    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
 
     Write-Section 'Phase 9: Manifest'
     Write-Manifest -Root $Root -Manifest $manifest
@@ -2481,6 +2640,12 @@ function Invoke-Update {
     Write-Section 'OpenSpec project.md (update / 1C autodetect)'
     Invoke-OpenSpecProjectMd -Root $Root -Manifest $manifest
 
+    # .dev.env runs before MCP so that {INFOBASE_PUBLISH_URL} placeholders in
+    # `content/mcp-servers.json` resolve against the actual project value
+    # when MCP configs are re-rendered.
+    Write-Section '.dev.env (update — placed only if missing)'
+    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
+
     Write-Section 'MCP (update)'
     Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
 
@@ -2489,9 +2654,6 @@ function Invoke-Update {
 
     Write-Section 'Root templates (update)'
     Place-RootTemplates -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
-
-    Write-Section '.dev.env (update — placed only if missing)'
-    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
 
     $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $manifest.lastChannel = $script:LastChannel
@@ -2528,6 +2690,11 @@ function Invoke-Add {
     Write-Section "Placing files for tool: $NewTool"
     Invoke-PlacePhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
     Invoke-OpenSpecArtifacts -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Manifest $manifest
+
+    # Place .dev.env BEFORE the MCP phase so {INFOBASE_PUBLISH_URL}
+    # placeholders in `content/mcp-servers.json` substitute against the
+    # actual project value when rendering the newly-added tool's MCP config.
+    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
     Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
 
     # Merge foreign files for this tool into manifest
@@ -2544,7 +2711,6 @@ function Invoke-Add {
     Update-AgentsMd -Root $Root -SourceRoot $sourceRoot -ActiveTools $allActive -Adapters $allAdapters -Manifest $manifest
 
     Place-RootTemplates -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
-    Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
 
     $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     Write-Manifest -Root $Root -Manifest $manifest
