@@ -26,6 +26,7 @@ Patterns, pitfalls, and platform-version mapping (8.3.18+ `Асинх` / `Жда
 
 - Use `ДанныеФормыВЗначение()` / `ЗначениеВДанныеФормы()` to convert between form data and actual objects.
 - Remember that form attributes are not the same as object attributes — they are form-specific representations.
+- Always check methods, functions, procedures, attributes, and elements for availability in the context of the directive when using directives from the directives table (`&НаКлиенте`, `&НаСервере`, `&НаСервереБезКонтекста`, `&НаКлиентеНаСервереБезКонтекста`)
 
 ## Module Structure
 
