@@ -10,15 +10,15 @@
 
 ## Required evidence
 
-- [ ] `scripts/check.ps1 -Mode Full` passes from a clean worktree.
-- [ ] Fresh clone smoke passes for Codex, Kilo, and Codex+Kilo.
-- [ ] Fresh Codex+Kilo inventory has one copy of shared/OpenSpec skills under `.agents/skills` and no `.kilocode`.
-- [ ] Clean and user-modified manifest 1.0 migrations pass.
-- [ ] User-profile Codex prompts are byte-identical before and after all automated tests.
-- [ ] Source and rendered `AGENTS.md` are at most 24 KiB.
-- [ ] Kilo Code runtime smoke passes with `kilocode.kilo-code` 7.4.5 after `/reload`.
-- [ ] Kilo discovers `doctor`, `1c-metadata-manage`, and `openspec-propose` skills.
-- [ ] Kilo exposes `/opsx-propose`, exposes no general `/doctor` command duplicate, and the project has no `.kilocode`.
+- [x] `scripts/check.ps1 -Mode Full` passes from a clean worktree.
+- [x] Fresh isolated smoke passes for Codex, Kilo, Codex+Kilo, Cursor, Claude Code, OpenCode, and `other`.
+- [x] Fresh Codex+Kilo inventory has one copy of shared/OpenSpec skills under `.agents/skills` and no `.kilocode`.
+- [x] Clean and user-modified manifest 1.0 migrations pass.
+- [x] User-profile Codex prompts are byte-identical before and after all automated tests.
+- [x] Source and rendered `AGENTS.md` are at most 24 KiB.
+- [x] Kilo Code runtime smoke passes with `kilocode.kilo-code` 7.4.5 after `/reload`.
+- [x] Kilo discovers `doctor`, `1c-metadata-manage`, and `openspec-propose` skills.
+- [x] Kilo exposes `/opsx-propose`, exposes exactly one skill-backed `/doctor` entry, has no `.kilo/commands/doctor.md` duplicate, and the project has no `.kilocode`.
 - [ ] Publish preview resolves the expected commit, branch, and tag.
 - [ ] The published tag passes a fresh-clone verification.
 
@@ -26,10 +26,10 @@
 
 Fill this section only from executed gates. A failed or unverified item blocks publication.
 
-- Source `AGENTS.md` bytes: pending
-- Rendered Codex+Kilo `AGENTS.md` bytes: pending
-- Managed inventory summary: pending
-- Full gate: pending
-- Kilo runtime steps/result: pending
+- Source `AGENTS.md` bytes: 7,354
+- Rendered Codex+Kilo `AGENTS.md` bytes: 7,363
+- Managed inventory summary: 224 files; 23 shared skill directories (124 managed files); 4 Kilo OpenSpec commands; no `.codex/skills`, `.kilo/skills`, or `.kilocode`
+- Full gate: passed 26/26 from clean commit `d4a0db927997506ac4addcb670c0467f49ceee82`
+- Kilo runtime steps/result: passed on 2026-07-12 with `kilocode.kilo-code` 7.4.5; opened `build/kilo-r2-runtime`, ran `/reload`, observed one result for each required skill, four `/opsx-*` commands, and one (not duplicated) skill-backed `/doctor`
 - Published fork commit: pending
 - Fresh-clone verification: pending
