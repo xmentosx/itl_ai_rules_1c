@@ -1,6 +1,9 @@
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding(DefaultParameterSetName = "Tag", SupportsShouldProcess = $true)]
 param(
-    [Parameter(Mandatory = $true)][string]$UpstreamTag,
+    [Parameter(Mandatory = $true, ParameterSetName = "Tag")][string]$UpstreamTag,
+    [Parameter(Mandatory = $true, ParameterSetName = "Commit")]
+    [ValidatePattern("^[0-9a-fA-F]{40}$")][string]$UpstreamCommit,
+    [Parameter(ParameterSetName = "Commit")][string]$UpstreamBranch = "main",
     [ValidateRange(1, 999)][int]$Revision = 1,
     [string]$UpstreamRemote = "upstream",
     [string]$PublishRemote = "origin",
@@ -36,9 +39,15 @@ function Test-RefExists {
 }
 
 $RepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
-$normalizedTag = (($UpstreamTag -replace '[^A-Za-z0-9._-]', '-').Trim('-'))
-$upgradeBranch = "upgrade/$normalizedTag"
-$forkTag = "itl-$normalizedTag-r$Revision"
+$sourceKind = $PSCmdlet.ParameterSetName.ToLowerInvariant()
+$sourceName = if ($sourceKind -eq "tag") {
+    $UpstreamTag
+} else {
+    "$UpstreamBranch-$($UpstreamCommit.Substring(0, 8).ToLowerInvariant())"
+}
+$normalizedSource = (($sourceName -replace '[^A-Za-z0-9._-]', '-').Trim('-'))
+$upgradeBranch = "upgrade/$normalizedSource"
+$forkTag = "itl-$normalizedSource-r$Revision"
 $releaseBranch = "release/$forkTag"
 
 $status = @(Invoke-RepoGit -Arguments @("status", "--porcelain"))
@@ -49,11 +58,30 @@ if ($currentBranch -ne $upgradeBranch) {
 }
 
 [void](Invoke-RepoGit -Arguments @("fetch", $UpstreamRemote, "--tags", "--prune"))
-$upstreamCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "refs/tags/$UpstreamTag^{commit}") | Select-Object -First 1)
+$upstreamRef = ""
+if ($sourceKind -eq "tag") {
+    $upstreamRef = "refs/tags/$UpstreamTag"
+    $resolvedUpstreamCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "$upstreamRef^{commit}") | Select-Object -First 1)
+} else {
+    $upstreamRef = "refs/heads/$UpstreamBranch"
+    $resolvedUpstreamCommit = ([string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "$UpstreamCommit^{commit}") | Select-Object -First 1)).ToLowerInvariant()
+    if ($resolvedUpstreamCommit -ne $UpstreamCommit.ToLowerInvariant()) {
+        throw "Resolved upstream commit differs from the requested full SHA: requested=$UpstreamCommit resolved=$resolvedUpstreamCommit"
+    }
+    $remoteLines = @(Invoke-RepoGit -Arguments @("ls-remote", "--heads", $UpstreamRemote, $upstreamRef))
+    if ($remoteLines.Count -ne 1) {
+        throw "Upstream branch does not resolve to exactly one remote ref: $UpstreamRemote/$UpstreamBranch"
+    }
+    $remoteTip = (([string]$remoteLines[0] -split '\s+')[0]).ToLowerInvariant()
+    & git -C $RepositoryRoot merge-base --is-ancestor $resolvedUpstreamCommit $remoteTip
+    if ($LASTEXITCODE -ne 0) {
+        throw "Selected upstream snapshot $resolvedUpstreamCommit is no longer reachable from $UpstreamRemote/$UpstreamBranch ($remoteTip)."
+    }
+}
 $headCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "HEAD") | Select-Object -First 1)
-& git -C $RepositoryRoot merge-base --is-ancestor $upstreamCommit $headCommit
+& git -C $RepositoryRoot merge-base --is-ancestor $resolvedUpstreamCommit $headCommit
 if ($LASTEXITCODE -ne 0) {
-    throw "Current release candidate is not based on upstream tag $UpstreamTag ($upstreamCommit)."
+    throw "Current release candidate is not based on upstream $sourceKind $upstreamRef ($resolvedUpstreamCommit)."
 }
 
 if (-not $SkipCheck) {
@@ -68,7 +96,7 @@ $remoteTag = @(& git -C $RepositoryRoot ls-remote --tags $PublishRemote "refs/ta
 if ($LASTEXITCODE -ne 0) { throw "Could not inspect remote tag: $forkTag" }
 if ($remoteTag.Count -gt 0) { throw "Fork tag already exists remotely: $forkTag" }
 
-$annotation = "ITL ai_rules_1c release $forkTag; upstream=$UpstreamTag@$upstreamCommit; fork=$headCommit"
+$annotation = "ITL ai_rules_1c release $forkTag; upstream=$upstreamRef@$resolvedUpstreamCommit; fork=$headCommit"
 $createdBranch = $false
 $createdTag = $false
 try {
@@ -93,5 +121,5 @@ try {
 }
 
 Write-Host "Release candidate: $forkTag -> $headCommit"
-Write-Host "Upstream provenance: $UpstreamTag -> $upstreamCommit"
+Write-Host "Upstream provenance: $sourceKind $upstreamRef -> $resolvedUpstreamCommit"
 if (-not $Push) { Write-Host "Remote was not changed; pass -Push after review." }
