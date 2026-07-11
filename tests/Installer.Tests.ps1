@@ -33,7 +33,7 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
 
     It "keeps local gate artifacts out of git status" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot ".gitignore") -Raw -Encoding UTF8
-        $text | Should -Match '(?m)^build/$'
+        $text | Should -Match '(?m)^build/\r?$'
     }
 
     It "records bootstrap infrastructure in the downstream ledger" {
