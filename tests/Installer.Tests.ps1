@@ -33,6 +33,15 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot ".gitignore") -Raw -Encoding UTF8
         $text | Should -Match '(?m)^build/$'
     }
+
+    It "records bootstrap infrastructure in the downstream ledger" {
+        $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot "docs\DOWNSTREAM-PATCHES.md") -Raw -Encoding UTF8
+        $text | Should -Match "ITL-INFRA-001"
+        $text | Should -Match "ITL-INFRA-002"
+        $text | Should -Match '`keep`'
+        $text | Should -Match '`drop`'
+        $text | Should -Match '`rewrite`'
+    }
 }
 
 Describe "Current upstream installer smoke" {
