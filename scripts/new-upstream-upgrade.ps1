@@ -1,6 +1,9 @@
-[CmdletBinding(SupportsShouldProcess = $true)]
+[CmdletBinding(DefaultParameterSetName = "Tag", SupportsShouldProcess = $true)]
 param(
-    [Parameter(Mandatory = $true)][string]$UpstreamTag,
+    [Parameter(Mandatory = $true, ParameterSetName = "Tag")][string]$UpstreamTag,
+    [Parameter(Mandatory = $true, ParameterSetName = "Commit")]
+    [ValidatePattern("^[0-9a-fA-F]{40}$")][string]$UpstreamCommit,
+    [Parameter(ParameterSetName = "Commit")][string]$UpstreamBranch = "main",
     [string]$Remote = "upstream",
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$ReportDirectory = "build\reports"
@@ -26,11 +29,11 @@ function Invoke-RepoGit {
     return @($output)
 }
 
-function Get-NormalizedTagName {
+function Get-NormalizedSourceName {
     param([string]$Value)
     $normalized = ($Value -replace '[^A-Za-z0-9._-]', '-').Trim('-')
     if ([string]::IsNullOrWhiteSpace($normalized)) {
-        throw "Upstream tag cannot be normalized into a branch name: $Value"
+        throw "Upstream source cannot be normalized into a branch name: $Value"
     }
     return $normalized
 }
@@ -48,37 +51,67 @@ if ($status.Count -gt 0) {
 $originalHead = [string](Invoke-RepoGit -Arguments @("rev-parse", "HEAD") | Select-Object -First 1)
 [void](Invoke-RepoGit -Arguments @("fetch", $Remote, "--tags", "--prune"))
 
-$remoteLines = @(Invoke-RepoGit -Arguments @(
-    "ls-remote", "--tags", $Remote,
-    "refs/tags/$UpstreamTag", "refs/tags/$UpstreamTag^{}"
-))
-if ($remoteLines.Count -eq 0) {
-    throw "Upstream tag does not exist on remote '$Remote': $UpstreamTag. upstream/main is not an allowed fallback."
-}
+$sourceKind = $PSCmdlet.ParameterSetName.ToLowerInvariant()
+$sourceRef = ""
+$sourceName = ""
+$sourceRefType = ""
+$remoteCommit = ""
+$localCommit = ""
 
-$peeled = @($remoteLines | Where-Object { $_ -match '\^\{\}$' } | Select-Object -First 1)
-$remoteCommit = if ($peeled.Count -gt 0) {
-    ([string]$peeled[0] -split '\s+')[0]
+if ($sourceKind -eq "tag") {
+    $remoteLines = @(Invoke-RepoGit -Arguments @(
+        "ls-remote", "--tags", $Remote,
+        "refs/tags/$UpstreamTag", "refs/tags/$UpstreamTag^{}"
+    ))
+    if ($remoteLines.Count -eq 0) {
+        throw "Upstream tag does not exist on remote '$Remote': $UpstreamTag. Use a full upstream commit SHA explicitly when upstream has no tags."
+    }
+
+    $peeled = @($remoteLines | Where-Object { $_ -match '\^\{\}$' } | Select-Object -First 1)
+    $remoteCommit = if ($peeled.Count -gt 0) {
+        ([string]$peeled[0] -split '\s+')[0]
+    } else {
+        ([string]$remoteLines[0] -split '\s+')[0]
+    }
+    $localCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "refs/tags/$UpstreamTag^{commit}") | Select-Object -First 1)
+    if ($localCommit -ne $remoteCommit) {
+        throw "Fetched tag commit does not match remote: local=$localCommit remote=$remoteCommit"
+    }
+    $sourceRef = "refs/tags/$UpstreamTag"
+    $sourceName = $UpstreamTag
+    $sourceRefType = [string](Invoke-RepoGit -Arguments @("cat-file", "-t", $sourceRef) | Select-Object -First 1)
 } else {
-    ([string]$remoteLines[0] -split '\s+')[0]
-}
-$localCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "refs/tags/$UpstreamTag^{commit}") | Select-Object -First 1)
-if ($localCommit -ne $remoteCommit) {
-    throw "Fetched tag commit does not match remote: local=$localCommit remote=$remoteCommit"
+    $remoteLines = @(Invoke-RepoGit -Arguments @(
+        "ls-remote", "--heads", $Remote, "refs/heads/$UpstreamBranch"
+    ))
+    if ($remoteLines.Count -ne 1) {
+        throw "Upstream branch does not resolve to exactly one remote ref: $Remote/$UpstreamBranch"
+    }
+    $remoteCommit = (([string]$remoteLines[0] -split '\s+')[0]).ToLowerInvariant()
+    $requestedCommit = $UpstreamCommit.ToLowerInvariant()
+    if ($requestedCommit -ne $remoteCommit) {
+        throw "Upstream commit must equal the current remote tip of $Remote/$UpstreamBranch at intake: requested=$requestedCommit remote=$remoteCommit"
+    }
+    $localCommit = ([string](Invoke-RepoGit -Arguments @("rev-parse", "--verify", "$requestedCommit^{commit}") | Select-Object -First 1)).ToLowerInvariant()
+    if ($localCommit -ne $remoteCommit) {
+        throw "Fetched branch commit does not match remote: local=$localCommit remote=$remoteCommit"
+    }
+    $sourceRef = "refs/heads/$UpstreamBranch"
+    $sourceName = "$UpstreamBranch-$($localCommit.Substring(0, 8))"
+    $sourceRefType = "commit"
 }
 
-$normalizedTag = Get-NormalizedTagName -Value $UpstreamTag
-$upgradeBranch = "upgrade/$normalizedTag"
+$normalizedSource = Get-NormalizedSourceName -Value $sourceName
+$upgradeBranch = "upgrade/$normalizedSource"
 & git -C $RepositoryRoot show-ref --verify --quiet "refs/heads/$upgradeBranch"
 if ($LASTEXITCODE -eq 0) {
     throw "Upgrade branch already exists: $upgradeBranch"
 }
 
-if ($PSCmdlet.ShouldProcess($RepositoryRoot, "create $upgradeBranch from upstream tag $UpstreamTag ($localCommit)")) {
+if ($PSCmdlet.ShouldProcess($RepositoryRoot, "create $upgradeBranch from upstream $sourceKind $sourceRef ($localCommit)")) {
     [void](Invoke-RepoGit -Arguments @("switch", "--create", $upgradeBranch, $localCommit))
 }
 
-$tagType = [string](Invoke-RepoGit -Arguments @("cat-file", "-t", "refs/tags/$UpstreamTag") | Select-Object -First 1)
 $tree = [string](Invoke-RepoGit -Arguments @("rev-parse", "$localCommit^{tree}") | Select-Object -First 1)
 $remoteUrl = [string](Invoke-RepoGit -Arguments @("remote", "get-url", $Remote) | Select-Object -First 1)
 $bootstrapCommits = @(Invoke-RepoGit -Arguments @("rev-list", "--reverse", "$localCommit..$originalHead"))
@@ -115,13 +148,17 @@ if ($reportRoot.StartsWith($repositoryPrefix, [System.StringComparison]::Ordinal
     }
 }
 New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
-$reportPath = Join-Path $reportRoot ("upstream-intake-$normalizedTag.json")
+$reportPath = Join-Path $reportRoot ("upstream-intake-$normalizedSource.json")
 $report = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     createdAt = [DateTime]::UtcNow.ToString("o")
     upstreamRemote = $remoteUrl
-    upstreamTag = $UpstreamTag
-    upstreamTagType = $tagType
+    upstreamSourceKind = $sourceKind
+    upstreamSourceName = $sourceName
+    upstreamRef = $sourceRef
+    upstreamRefType = $sourceRefType
+    upstreamTag = $(if ($sourceKind -eq "tag") { $UpstreamTag } else { "" })
+    upstreamBranch = $(if ($sourceKind -eq "commit") { $UpstreamBranch } else { "" })
     upstreamCommit = $localCommit
     upstreamTree = $tree
     upgradeBranch = $upgradeBranch
@@ -137,5 +174,5 @@ $report = [ordered]@{
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($reportPath, ($report | ConvertTo-Json -Depth 8), $utf8NoBom)
 
-Write-Host "Created $upgradeBranch from $UpstreamTag at $localCommit"
+Write-Host "Created $upgradeBranch from upstream $sourceKind $sourceRef at $localCommit"
 Write-Host "Intake report: $reportPath"

@@ -5,21 +5,29 @@ This repository is the controlled ITL fork of
 
 ## Repository roles
 
-- `upstream/main` is observed, but is never a release input by itself.
+- `upstream/main` is observed, but its moving branch name is never a release
+  input by itself.
 - `origin/main` mirrors upstream and is never consumed by ITL projects.
 - `codex/fork-bootstrap` contains fork-process infrastructure only.
-- `upgrade/<upstream-tag>` starts directly from an immutable upstream release tag.
-- `release/itl-<upstream-tag>-rN` identifies the reviewed release commit.
-- `itl-<upstream-tag>-rN` is the immutable annotated tag consumed by projects.
+- `upgrade/<source-id>` starts directly from an immutable upstream tag or from
+  a reviewed full 40-character commit SHA.
+- `release/itl-<source-id>-rN` identifies the reviewed release commit.
+- `itl-<source-id>-rN` is the immutable annotated tag consumed by projects.
 
-An upstream release without a tag is not eligible. A published ITL tag is never
-moved, recreated, or force-pushed. Corrections are released as the next `rN`.
-The active GitHub ruleset `Protect immutable ITL release tags` blocks updates
-and deletion for `refs/tags/itl-*`; verify it remains active before publication.
+An upstream tag is preferred when available. If upstream publishes only a
+moving main branch, intake may designate its current tip as a stable snapshot.
+The operator must pass the full SHA explicitly; the intake script verifies that
+it equals the remote branch tip at that moment and records both ref and commit.
+A short SHA, an unpinned branch name, or an arbitrary stale commit is not
+eligible. A published ITL tag is never moved, recreated, or force-pushed.
+Corrections are released as the next `rN`. The active GitHub ruleset `Protect
+immutable ITL release tags` blocks updates and deletion for `refs/tags/itl-*`;
+verify it remains active before publication.
 
 ## Upgrade rule
 
-Each upstream release is integrated from a new upgrade branch. Downstream
+Each upstream tag or approved commit snapshot is integrated from a new upgrade
+branch. Downstream
 commits are reviewed and transferred individually according to
 `docs/DOWNSTREAM-PATCHES.md`; an earlier release branch is never merged wholesale.
 
