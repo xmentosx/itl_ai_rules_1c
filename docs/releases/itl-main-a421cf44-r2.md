@@ -19,8 +19,8 @@
 - [x] Kilo Code runtime smoke passes with `kilocode.kilo-code` 7.4.5 after `/reload`.
 - [x] Kilo discovers `doctor`, `1c-metadata-manage`, and `openspec-propose` skills.
 - [x] Kilo exposes `/opsx-propose`, exposes exactly one skill-backed `/doctor` entry, has no `.kilo/commands/doctor.md` duplicate, and the project has no `.kilocode`.
-- [ ] Publish preview resolves the expected commit, branch, and tag.
-- [ ] The published tag passes a fresh-clone verification.
+- [x] Publish preview resolves the expected commit, branch, and tag.
+- [x] The published tag passes a fresh-clone verification.
 
 ## Recorded results
 
@@ -31,5 +31,5 @@ Fill this section only from executed gates. A failed or unverified item blocks p
 - Managed inventory summary: 224 files; 23 shared skill directories (124 managed files); 4 Kilo OpenSpec commands; no `.codex/skills`, `.kilo/skills`, or `.kilocode`
 - Full gate: passed 26/26 from clean commit `d4a0db927997506ac4addcb670c0467f49ceee82`
 - Kilo runtime steps/result: passed on 2026-07-12 with `kilocode.kilo-code` 7.4.5; opened `build/kilo-r2-runtime`, ran `/reload`, observed one result for each required skill, four `/opsx-*` commands, and one (not duplicated) skill-backed `/doctor`
-- Published fork commit: pending
-- Fresh-clone verification: pending
+- Published fork commit: `bcb662c1eb682c1eae94cef8ad56cec0983f41d5`; annotated tag object `f53d3b9a0731eb03166a2de33c0c155e032ab4c7`
+- Fresh-clone verification: passed 26/26 from `https://github.com/xmentosx/itl_ai_rules_1c.git`, detached at immutable tag `itl-main-a421cf44-r2`; resolved commit matched the release branch exactly
