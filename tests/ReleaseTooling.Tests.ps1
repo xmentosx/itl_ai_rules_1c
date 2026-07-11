@@ -16,6 +16,15 @@ Describe "Fork release tooling" -Tag "Fast" {
         }
     }
 
+    It "derives the repository root at runtime instead of in param defaults" {
+        foreach ($name in @("new-upstream-upgrade.ps1", "publish-fork-release.ps1")) {
+            $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\$name") -Raw -Encoding UTF8
+            $text | Should -Match '\[string\]\$RepositoryRoot = ""'
+            $text | Should -Match '\$PSCommandPath'
+            $text | Should -Not -Match '\$RepositoryRoot = \(Split-Path -Parent \$PSScriptRoot\)'
+        }
+    }
+
     It "requires immutable source input and atomic tag publication" {
         $intake = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\new-upstream-upgrade.ps1") -Raw -Encoding UTF8
         $publish = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\publish-fork-release.ps1") -Raw -Encoding UTF8

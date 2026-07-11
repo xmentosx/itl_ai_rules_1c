@@ -5,7 +5,7 @@ param(
     [ValidatePattern("^[0-9a-fA-F]{40}$")][string]$UpstreamCommit,
     [Parameter(ParameterSetName = "Commit")][string]$UpstreamBranch = "main",
     [string]$Remote = "upstream",
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [string]$ReportDirectory = "build\reports"
 )
 
@@ -38,6 +38,9 @@ function Get-NormalizedSourceName {
     return $normalized
 }
 
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
 $RepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
 if (-not (Test-Path -LiteralPath (Join-Path $RepositoryRoot ".git"))) {
     throw "RepositoryRoot is not a Git working tree: $RepositoryRoot"

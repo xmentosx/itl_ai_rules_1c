@@ -7,7 +7,7 @@ param(
     [ValidateRange(1, 999)][int]$Revision = 1,
     [string]$UpstreamRemote = "upstream",
     [string]$PublishRemote = "origin",
-    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepositoryRoot = "",
     [switch]$Push,
     [switch]$SkipCheck
 )
@@ -38,6 +38,9 @@ function Test-RefExists {
     return ($LASTEXITCODE -eq 0)
 }
 
+if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+    $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
+}
 $RepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
 $sourceKind = $PSCmdlet.ParameterSetName.ToLowerInvariant()
 $sourceName = if ($sourceKind -eq "tag") {
