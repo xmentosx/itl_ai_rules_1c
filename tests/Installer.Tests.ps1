@@ -18,6 +18,8 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
         $text | Should -Match "exact current remote-tip SHA"
         $text | Should -Match "(?is)do not\s+merge an earlier"
         $text | Should -Match 'keep.*drop.*rewrite'
+        $text | Should -Match "-WhatIf"
+        $text | Should -Match 'with `-Push` instead of'
     }
 
     It "parses install.ps1 under the PowerShell parser" {
