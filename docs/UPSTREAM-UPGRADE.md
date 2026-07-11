@@ -37,21 +37,25 @@ git ls-remote upstream refs/heads/main
 .\scripts\check.ps1 -Mode Full
 ```
 
-After downstream adaptation and review, create the local release branch/tag:
+After downstream adaptation and review, preview the exact release refs without
+creating them:
 
 ```powershell
-.\scripts\publish-fork-release.ps1 -UpstreamTag <tag> -Revision 1
+.\scripts\publish-fork-release.ps1 -UpstreamTag <tag> -Revision 1 -WhatIf
 ```
 
 For a commit snapshot:
 
 ```powershell
 .\scripts\publish-fork-release.ps1 `
-  -UpstreamCommit <40-character-sha> -UpstreamBranch main -Revision 1
+  -UpstreamCommit <40-character-sha> -UpstreamBranch main -Revision 1 -WhatIf
 ```
 
-Inspect the resulting refs, then repeat with `-Push`. Publication uses one
-atomic push so the release branch and immutable tag cannot be partially sent.
+Inspect the preview, then run the same command once with `-Push` instead of
+`-WhatIf`. Do not first create local refs without `-Push`: immutable duplicate
+protection intentionally rejects a second creation attempt. Publication uses
+one atomic push so the release branch and immutable tag cannot be partially
+sent.
 
 If an upstream tag is moved, or a selected snapshot is no longer reachable from
 its recorded branch before publication, discard the unpublished upgrade branch
