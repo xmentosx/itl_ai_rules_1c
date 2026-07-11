@@ -1,4 +1,5 @@
 ---
+name: getconfigfiles
 description: Extract configuration objects from infobase to files for editing
 ---
 

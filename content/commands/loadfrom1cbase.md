@@ -1,4 +1,5 @@
 ---
+name: loadfrom1cbase
 description: Dump the configuration from the infobase defined in .dev.env into the current repository files
 ---
 

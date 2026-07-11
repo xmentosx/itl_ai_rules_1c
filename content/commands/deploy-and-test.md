@@ -1,4 +1,5 @@
 ---
+name: deploy-and-test
 description: Load the configuration into the test infobase from .dev.env and run UI tests in the web client
 ---
 

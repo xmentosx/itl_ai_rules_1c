@@ -41,12 +41,15 @@ $ErrorActionPreference = 'Stop'
 
 $script:Tools = @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode')
 $script:OpenSpecToolsArg = 'cursor,claude,codex,opencode,kilocode'
-$script:DotMap = @{
-    'cursor'      = '.cursor'
-    'claude-code' = '.claude'
-    'codex'       = '.codex'
-    'opencode'    = '.opencode'
-    'kilocode'    = '.kilocode'
+$script:BundleMap = @{
+    'cursor'      = @(@{ Source = '.cursor'; Target = '.cursor' })
+    'claude-code' = @(@{ Source = '.claude'; Target = '.claude' })
+    'codex'       = @(@{ Source = '.codex/skills'; Target = '.agents/skills' })
+    'opencode'    = @(@{ Source = '.opencode'; Target = '.opencode' })
+    'kilocode'    = @(
+        @{ Source = '.kilocode/skills'; Target = '.agents/skills' },
+        @{ Source = '.kilocode/workflows'; Target = '.kilo/commands' }
+    )
 }
 
 function Resolve-RepoRoot {
@@ -114,41 +117,44 @@ function Sync-ToolBundle {
         [string]$BundleRoot,
         [bool]$DryRun
     )
-    $dot = $script:DotMap[$Tool]
-    $sourceDir = Join-Path $ProbeRoot $dot
-    $targetDir = Join-Path $BundleRoot "$Tool\$dot"
+    $addedCount = 0
+    $updatedCount = 0
+    $removedCount = 0
+    foreach ($mapping in @($script:BundleMap[$Tool])) {
+        $sourceRel = ([string]$mapping.Source).Replace('/', '\')
+        $targetRel = ([string]$mapping.Target).Replace('/', '\')
+        $sourceDir = Join-Path $ProbeRoot $sourceRel
+        $targetDir = Join-Path $BundleRoot "$Tool\$targetRel"
+        if (-not (Test-Path $sourceDir)) {
+            Write-Warning "  [$Tool] no $sourceRel in probe output - skipped"
+            continue
+        }
 
-    if (-not (Test-Path $sourceDir)) {
-        Write-Warning "  [$Tool] no $dot in probe output - skipped"
-        return [pscustomobject]@{ Tool = $Tool; Added = 0; Updated = 0; Removed = 0 }
+        $sourceFiles = Get-RelativeFiles $sourceDir
+        $targetFiles = Get-RelativeFiles $targetDir
+        $sourceSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$sourceFiles)
+        $targetSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$targetFiles)
+        $added = @($sourceFiles | Where-Object { -not $targetSet.Contains($_) })
+        $removed = @($targetFiles | Where-Object { -not $sourceSet.Contains($_) })
+        $shared = @($sourceFiles | Where-Object { $targetSet.Contains($_) })
+        $updated = @()
+        foreach ($rel in $shared) {
+            $a = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $sourceDir $rel)).Hash
+            $b = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $targetDir $rel)).Hash
+            if ($a -ne $b) { $updated += $rel }
+        }
+        $addedCount += $added.Count
+        $removedCount += $removed.Count
+        $updatedCount += $updated.Count
+
+        if (-not $DryRun) {
+            if (Test-Path $targetDir) { Remove-Item -Recurse -Force $targetDir }
+            $parent = Split-Path -Parent $targetDir
+            if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
+            Copy-Item -Recurse -Force -Path $sourceDir -Destination $targetDir
+        }
     }
-
-    $sourceFiles = Get-RelativeFiles $sourceDir
-    $targetFiles = Get-RelativeFiles $targetDir
-    $sourceSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$sourceFiles)
-    $targetSet = [System.Collections.Generic.HashSet[string]]::new([string[]]$targetFiles)
-
-    $added = @($sourceFiles | Where-Object { -not $targetSet.Contains($_) })
-    $removed = @($targetFiles | Where-Object { -not $sourceSet.Contains($_) })
-    $shared = @($sourceFiles | Where-Object { $targetSet.Contains($_) })
-    $updated = @()
-    foreach ($rel in $shared) {
-        $a = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $sourceDir $rel)).Hash
-        $b = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $targetDir $rel)).Hash
-        if ($a -ne $b) { $updated += $rel }
-    }
-
-    if (-not $DryRun) {
-        if (Test-Path $targetDir) { Remove-Item -Recurse -Force $targetDir }
-        Copy-Item -Recurse -Force -Path $sourceDir -Destination $targetDir
-    }
-
-    return [pscustomobject]@{
-        Tool    = $Tool
-        Added   = $added.Count
-        Updated = $updated.Count
-        Removed = $removed.Count
-    }
+    return [pscustomobject]@{ Tool = $Tool; Added = $addedCount; Updated = $updatedCount; Removed = $removedCount }
 }
 
 $repo = Resolve-RepoRoot -Requested $RepoRoot

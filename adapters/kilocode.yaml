@@ -14,12 +14,11 @@
 #                                         extension did not expose a folder for
 #                                         these — `.kilocode/subagents/` was
 #                                         never an official location)
-#       commands -> .kilo/commands/      (formerly "workflows"; the new extension
-#                                         auto-migrates `.kilocode/workflows/`
-#                                         to `.kilo/commands/` on startup)
-#       skills   -> .kilo/skills/        (per the Agent Skills specification;
-#                                         `.kilocode/skills/` is not a recognised
-#                                         skill directory)
+#       commands -> common command workflows are repository skills in
+#                   .agents/skills/; only Kilo-native OpenSpec and ITL slash
+#                   commands live in .kilo/commands/
+#       skills   -> .agents/skills/       (open Agent Skills compatibility
+#                                         directory, loaded by Kilo by default)
 #   - MCP project-level config lives in `.kilo/kilo.json` (or any of the
 #     equivalents `kilo.json` / `kilo.jsonc` / `.kilo/kilo.jsonc`) and is
 #     written under the top-level `mcp` key, with per-server entries of
@@ -77,13 +76,13 @@ agents:
     drop: [allowParallel, reasoningEffort]
 
 commands:
-  copyTo: ".kilo/commands/{name}.md"
+  copyTo: ".agents/skills/{name}/SKILL.md"
   frontmatter:
-    keep: [description]
+    keep: [name, description]
     drop: [argumentHint, allowedTools]
 
 skills:
-  copyTo: ".kilo/skills/{name}/"
+  copyTo: ".agents/skills/{name}/"
   mode: verbatim
 
 mcp:
