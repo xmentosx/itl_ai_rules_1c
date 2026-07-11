@@ -1,4 +1,5 @@
 ---
+name: checkmcp
 description: Check availability of 1C MCP servers and install/start the missing ones
 ---
 

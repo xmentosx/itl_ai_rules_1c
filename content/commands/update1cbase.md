@@ -1,4 +1,5 @@
 ---
+name: update1cbase
 description: Load current repository files into the infobase defined in .dev.env and update the DB structure
 ---
 

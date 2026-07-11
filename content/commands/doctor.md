@@ -1,4 +1,5 @@
 ---
+name: doctor
 description: Diagnose whether 1c-rules is installed, connected, configured, and usable by the current agent
 ---
 
