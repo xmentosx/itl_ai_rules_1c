@@ -1,14 +1,15 @@
 # Downstream patch ledger
 
-This ledger is deliberately empty during fork bootstrap. Functional adapter,
-installer, OpenSpec, and `AGENTS.md` changes will be designed against the next
-upstream release rather than the current pre-release structure.
+Functional adapter, installer, OpenSpec, and `AGENTS.md` changes remain empty
+during fork bootstrap. They will be designed against the next upstream release
+rather than the current pre-release structure.
 
 Every downstream patch added later must have one row:
 
 | ID | Purpose | Upstream contract | Verification | Next upgrade |
 |---|---|---|---|---|
-| _none yet_ | | | | |
+| ITL-INFRA-001 | Local fork policy and Full gate | Repository process only | `scripts/check.ps1 -Mode Full` | keep |
+| ITL-INFRA-002 | Tag-only intake and atomic fork release tooling | Git refs and release tags | `tests/ReleaseTooling.Tests.ps1` | keep |
 
 Allowed values for **Next upgrade** are:
 
@@ -18,4 +19,3 @@ Allowed values for **Next upgrade** are:
 
 The ledger is reviewed before every immutable ITL tag. Commit hashes alone are
 not an explanation and are not sufficient ledger entries.
-
