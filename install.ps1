@@ -1095,9 +1095,9 @@ function Read-Manifest {
         $isUserScope = [System.IO.Path]::IsPathRooted([string]$key) -or ([string]$key).StartsWith('~/') -or ([string]$key).StartsWith('~\')
         if ($isUserScope) {
             $displayPath = [string]$key
-            $home = [Environment]::GetFolderPath('UserProfile').TrimEnd('\', '/')
-            if ($home -and $displayPath.StartsWith($home, [System.StringComparison]::OrdinalIgnoreCase)) {
-                $displayPath = '~/' + $displayPath.Substring($home.Length).TrimStart('\', '/').Replace('\', '/')
+            $userProfilePath = [Environment]::GetFolderPath('UserProfile').TrimEnd('\', '/')
+            if ($userProfilePath -and $displayPath.StartsWith($userProfilePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $displayPath = '~/' + $displayPath.Substring($userProfilePath.Length).TrimStart('\', '/').Replace('\', '/')
             }
             $manifest.legacyArtifacts.userScope = @($manifest.legacyArtifacts.userScope) + @([ordered]@{
                 path          = $displayPath
@@ -1128,6 +1128,7 @@ function Write-Manifest {
         [string]$Root,
         [System.Collections.IDictionary]$Manifest
     )
+    Normalize-ManifestForWrite -Manifest $Manifest
     foreach ($key in @($Manifest.files.Keys)) {
         $entry = $Manifest.files[$key]
         if (-not $entry.Contains('owners')) { $entry['owners'] = @('core') }
@@ -1899,6 +1900,20 @@ function Invoke-PlaceArtifactFile {
         owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners $Owners)
         scope         = $Scope
     }
+}
+
+function Normalize-ManifestForWrite {
+    param([System.Collections.IDictionary]$Manifest)
+    if (-not $Manifest -or -not $Manifest.Contains('files')) { return }
+    $sortedFiles = [ordered]@{}
+    foreach ($key in @($Manifest.files.Keys) | Sort-Object) {
+        $entry = $Manifest.files[$key]
+        if ($entry -and $entry.Contains('owners')) {
+            $entry.owners = @($entry.owners | Where-Object { $_ } | Sort-Object -Unique)
+        }
+        $sortedFiles[$key] = $entry
+    }
+    $Manifest.files = $sortedFiles
 }
 
 function Invoke-PlaceSkill {
@@ -4092,7 +4107,10 @@ function Invoke-Update {
     # userModified on every update.
     $newFiles = [ordered]@{}
     foreach ($k in $manifest.files.Keys) {
-        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName) { $newFiles[$k] = $manifest.files[$k] }
+        $entryOwners = @($manifest.files[$k].owners)
+        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName -or $entryOwners -contains 'legacy') {
+            $newFiles[$k] = $manifest.files[$k]
+        }
     }
     $manifest.files = $newFiles
 
@@ -4157,6 +4175,7 @@ function Invoke-Update {
     }
     $previousUpdatedAt = [string]$manifest.updatedAt
     $manifest.updatedAt = '__compare__'
+    Normalize-ManifestForWrite -Manifest $manifest
     $manifestCandidateText = (ConvertTo-Json $manifest -Depth 15) + "`n"
     $updatedAtPattern = '(?m)("updatedAt"\s*:\s*)"[^"]*"'
     $originalComparable = [regex]::Replace($manifestOriginalText, $updatedAtPattern, '$1"__compare__"')
