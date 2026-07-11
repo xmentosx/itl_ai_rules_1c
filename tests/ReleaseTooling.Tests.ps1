@@ -33,6 +33,7 @@ Describe "Fork release tooling" -Tag "Fast" {
         $intake | Should -Match "must equal the current remote tip"
         $publish | Should -Match 'push", "--atomic"'
         $publish | Should -Match 'itl-\$normalizedSource-r\$Revision'
+        $publish | Should -Match 'upgrade/\$normalizedSource-r\$Revision'
     }
 }
 
@@ -139,6 +140,15 @@ Describe "Upstream intake behavior" {
             (& git -C $forkRoot cat-file -t "refs/tags/itl-$sourceId-r1").Trim() | Should -Be "tag"
             $annotation = (& git -C $forkRoot for-each-ref "--format=%(contents)" "refs/tags/itl-$sourceId-r1") -join "`n"
             $annotation | Should -Match "refs/heads/main@$currentCommit"
+
+            & git -C $forkRoot branch -m "upgrade/$sourceId-r2"
+            $publishR2 = Invoke-WindowsPowerShellFile -FilePath $publishPath -Arguments @(
+                "-UpstreamCommit", $currentCommit, "-UpstreamBranch", "main", "-Revision", "2",
+                "-RepositoryRoot", $forkRoot, "-UpstreamRemote", "upstream",
+                "-PublishRemote", "origin", "-SkipCheck"
+            )
+            $publishR2.ExitCode | Should -Be 0 -Because $publishR2.Output
+            (& git -C $forkRoot cat-file -t "refs/tags/itl-$sourceId-r2").Trim() | Should -Be "tag"
         } finally {
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
