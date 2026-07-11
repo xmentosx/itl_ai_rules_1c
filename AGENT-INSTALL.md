@@ -17,7 +17,7 @@ If the user asks you to install or update `1c-rules`, follow this protocol from 
 
 ### Project root is mandatory — no global installs
 
-`1c-rules` is a **project-scoped** toolkit. Every supported tool (Cursor, Claude Code, Codex, OpenCode, Kilo Code, `other`) reads its always-on context from the project root, and every on-demand rule / agent / command / skill lands under a project-local tool directory (`.cursor/`, `.claude/`, `.kilo/`, `.codex/`, `.opencode/`, `.ai-agent/`). Installing into a tool's **global CLI configuration directory** (`~/.config/kilo/`, `~/.codex/`, `~/.claude/`, `~/.opencode/`, `%APPDATA%\…\<tool>\`, etc.) is **not supported and is forbidden**: such directories are owned by the CLI itself, the adapter targets (`.kilo/commands/`, `.kilo/agents/`, …) do not match what the CLI looks up globally, `AGENTS.md` path rewriting yields broken links, and `.dev.env` / OpenSpec / `.ai-rules.json` have no project to bind to. A "global" install is always wrong, even when the user has not opened a project — there is nothing meaningful for the rules to attach to.
+`1c-rules` is a **project-scoped** toolkit. Every supported tool (Cursor, Claude Code, Codex, OpenCode, Kilo Code, `other`) reads its always-on context from the project root. Codex and Kilo share repo skills under `.agents/skills/`; their remaining project artifacts stay under `.codex/` and `.kilo/`. Other clients use their adapter-owned project directories (`.cursor/`, `.claude/`, `.opencode/`, `.ai-agent/`). Installing into a tool's **global CLI configuration directory** (`~/.config/kilo/`, `~/.codex/`, `~/.claude/`, `~/.opencode/`, `%APPDATA%\…\<tool>\`, etc.) is **not supported and is forbidden**: those directories are owned by the CLI itself, `AGENTS.md` path rewriting yields broken links, and `.dev.env` / OpenSpec / `.ai-rules.json` have no project to bind to. A "global" install is always wrong, even when the user has not opened a project — there is nothing meaningful for the rules to attach to.
 
 Before doing **any** filesystem operation, resolve the project root:
 
@@ -56,7 +56,7 @@ Use this lean sequence:
 3. **Bulk-copy directories.** For each active tool, copy whole directories from `content/` to the adapter's target paths in one shell call each. Do **not** open file bodies during the copy:
    - `content/rules/` → `<rules.copyTo dir>/`
    - `content/agents/` → `<agents.copyTo dir>/`
-   - `content/commands/` → `<commands.copyTo dir>/`
+   - `content/commands/` → `<commands.copyTo dir>/`; for Codex and Kilo each command is installed as the shared skill `.agents/skills/<name>/SKILL.md`, while Cursor, Claude Code, and OpenCode retain their native command targets.
    - `content/skills/` → `<skills.copyTo dir>/` (mode `verbatim` — copy **every** skill folder as-is, no transformation). Copy the whole `content/skills/` directory; do **not** cherry-pick a subset. All skills are required, including the non-1C-domain ones (`caveman`, `prompt-enhancer`, `handoff`, `mermaid-diagrams`, `transcribe`, `md-to-docx`, `img-grid-analysis`) — `AGENTS.md` references them and silently skipping any of them leaves a degraded ruleset. Use a single directory copy, not per-skill judgement calls.
    - `content/openspec-bundle/<tool>/` → at the locations encoded in that snapshot, **skip-if-exists**.
 
@@ -76,7 +76,7 @@ Use this lean sequence:
 
 8. **Scaffold OpenSpec.** Copy `openspec/` into the project in skip-if-exists mode (no overwrites).
 
-9. **Write the manifest** `.ai-rules.json` at the project root: list all placed files with their content sources, the active tools, the source version (`git describe --tags --always` from the clone), the protocol version (`1.0`), the canonical rules directory used for diagnostics / updates, and any detected foreign user-authored files under `foreignFiles`.
+9. **Write the manifest** `.ai-rules.json` at the project root using protocol `1.1`: every managed file records `source`, `installedHash`, `owners`, and project `scope`. Shared destinations with identical bytes are represented once with multiple owners. Legacy user-scope prompt records move to `legacyArtifacts.userScope` and are never managed or verified. The manifest also records the active tools, exact source version, canonical rules directory, integrations, and detected foreign user-authored files.
 
 ### OpenCode agents: `tools` array → `permission` object
 
@@ -148,7 +148,7 @@ When the MCP servers were installed by the MCP vendor distribution's **`INSTALL.
 3. Rewrite the source text by substituting `content/<section>/...` paths with the per-section canonical installed paths so every path in the file resolves to an existing project-local file:
    - `content/rules/<name>.md` → `<rulesDir>/<name>.<rulesExt>` (e.g. `.cursor/rules/<name>.mdc`, `.claude/rules/<name>.md`).
    - `content/agents/<name>.md` → `<agentsDir>/<name>.<agentsExt>` (e.g. `.codex/agents/<name>.toml` when Codex is canonical).
-   - `content/commands/<name>.md` → `<commandsDir>/<name>.<commandsExt>` (Codex commands resolve to `~/.codex/prompts/<name>.md` when Codex is the only active tool).
+   - `content/commands/<name>.md` → `<commandsDir>/<name>.<commandsExt>`; Codex and Kilo resolve these workflows to `.agents/skills/<name>/SKILL.md`, never to user-scope prompts.
    - `content/skills/<rest>` → `<skillsDir>/<rest>` — skills are copied verbatim, so any subpath after `content/skills/` (`SKILL.md`, `docs/<file>.md`, `tools/...`) is preserved untouched.
    - The name regex matches both real names and prose placeholders like `<name>`, so illustrative paths in the body are also rewritten consistently.
 4. Write the rewritten text to the project root as `AGENTS.md`. Refresh on update only if the local file is unmodified since the previous installer write (manifest hash matches) — preserve user edits otherwise.
@@ -179,8 +179,8 @@ The legacy `infobasesettings.md` file (used by earlier versions of `/loadfrom1cb
   - **Escape hatch** — `-Force` overwrites every drifted file with the shipped version ("take theirs"); `-ForcePaths <path>[,<path>…]` (comma-separated, implies `-Force`) restricts the overwrite to specific files (exact path or `*`/`?` wildcard, e.g. `.claude/skills/*`), leaving all other user edits intact. This is the supported way to pull updates into a file that drifted (including files mis-flagged by an older installer build) without hand-editing `.ai-rules.json`.
   - **Skill files** are synced per-file rather than wiped-and-recopied: shipped files are refreshed, files dropped from the source are pruned, user-modified skill files are preserved, and files the user added into the skill directory themselves (never tracked by us) are always kept.
   - As part of update, **migrate** any legacy `.ai-rules/rules/*` entries (from earlier installer versions): delete those files and remove them from the manifest. If the user modified any of them, ask before deleting.
-- **Add `<tool>`** — same as init but for one additional tool only; merge into the existing manifest. After adding, refresh `AGENTS.md` against the **full** active tool set — the canonical rules dir may shift if the new tool has higher priority.
-- **Remove `[<tool>]`** — delete files this tool owns according to the manifest. With no tool argument — delete every managed file and the manifest itself (the user keeps `USER-RULES.md`, `memory.md`, OpenSpec content, and any `*.bak.md`).
+- **Add `<tool>`** — build and validate the installation plan for the full resulting tool set before writing, then add the owner to identical shared destinations and refresh `AGENTS.md` against all active tools.
+- **Remove `[<tool>]`** — remove that owner from every manifest entry. Delete a managed file only when no owners remain. With no tool argument — delete every project-scoped managed file and the manifest itself (the user keeps `USER-RULES.md`, `memory.md`, OpenSpec content, and any `*.bak.md`).
 
 ### Anti-patterns observed in the wild — do not repeat
 
@@ -278,12 +278,12 @@ If at first install the project already had an `AGENTS.md` or `CLAUDE.md` with c
 
 ## Migration from earlier `1c-rules` versions
 
-Earlier versions of `1c-rules` created a shared `.ai-rules/rules/` mirror at the project root. The current version no longer creates it — on-demand rules live under the active tool's directory and `AGENTS.md` is rendered to point there. On `update`, the installer detects the legacy mirror and removes it. If you have manual edits in `.ai-rules/rules/`, the installer will warn before deleting and ask for confirmation (or skip in `-NonInteractive` mode unless `-AssumeYes` is set).
+Earlier versions created a shared `.ai-rules/rules/` mirror and duplicated Codex/Kilo skills under `.codex/skills`, `.kilo/skills`, `.kilocode/skills`, and `.kilocode/workflows`. Protocol 1.1 migrates hash-matching managed project artifacts to `.agents/skills` and Kilo OpenSpec commands to `.kilo/commands`. Modified legacy files are preserved and recorded under `legacyArtifacts.preservedProject`; an empty `.kilocode` tree is removed. Historical `~/.codex/prompts/*` records move to `legacyArtifacts.userScope`, but the files in the user profile are neither changed nor deleted and are listed for manual review.
 
 ## OpenSpec workspace
 
 The project ships an [OpenSpec](https://github.com/Fission-AI/OpenSpec) workspace at the repository root. The `1c-rules` installer scaffolds it unconditionally on first install (skip-if-exists; existing files are never overwritten) and records the result in `.ai-rules.json` under `integrations.openspec`.
 
-OpenSpec slash commands (`/opsx:propose`, `/opsx:apply`, `/opsx:archive`, `/opsx:explore`) and the matching SKILLs are placed automatically by the `1c-rules` installer for every active tool from a bundled snapshot of `openspec init` output (see `content/openspec-bundle/`); no `npm` and no OpenSpec CLI are required at install time. The snapshot's CLI version is recorded in `.ai-rules.json` under `integrations.openspec.artifactsBundleVersion` and is refreshed whenever `1c-rules` is updated.
+OpenSpec commands and matching skills are placed automatically from the bundled OpenSpec 1.2.0 snapshot (see `content/openspec-bundle/`); no `npm` and no OpenSpec CLI are required at install time. Codex and Kilo share one physical copy of every OpenSpec skill under `.agents/skills/openspec-*`. Kilo receives `/opsx-*` commands under `.kilo/commands/`; it receives no duplicated command workflows for the nine general rules workflows. The snapshot version is recorded in `.ai-rules.json` under `integrations.openspec.artifactsBundleVersion`.
 
 Bundles are shipped for `cursor`, `claude-code`, `codex`, `opencode`, `kilocode`. The `other` adapter (universal fallback) has no OpenSpec bundle — its users continue to read `openspec/specs/` and `openspec/changes/` directly and invoke OpenSpec workflows manually, without project-rendered slash commands. This is recorded in `.ai-rules.json` under `integrations.openspec.bundleSkipped` for transparency.

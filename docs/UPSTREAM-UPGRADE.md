@@ -12,9 +12,9 @@ snapshot. Never use the moving branch name alone.
 5. Run the unmodified upstream checks and record their baseline result.
 6. Compare installer protocol, adapters, generated paths, OpenSpec bundle,
    `AGENTS.md`, tests, and distribution terms with the previous audited base.
-7. Classify every downstream patch as `keep`, `drop`, or `rewrite`.
+7. Classify every functional row in `docs/DOWNSTREAM-PATCHES.md` independently as `keep`, `drop`, or `rewrite`; do not transfer a monolithic downstream diff.
 8. Transfer only approved bootstrap and downstream commits.
-9. Run the fork gate and generate release provenance before tagging.
+9. Run the fork gate, runtime-client qualification, and generate a release qualification record before tagging.
 
 Do not pass `upstream/main` as a floating release input. Commit intake requires
 the exact current remote-tip SHA and rejects stale or abbreviated values. Do not
