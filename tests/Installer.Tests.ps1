@@ -6,15 +6,17 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
     It "keeps main out of project consumption" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot "docs\FORK-POLICY.md") -Raw -Encoding UTF8
         $text | Should -Match "origin/main.*never consumed"
-        $text | Should -Match "upgrade/<upstream-tag>"
-        $text | Should -Match "itl-<upstream-tag>-rN"
+        $text | Should -Match "upgrade/<source-id>"
+        $text | Should -Match "itl-<source-id>-rN"
+        $text | Should -Match "full 40-character commit SHA"
         $text | Should -Match "never\s+moved"
     }
 
-    It "requires a tagged upstream release and selective patch transfer" {
+    It "requires an immutable upstream source and selective patch transfer" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot "docs\UPSTREAM-UPGRADE.md") -Raw -Encoding UTF8
-        $text | Should -Match 'Do not use `upstream/main`'
-        $text | Should -Match "Do not merge an earlier"
+        $text | Should -Match "Never use the moving branch name alone"
+        $text | Should -Match "exact current remote-tip SHA"
+        $text | Should -Match "(?is)do not\s+merge an earlier"
         $text | Should -Match 'keep.*drop.*rewrite'
     }
 
