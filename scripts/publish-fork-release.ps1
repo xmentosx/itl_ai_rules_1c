@@ -49,15 +49,21 @@ $sourceName = if ($sourceKind -eq "tag") {
     "$UpstreamBranch-$($UpstreamCommit.Substring(0, 8).ToLowerInvariant())"
 }
 $normalizedSource = (($sourceName -replace '[^A-Za-z0-9._-]', '-').Trim('-'))
-$upgradeBranch = "upgrade/$normalizedSource"
+$revisionUpgradeBranch = "upgrade/$normalizedSource-r$Revision"
+$allowedUpgradeBranches = @($revisionUpgradeBranch)
+if ($Revision -eq 1) {
+    # Bootstrap releases created before revision-qualified upgrade branches
+    # remain reproducible, while r2+ must use their own clean intake branch.
+    $allowedUpgradeBranches += "upgrade/$normalizedSource"
+}
 $forkTag = "itl-$normalizedSource-r$Revision"
 $releaseBranch = "release/$forkTag"
 
 $status = @(Invoke-RepoGit -Arguments @("status", "--porcelain"))
 if ($status.Count -gt 0) { throw "Fork worktree must be clean before release." }
 $currentBranch = [string](Invoke-RepoGit -Arguments @("branch", "--show-current") | Select-Object -First 1)
-if ($currentBranch -ne $upgradeBranch) {
-    throw "Release must be published from '$upgradeBranch'; current branch is '$currentBranch'."
+if ($allowedUpgradeBranches -notcontains $currentBranch) {
+    throw "Release r$Revision must be published from '$revisionUpgradeBranch'; current branch is '$currentBranch'."
 }
 
 [void](Invoke-RepoGit -Arguments @("fetch", $UpstreamRemote, "--tags", "--prune"))
