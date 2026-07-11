@@ -119,7 +119,7 @@ param(
 # CONSTANTS
 # ============================================================================
 
-$script:ProtocolVersion = '1.0'
+$script:ProtocolVersion = '1.1'
 $script:ManifestFileName = '.ai-rules.json'
 $script:AgentsMdFileName = 'AGENTS.md'
 $script:UserRulesFileName = 'USER-RULES.md'
@@ -1066,6 +1066,10 @@ function New-Manifest {
         files         = [ordered]@{}
         foreignFiles  = [ordered]@{}
         integrations  = [ordered]@{}
+        legacyArtifacts = [ordered]@{
+            userScope       = @()
+            preservedProject = @()
+        }
     }
     return $m
 }
@@ -1076,7 +1080,47 @@ function Read-Manifest {
     if (-not (Test-Path $path)) { return $null }
     $json = Read-TextFile $path
     $obj = $json | ConvertFrom-Json
-    return (ConvertTo-OrderedHashtable $obj)
+    $manifest = ConvertTo-OrderedHashtable $obj
+    if (-not $manifest.Contains('legacyArtifacts')) {
+        $manifest['legacyArtifacts'] = [ordered]@{ userScope = @(); preservedProject = @() }
+    }
+    if (-not $manifest.legacyArtifacts.Contains('userScope')) { $manifest.legacyArtifacts['userScope'] = @() }
+    if (-not $manifest.legacyArtifacts.Contains('preservedProject')) { $manifest.legacyArtifacts['preservedProject'] = @() }
+
+    # Protocol 1.0 could track absolute user-scope Codex prompts in `files`.
+    # Protocol 1.1 deliberately relinquishes ownership: keep the files on disk,
+    # record only a home-relative audit entry, and never verify/update/remove it.
+    foreach ($key in @($manifest.files.Keys)) {
+        $entry = $manifest.files[$key]
+        $isUserScope = [System.IO.Path]::IsPathRooted([string]$key) -or ([string]$key).StartsWith('~/') -or ([string]$key).StartsWith('~\')
+        if ($isUserScope) {
+            $displayPath = [string]$key
+            $home = [Environment]::GetFolderPath('UserProfile').TrimEnd('\', '/')
+            if ($home -and $displayPath.StartsWith($home, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $displayPath = '~/' + $displayPath.Substring($home.Length).TrimStart('\', '/').Replace('\', '/')
+            }
+            $manifest.legacyArtifacts.userScope = @($manifest.legacyArtifacts.userScope) + @([ordered]@{
+                path          = $displayPath
+                source        = [string]$entry.source
+                lastKnownHash = [string]$entry.installedHash
+                action        = 'manual-review'
+            })
+            [void]$manifest.files.Remove($key)
+            continue
+        }
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('legacy') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
+    $manifest.protocol = $script:ProtocolVersion
+    return $manifest
+}
+
+function Merge-ManifestOwners {
+    param($Existing, [string[]]$Owners)
+    $result = @()
+    if ($Existing -and $Existing.Contains('owners')) { $result += @($Existing.owners) }
+    $result += @($Owners)
+    return @($result | Where-Object { $_ } | Sort-Object -Unique)
 }
 
 function Write-Manifest {
@@ -1084,6 +1128,11 @@ function Write-Manifest {
         [string]$Root,
         [System.Collections.IDictionary]$Manifest
     )
+    foreach ($key in @($Manifest.files.Keys)) {
+        $entry = $Manifest.files[$key]
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('core') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
     $path = Join-Path $Root $script:ManifestFileName
     $json = ConvertTo-Json $Manifest -Depth 15
     Write-TextFile -Path $path -Content ($json + "`n")
@@ -1373,9 +1422,12 @@ function Invoke-OpenSpecArtifacts {
                 New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
             }
             Copy-Item -Path $_.FullName -Destination $absTarget -Force
+            $existingEntry = if ($Manifest.files.Contains($rel)) { $Manifest.files[$rel] } else { $null }
             $Manifest.files[$rel] = [ordered]@{
                 source        = "content/openspec-bundle/$tool/$rel"
                 installedHash = (Get-FileSha256 $absTarget)
+                owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners @($tool))
+                scope         = 'project'
             }
             $toolCopied++
         }
@@ -1797,7 +1849,9 @@ function Invoke-PlaceArtifactFile {
         [string]$Mode,
         [string]$Template,
         [System.Collections.IDictionary]$Manifest,
-        [string]$ContentSource
+        [string]$ContentSource,
+        [string[]]$Owners = @('core'),
+        [ValidateSet('project')][string]$Scope = 'project'
     )
     # Respect user modifications: if manifest marks this path as userModified,
     # keep the user's edits and leave the manifest entry unchanged — unless the
@@ -1838,9 +1892,12 @@ function Invoke-PlaceArtifactFile {
         Write-TextFile -Path $absTarget -Content $full
     }
     $hash = Get-FileSha256 $absTarget
+    $existingEntry = if ($Manifest.files.Contains($TargetRel)) { $Manifest.files[$TargetRel] } else { $null }
     $Manifest.files[$TargetRel] = [ordered]@{
         source        = $ContentSource
         installedHash = $hash
+        owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners $Owners)
+        scope         = $Scope
     }
 }
 
@@ -1858,7 +1915,9 @@ function Invoke-PlaceSkill {
         [string]$SourceDir,
         [string]$TargetDir,
         [System.Collections.IDictionary]$Manifest,
-        [string]$ContentSource
+        [string]$ContentSource,
+        [string[]]$Owners = @('core'),
+        [ValidateSet('project')][string]$Scope = 'project'
     )
     $absTarget = Join-Path $Root $TargetDir
     $srcFull = (Resolve-Path $SourceDir).Path.TrimEnd('\', '/')
@@ -1885,9 +1944,12 @@ function Invoke-PlaceSkill {
             New-Item -ItemType Directory -Force -Path $destDir | Out-Null
         }
         Copy-Item -Path $sf.FullName -Destination $destFull -Force
+        $existingEntry = if ($Manifest.files.Contains($key)) { $Manifest.files[$key] } else { $null }
         $Manifest.files[$key] = [ordered]@{
             source        = $ContentSource
             installedHash = (Get-FileSha256 $destFull)
+            owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners $Owners)
+            scope         = $Scope
         }
     }
 
@@ -1984,6 +2046,136 @@ function Resolve-AgentModelTier {
     return $result
 }
 
+function Get-StringSha256 {
+    param([string]$Value)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$Value)
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    }
+    finally { $sha.Dispose() }
+}
+
+function Add-InstallationPlanEntry {
+    param(
+        [System.Collections.IDictionary]$Plan,
+        [string]$Root,
+        [string]$Target,
+        [string]$ContentHash,
+        [string]$Source,
+        [string]$Owner,
+        [string]$Kind
+    )
+    if ([System.IO.Path]::IsPathRooted($Target) -or $Target.StartsWith('~/') -or $Target.StartsWith('~\')) {
+        throw "Installation plan contains a non-project target: $Target ($Source)"
+    }
+    $normalized = $Target.Replace('\', '/').TrimStart('/')
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $targetFull = [System.IO.Path]::GetFullPath((Join-Path $Root $normalized))
+    if (-not $targetFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Installation plan target escapes project root: $Target ($Source)"
+    }
+    $key = $normalized.ToLowerInvariant()
+    if ($Plan.Contains($key)) {
+        $existing = $Plan[$key]
+        if ([string]$existing.contentHash -ne $ContentHash) {
+            throw "Installation plan conflict for '$normalized': $($existing.source) and $Source render different content."
+        }
+        $existing.owners = @(@($existing.owners) + @($Owner) | Sort-Object -Unique)
+        return
+    }
+    $Plan[$key] = [ordered]@{
+        target      = $normalized
+        source      = $Source
+        contentHash = $ContentHash
+        owners      = @($Owner)
+        scope       = 'project'
+        kind        = $Kind
+    }
+}
+
+function Get-PlannedArtifactHash {
+    param(
+        [string]$SourcePath,
+        [System.Collections.IDictionary]$SourceFm,
+        [string]$SourceBody,
+        [System.Collections.IDictionary]$FrontmatterOps,
+        [string]$Mode,
+        [string]$Template
+    )
+    if ($Mode -eq 'verbatim') { return (Get-FileSha256 $SourcePath).ToLowerInvariant() }
+    if ($Mode -eq 'rebuild-toml') {
+        return Get-StringSha256 (Invoke-CodexAgentTemplate -Template $Template -Fm $SourceFm -Body $SourceBody)
+    }
+    $newFm = Invoke-FrontmatterOps -Source $SourceFm -Ops $FrontmatterOps
+    $fmText = Format-Frontmatter $newFm
+    $rendered = if ($fmText) { $fmText + "`n" + $SourceBody } else { $SourceBody }
+    return Get-StringSha256 $rendered
+}
+
+function New-InstallationPlan {
+    param(
+        [string]$Root,
+        [string]$SourceRoot,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    $plan = [ordered]@{}
+    foreach ($tool in $ActiveTools) {
+        $adapter = $Adapters[$tool]
+        foreach ($section in @('rules', 'agents', 'commands')) {
+            $definition = $adapter[$section]
+            if (-not $definition -or -not $definition.copyTo) { continue }
+            $sourceDir = Join-Path $SourceRoot ("content/" + $section)
+            if (-not (Test-Path $sourceDir)) { continue }
+            $mode = if ($definition.mode) { [string]$definition.mode } else { 'transform' }
+            foreach ($file in Get-ChildItem -File $sourceDir -Filter *.md) {
+                $parts = Split-FrontmatterAndBody (Read-TextFile $file.FullName)
+                $fm = if ($section -eq 'agents') { Resolve-AgentModelTier -Frontmatter $parts.Frontmatter -Root $Root } else { $parts.Frontmatter }
+                $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+                $target = Resolve-CopyToPath ([string]$definition.copyTo) $name
+                $hash = Get-PlannedArtifactHash -SourcePath $file.FullName -SourceFm $fm -SourceBody $parts.Body `
+                    -FrontmatterOps $definition.frontmatter -Mode $mode -Template $definition.template
+                Add-InstallationPlanEntry -Plan $plan -Root $Root -Target $target -ContentHash $hash `
+                    -Source ("content/$section/" + $file.Name) -Owner $tool -Kind $section
+            }
+        }
+
+        if ($adapter.skills -and $adapter.skills.copyTo) {
+            $dirTemplate = ([string]$adapter.skills.copyTo).TrimEnd('/', '\')
+            foreach ($skillDir in Get-ChildItem -Directory (Join-Path $SourceRoot 'content/skills')) {
+                if (-not (Test-Path (Join-Path $skillDir.FullName 'SKILL.md'))) { continue }
+                $targetDir = Resolve-CopyToPath $dirTemplate $skillDir.Name
+                $sourceBase = (Resolve-Path $skillDir.FullName).Path.TrimEnd('\', '/')
+                foreach ($skillFile in Get-ChildItem -Recurse -File $skillDir.FullName) {
+                    $relative = $skillFile.FullName.Substring($sourceBase.Length + 1).Replace('\', '/')
+                    Add-InstallationPlanEntry -Plan $plan -Root $Root -Target ($targetDir.TrimEnd('/', '\') + '/' + $relative) `
+                        -ContentHash ((Get-FileSha256 $skillFile.FullName).ToLowerInvariant()) `
+                        -Source ("content/skills/$($skillDir.Name)/$relative") -Owner $tool -Kind 'skill'
+                }
+            }
+        }
+
+        $bundleRoot = Join-Path $SourceRoot ("content/openspec-bundle/" + $tool)
+        if (Test-Path $bundleRoot) {
+            $bundleBase = (Resolve-Path $bundleRoot).Path.TrimEnd('\', '/')
+            foreach ($bundleFile in Get-ChildItem -Recurse -File $bundleRoot) {
+                $relative = $bundleFile.FullName.Substring($bundleBase.Length + 1).Replace('\', '/')
+                Add-InstallationPlanEntry -Plan $plan -Root $Root -Target $relative `
+                    -ContentHash ((Get-FileSha256 $bundleFile.FullName).ToLowerInvariant()) `
+                    -Source ("content/openspec-bundle/$tool/$relative") -Owner $tool -Kind 'openspec'
+            }
+        }
+
+        if ($adapter.mcp -and $adapter.mcp.target) {
+            $descriptor = @($adapter.mcp.source, $adapter.mcp.schema, $adapter.mcp.format, $adapter.mcp.merge) -join '|'
+            Add-InstallationPlanEntry -Plan $plan -Root $Root -Target ([string]$adapter.mcp.target) `
+                -ContentHash (Get-StringSha256 $descriptor) -Source ("adapters/$tool.yaml#mcp") -Owner $tool -Kind 'mcp'
+        }
+    }
+    return $plan
+}
+
 function Invoke-PlacePhase {
     param(
         [string]$Root,
@@ -2008,7 +2200,7 @@ function Invoke-PlacePhase {
                 Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                     -TargetRel $target -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                     -FrontmatterOps $fmOps -Mode $mode `
-                    -Manifest $Manifest -ContentSource ("content/rules/" + $f.Name)
+                    -Manifest $Manifest -ContentSource ("content/rules/" + $f.Name) -Owners @($tool)
             }
         }
 
@@ -2026,7 +2218,7 @@ function Invoke-PlacePhase {
                 Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                     -TargetRel $target -SourceFm $agentFm -SourceBody $parts.Body `
                     -FrontmatterOps $fmOps -Mode $mode -Template $template `
-                    -Manifest $Manifest -ContentSource ("content/agents/" + $f.Name)
+                    -Manifest $Manifest -ContentSource ("content/agents/" + $f.Name) -Owners @($tool)
             }
         }
 
@@ -2044,14 +2236,14 @@ function Invoke-PlacePhase {
                     Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                         -TargetRel $targetRaw -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                         -FrontmatterOps $fmOps -Mode $mode `
-                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name)
+                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -Owners @($tool)
                     Write-Warn "  command written to user scope: $targetRaw (shared across projects)"
                 }
                 else {
                     Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                         -TargetRel $targetRaw -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                         -FrontmatterOps $fmOps -Mode $mode `
-                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name)
+                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -Owners @($tool)
                 }
             }
         }
@@ -2065,7 +2257,7 @@ function Invoke-PlacePhase {
                 $name = $sd.Name
                 $targetDir = Resolve-CopyToPath $dirTpl $name
                 Invoke-PlaceSkill -Root $Root -SourceDir $sd.FullName -TargetDir $targetDir `
-                    -Manifest $Manifest -ContentSource ("content/skills/" + $name)
+                    -Manifest $Manifest -ContentSource ("content/skills/" + $name) -Owners @($tool)
             }
         }
 
@@ -2414,9 +2606,12 @@ function Invoke-McpPhase {
         }
 
         Write-TextFile -Path $absTarget -Content ($finalContent + "`n")
+        $mcpPrevious = if ($Manifest.files.Contains($target)) { $Manifest.files[$target] } else { $null }
         $mcpEntry = [ordered]@{
             source        = 'content/mcp-servers.json'
             installedHash = (Get-FileSha256 $absTarget)
+            owners        = @(Merge-ManifestOwners -Existing $mcpPrevious -Owners @($tool))
+            scope         = 'project'
         }
         # `merged` marks a SHARED config (opencode.json / .kilo/kilo.json) that
         # carries user keys besides `mcp`. On `remove`, such a file must NOT be
@@ -3567,6 +3762,7 @@ function Invoke-Init {
     Write-Info ("Active tools: " + ($activeTools -join ', '))
 
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
 
     Write-Section 'Phase 2-3: Scan foreign files + integrations'
     $foreign = Invoke-ScanForeign -Root $Root -ActiveTools $activeTools -Manifest $null -Adapters $adapters
@@ -3584,6 +3780,7 @@ function Invoke-Init {
         $planDirs += "$t -> $primary/"
     }
     Write-Info ("Will write per-tool files into: " + ($planDirs -join ', '))
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
     Write-Info "MCP servers will be added to each tool's MCP config."
     if (-not $AssumeYes -and -not $NonInteractive) {
         if (-not (Read-YesNo 'Proceed with installation?' $true)) { return }
@@ -3700,6 +3897,7 @@ function Invoke-Verify {
     $mismatches = @()
     $count = 0
     foreach ($rel in $Manifest.files.Keys) {
+        if ($Manifest.files[$rel].userModified) { continue }
         $abs = Resolve-ManifestPath -Root $Root -Rel $rel
         if (-not (Test-Path $abs)) { $mismatches += "missing: $rel"; continue }
         $count++
@@ -3710,11 +3908,65 @@ function Invoke-Verify {
     return @{ Ok = ($mismatches.Count -eq 0); Count = $count; Mismatches = $mismatches }
 }
 
+function Invoke-LegacyClientLayoutMigration {
+    param(
+        [string]$Root,
+        [System.Collections.IDictionary]$Manifest,
+        [System.Collections.IDictionary]$InstallationPlan
+    )
+    $legacyPatterns = @('.codex/skills/*', '.kilo/skills/*', '.kilocode/skills/*', '.kilocode/workflows/*')
+    $removed = @()
+    $preserved = @()
+    foreach ($key in @($Manifest.files.Keys)) {
+        $normalized = ([string]$key).Replace('\', '/')
+        if (-not @($legacyPatterns | Where-Object { $normalized -like $_ }).Count) { continue }
+        if ($InstallationPlan.Contains($normalized.ToLowerInvariant())) { continue }
+        $entry = $Manifest.files[$key]
+        if (-not (@($entry.owners) -contains 'legacy')) { continue }
+        $abs = Resolve-ManifestPath -Root $Root -Rel $key
+        $exists = Test-Path -LiteralPath $abs -PathType Leaf
+        $matches = $exists -and $entry.installedHash -and ((Get-FileSha256 $abs) -eq [string]$entry.installedHash)
+        if ($matches -and -not $entry.userModified) {
+            Remove-Item -LiteralPath $abs -Force
+            [void]$Manifest.files.Remove($key)
+            $removed += $normalized
+            continue
+        }
+        if ($exists) {
+            $entry['userModified'] = $true
+            $record = [ordered]@{ path = $normalized; source = [string]$entry.source; reason = 'user-modified' }
+            $Manifest.legacyArtifacts.preservedProject = @($Manifest.legacyArtifacts.preservedProject) + @($record)
+            $preserved += $normalized
+        }
+        else {
+            [void]$Manifest.files.Remove($key)
+        }
+    }
+
+    foreach ($relativeDir in @('.kilocode', '.codex/skills', '.kilo/skills')) {
+        $dir = Join-Path $Root $relativeDir
+        if (-not (Test-Path $dir -PathType Container)) { continue }
+        $remainingFiles = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force -ErrorAction SilentlyContinue)
+        if ($remainingFiles.Count -eq 0) { Remove-Item -LiteralPath $dir -Recurse -Force }
+    }
+    if ($removed.Count -gt 0) { Write-Info "Migrated legacy client layout: removed $($removed.Count) managed file(s)." }
+    if ($preserved.Count -gt 0) {
+        Write-Warn "Preserved $($preserved.Count) user-modified legacy client file(s):"
+        $preserved | ForEach-Object { Write-Warn "  $_" }
+    }
+    if (@($Manifest.legacyArtifacts.userScope).Count -gt 0) {
+        Write-Warn 'Legacy user-scope Codex prompts were preserved and are no longer installer-managed:'
+        @($Manifest.legacyArtifacts.userScope) | ForEach-Object { Write-Warn "  $($_.path)" }
+    }
+}
+
 function Invoke-Update {
     param(
         [string]$Root,
         [string]$SourceRootRequested
     )
+    $manifestPath = Join-Path $Root $script:ManifestFileName
+    $manifestOriginalText = Read-TextFile $manifestPath
     $manifest = Read-Manifest -Root $Root
     if (-not $manifest) { throw 'No manifest found. Run init first.' }
     if ($manifest.protocol -and [version]$manifest.protocol -gt [version]$script:ProtocolVersion) {
@@ -3726,6 +3978,8 @@ function Invoke-Update {
 
     $activeTools = @($manifest.tools)
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
 
     Write-Section 'Migration: legacy .ai-rules/rules/ mirror'
     $legacyKeys = @($manifest.files.Keys | Where-Object { $_ -like '.ai-rules/rules/*' })
@@ -3861,6 +4115,9 @@ function Invoke-Update {
     Write-Section 'OpenSpec artefacts (update)'
     Invoke-OpenSpecArtifacts -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Manifest $manifest
 
+    Write-Section 'Migration: legacy Codex/Kilo client layout'
+    Invoke-LegacyClientLayoutMigration -Root $Root -Manifest $manifest -InstallationPlan $installationPlan
+
     Write-Section 'OpenSpec project.md (update / 1C autodetect)'
     Invoke-OpenSpecProjectMd -Root $Root -Manifest $manifest
 
@@ -3891,11 +4148,27 @@ function Invoke-Update {
         Write-Info "  MCP: external. Конфиги не тронуты. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
     }
 
-    $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $manifest.lastChannel = $script:LastChannel
     $manifest.version = Get-SourceVersion -SourceRoot $sourceRoot
-
-    Write-Manifest -Root $Root -Manifest $manifest
+    foreach ($key in @($manifest.files.Keys)) {
+        $entry = $manifest.files[$key]
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('core') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
+    $previousUpdatedAt = [string]$manifest.updatedAt
+    $manifest.updatedAt = '__compare__'
+    $manifestCandidateText = (ConvertTo-Json $manifest -Depth 15) + "`n"
+    $updatedAtPattern = '(?m)("updatedAt"\s*:\s*)"[^"]*"'
+    $originalComparable = [regex]::Replace($manifestOriginalText, $updatedAtPattern, '$1"__compare__"')
+    $candidateComparable = [regex]::Replace($manifestCandidateText, $updatedAtPattern, '$1"__compare__"')
+    if ($candidateComparable -ne $originalComparable) {
+        $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        Write-Manifest -Root $Root -Manifest $manifest
+    }
+    else {
+        $manifest.updatedAt = $previousUpdatedAt
+        Write-Info 'Manifest unchanged; preserving updatedAt and file bytes.'
+    }
 
     Write-Section 'Report'
     Write-Info 'Update complete.'
@@ -3931,6 +4204,10 @@ function Invoke-Add {
     $sourceRoot = Resolve-SourceRoot -Requested $SourceRootRequested
     $activeTools = @($NewTool)
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    $allPlannedTools = @(@($manifest.tools) + @($NewTool) | Sort-Object -Unique)
+    $allPlannedAdapters = Load-Adapters -SourceRoot $sourceRoot -Tools $allPlannedTools
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
 
     $foreign = Invoke-ScanForeign -Root $Root -ActiveTools $activeTools -Manifest $manifest -Adapters $adapters
     $integrations = $manifest.integrations
@@ -4015,6 +4292,18 @@ function Test-MergedMcpEntry {
     return ($Entry -is [System.Collections.IDictionary] -and $Entry.Contains('merged') -and $Entry['merged'])
 }
 
+function Remove-EmptyManagedParents {
+    param([string]$Root, [string]$Path)
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $current = Split-Path -Parent $Path
+    while ($current -and $current.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) -and $current -ne $rootFull) {
+        $items = @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)
+        if ($items.Count -gt 0) { break }
+        Remove-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        $current = Split-Path -Parent $current
+    }
+}
+
 function Invoke-Remove {
     param(
         [string]$Root,
@@ -4026,22 +4315,16 @@ function Invoke-Remove {
     if ($ScopeTool) {
         if ($ScopeTool -notin $manifest.tools) { Write-Warn "$ScopeTool is not installed."; return }
         Write-Info "Removing rules for $ScopeTool only."
-        $toolPrefixes = @(".$ScopeTool/")
-        # Claude uses `.claude/` but also generates `CLAUDE.md` entry; Codex uses `.codex/` + `AGENTS.md` edits; handle per-tool cleanup:
-        switch ($ScopeTool) {
-            'claude-code' { $toolPrefixes = @('.claude/', 'CLAUDE.md', '.mcp.json') }
-            'codex'       { $toolPrefixes = @('.codex/') }
-            'opencode'    { $toolPrefixes = @('.opencode/', 'opencode.json') }
-            'kilocode'    { $toolPrefixes = @('.kilo/', '.kilocode/') }
-            'cursor'      { $toolPrefixes = @('.cursor/') }
-            'other'       { $toolPrefixes = @('.ai-agent/') }
-        }
         $toRemove = @()
         foreach ($rel in @($manifest.files.Keys)) {
-            foreach ($p in $toolPrefixes) {
-                if ($rel -eq $p -or $rel.StartsWith($p.TrimEnd('/') + '/')) {
-                    $toRemove += $rel; break
-                }
+            $entry = $manifest.files[$rel]
+            if (-not (@($entry.owners) -contains $ScopeTool)) { continue }
+            $remainingOwners = @(@($entry.owners) | Where-Object { $_ -ne $ScopeTool })
+            if ($remainingOwners.Count -gt 0) {
+                $entry['owners'] = $remainingOwners
+            }
+            else {
+                $toRemove += $rel
             }
         }
         foreach ($rel in $toRemove) {
@@ -4053,8 +4336,9 @@ function Invoke-Remove {
             }
             elseif (Test-Path $abs) {
                 Remove-Item -Force $abs -ErrorAction SilentlyContinue
+                Remove-EmptyManagedParents -Root $Root -Path $abs
             }
-            $manifest.files.Remove($rel)
+            [void]$manifest.files.Remove($rel)
         }
         $manifest.tools = @($manifest.tools | Where-Object { $_ -ne $ScopeTool })
         if ($manifest.foreignFiles.Contains($ScopeTool)) { $manifest.foreignFiles.Remove($ScopeTool) }
