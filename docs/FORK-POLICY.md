@@ -14,6 +14,8 @@ This repository is the controlled ITL fork of
 
 An upstream release without a tag is not eligible. A published ITL tag is never
 moved, recreated, or force-pushed. Corrections are released as the next `rN`.
+The active GitHub ruleset `Protect immutable ITL release tags` blocks updates
+and deletion for `refs/tags/itl-*`; verify it remains active before publication.
 
 ## Upgrade rule
 
@@ -30,4 +32,3 @@ The fork owner has confirmed permission to publish modifications and downstream
 tags/releases. Do not add private correspondence, credentials, or personal data
 to this repository. If upstream later publishes a license or changes the stated
 distribution terms, re-check them before the next release.
-
