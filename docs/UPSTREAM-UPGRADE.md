@@ -18,13 +18,19 @@ ITL release branch into a new upgrade branch.
 Recommended commands, with `<tag>` replaced by the published upstream tag:
 
 ```powershell
-git fetch upstream --tags --prune
-git rev-parse "<tag>^{commit}"
-git switch --create "upgrade/<tag>" "<tag>^{commit}"
+.\scripts\new-upstream-upgrade.ps1 -UpstreamTag <tag>
 .\scripts\check.ps1 -Mode Full
 ```
+
+After downstream adaptation and review, create the local release branch/tag:
+
+```powershell
+.\scripts\publish-fork-release.ps1 -UpstreamTag <tag> -Revision 1
+```
+
+Inspect the resulting refs, then repeat with `-Push`. Publication uses one
+atomic push so the release branch and immutable tag cannot be partially sent.
 
 If the upstream tag is moved after intake, discard the unpublished upgrade
 branch and restart review from the newly verified commit. Never repair that
 situation by silently changing an already published ITL tag.
-
