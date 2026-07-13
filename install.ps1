@@ -69,7 +69,9 @@
     render MCP configs from `content/mcp-servers.json` (legacy behaviour),
     even when an external installation is detected. `external` — require
     the external installation (fail if the env signal or manifest is
-    missing) and skip MCP config rendering.
+    missing) and skip MCP config rendering. `delegated` — delegate all MCP
+    ownership to the host workflow: do not render, inspect, delete, probe, or
+    track tool MCP config files. Existing MCP config bytes are preserved.
 
 .PARAMETER ProjectRoot
     Project root directory to install into. Defaults to the current working
@@ -111,7 +113,7 @@ param(
     [switch]$Force,
     [string[]]$ForcePaths,
 
-    [ValidateSet('auto', 'managed', 'external')]
+    [ValidateSet('auto', 'managed', 'external', 'delegated')]
     [string]$McpMode = 'auto'
 )
 
@@ -2964,6 +2966,7 @@ function Resolve-ExternalMcpMode {
     param([string]$ProjectRoot)
     switch ($script:McpMode) {
         'managed' { return @{ Mode = 'managed' } }
+        'delegated' { return @{ Mode = 'delegated' } }
         'external' {
             $det = Detect-ExternalMcp -ProjectRoot $ProjectRoot
             if ($det.Mode -ne 'external') {
@@ -2978,6 +2981,44 @@ function Resolve-ExternalMcpMode {
             return $det
         }
     }
+}
+
+function Remove-McpTargetsFromManifest {
+    param(
+        [System.Collections.IDictionary]$Manifest,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters,
+        [string]$OwnerLabel = 'delegated owner'
+    )
+
+    if (-not $Manifest -or -not $ActiveTools -or -not $Adapters) { return }
+    foreach ($tool in $ActiveTools) {
+        $adapter = $Adapters[$tool]
+        if (-not $adapter -or -not $adapter.mcp) { continue }
+        $mcpTarget = $adapter.mcp.target
+        if ($mcpTarget -and $Manifest.files.Contains($mcpTarget)) {
+            [void]$Manifest.files.Remove($mcpTarget)
+            Write-Info "  [$tool] MCP config: $mcpTarget removed from installer manifest ownership ($OwnerLabel)."
+        }
+    }
+}
+
+function Invoke-DelegatedMcpPhase {
+    param(
+        [System.Collections.IDictionary]$Manifest,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+
+    Remove-McpTargetsFromManifest -Manifest $Manifest -ActiveTools $ActiveTools -Adapters $Adapters -OwnerLabel 'ITL workflow'
+    if (-not $Manifest.integrations) { $Manifest.integrations = [ordered]@{} }
+    $Manifest.integrations['mcp'] = [ordered]@{
+        mode           = 'delegated'
+        owner          = 'ITL'
+        contractSource = 'host workflow'
+        managedTargets = @()
+    }
+    $Manifest.mcpServers = @()
 }
 
 function Get-RegistryProjectForRoot {
@@ -3841,6 +3882,9 @@ function Invoke-Init {
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиги инструментов НЕ изменяются.'
     }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — tool MCP configs are not inspected or changed.'
+    }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
     }
@@ -3858,6 +3902,11 @@ function Invoke-Init {
         Write-Section 'Phase 8d: External MCP (USER-RULES.md sync)'
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. Конфиги не тронуты. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Section 'Phase 8d: Delegated MCP ownership'
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
     }
 
     Write-Section 'Phase 9: Manifest'
@@ -3994,6 +4043,12 @@ function Invoke-Update {
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
     $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
     Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
+    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
+    if ($extMcp.Mode -eq 'delegated') {
+        # Ownership must be removed before drift detection. Otherwise a config
+        # changed by the host workflow is falsely reported as userModified.
+        Remove-McpTargetsFromManifest -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters -OwnerLabel 'ITL workflow'
+    }
 
     Write-Section 'Migration: legacy .ai-rules/rules/ mirror'
     $legacyKeys = @($manifest.files.Keys | Where-Object { $_ -like '.ai-rules/rules/*' })
@@ -4145,9 +4200,11 @@ function Invoke-Update {
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
 
     Write-Section 'MCP (update)'
-    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиги инструментов НЕ изменяются.'
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — tool MCP configs are not inspected or changed.'
     }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
@@ -4163,6 +4220,11 @@ function Invoke-Update {
         Write-Section 'External MCP (USER-RULES.md sync)'
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. Конфиги не тронуты. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Section 'Delegated MCP ownership'
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
     }
 
     $manifest.lastChannel = $script:LastChannel
@@ -4226,6 +4288,10 @@ function Invoke-Add {
     $allPlannedAdapters = Load-Adapters -SourceRoot $sourceRoot -Tools $allPlannedTools
     $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
     Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
+    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
+    if ($extMcp.Mode -eq 'delegated') {
+        Remove-McpTargetsFromManifest -Manifest $manifest -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters -OwnerLabel 'ITL workflow'
+    }
 
     $foreign = Invoke-ScanForeign -Root $Root -ActiveTools $activeTools -Manifest $manifest -Adapters $adapters
     $integrations = $manifest.integrations
@@ -4239,9 +4305,11 @@ function Invoke-Add {
     # placeholders in `content/mcp-servers.json` substitute against the
     # actual project value when rendering the newly-added tool's MCP config.
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
-    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиг для нового инструмента НЕ создаётся.'
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — no MCP config is created for the new tool.'
     }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
@@ -4265,6 +4333,10 @@ function Invoke-Add {
     if ($extMcp.Mode -eq 'external') {
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $allActive -Adapters $allAdapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
     }
 
     $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')

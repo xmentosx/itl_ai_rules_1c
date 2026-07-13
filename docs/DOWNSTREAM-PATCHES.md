@@ -17,6 +17,9 @@ Every downstream patch added later must have one row:
 | ITL-KILO-001 | Use `.kilo` only and migrate hash-matching legacy `.kilocode` artifacts | Kilo v7 project commands, skills, and MCP layout | clean/modified migration tests plus Kilo runtime qualification | keep |
 | ITL-CONTEXT-001 | Keep always-on `AGENTS.md` within 24 KiB and route detail on demand | Root context contract and internal links | `tests/LayoutAndManifest.Tests.ps1` budget and link cases | keep |
 | ITL-MCP-001 | Treat unresolved optional MCP servers as disabled and unresolved required servers as installation errors | `content/mcp-servers.json` `required` field and placeholder rendering | `tests/LayoutAndManifest.Tests.ps1` placeholder cases | keep |
+| ITL-MCP-002 | Add delegated MCP ownership for host workflows without reading or mutating client configs | Installer MCP mode and manifest ownership | `tests/Installer.Tests.ps1` delegated init/update/add cases | keep |
+| ITL-OPENSPEC-001 | Activate project-mandated skills before OpenSpec explore/propose/apply and preserve the preflight across bundle refresh | OpenSpec generated commands and skills | bundle overlay inventory and idempotence tests | keep |
+| ITL-METADATA-001 | Route initial extension creation through ITL lifecycle and document supported Designer `-Extension` load paths | CFE/DB metadata guidance | documentation routing tests and workflow integration gate | keep |
 
 Allowed values for **Next upgrade** are:
 

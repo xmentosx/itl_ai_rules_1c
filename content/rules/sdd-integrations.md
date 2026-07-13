@@ -20,6 +20,23 @@ Layout, spec format, delta format, and the full workflow are described in the wo
 
 Read those files before writing or editing OpenSpec artifacts.
 
+## Mandatory project-skill preflight
+
+Before `explore`, `propose`, or `apply` answers, investigation, or artifact
+work, read root `AGENTS.md` and `USER-RULES.md` and activate every skill they
+make mandatory for the current subject or phase. Do this before broad
+repository traversal. Kilo activates a project skill with
+`skill("<skill-name>")`; clients with native skill activation use their native
+mechanism.
+
+When a mandatory skill requires an external product source, search it first and
+then verify the result against code, tests, current metadata, and available MCP
+evidence. If the skill or source is unavailable, provide the concrete recovery
+action and label code-only findings as provisional; do not present architecture
+or product intent as confirmed. Artifacts created or updated in that phase must
+contain `## Context Sources` with the material external pages and any conflicts
+with repository evidence.
+
 ## MCP discipline for OpenSpec authoring
 
 OpenSpec artifacts (`proposal.md`, `design.md`, `tasks.md`, delta specs under `changes/<id>/specs/` and current specs under `specs/`) are Markdown, but they make **factual claims about the 1C system** — metadata names, attributes, tabular sections, public API signatures, БСП subsystem names, platform-version behaviour, project conventions. Every such claim must be grounded in evidence from the relevant MCP tools, not from memory or guessing. This is the **spec-authoring path** from `AGENTS.md → Development Procedure → Triage`.

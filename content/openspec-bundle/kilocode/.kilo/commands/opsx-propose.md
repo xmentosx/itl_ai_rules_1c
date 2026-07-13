@@ -1,3 +1,13 @@
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before answering, investigating the repository, planning, proposing, or applying:
+
+1. Read the project root `AGENTS.md` and `USER-RULES.md` and identify every skill they make mandatory for the current subject or phase.
+2. Activate those skills before broad repository traversal. Kilo must call `skill("<skill-name>")`; clients with native skill activation use their native mechanism.
+3. If a mandatory skill requires an external product source, search that source first, then verify the result against code, tests, metadata, and available MCP evidence.
+4. If a mandatory skill or source is unavailable, show the exact recovery action and do not present architecture or product intent as confirmed; label code-only findings as provisional.
+5. When creating or updating OpenSpec artifacts, add a `## Context Sources` section listing the material external pages used and any conflicts with repository evidence.
 Propose a new change - create the change and generate all artifacts in one step.
 
 I'll create a change with artifacts:

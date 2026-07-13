@@ -176,6 +176,12 @@ try {
     $initOut = Invoke-OpenSpecInit -WorkDir $probe
     Write-Verbose $initOut
 
+    # The official bundle is intentionally refreshed from scratch. Reapply
+    # ITL's project-skill preflight before diff/copy so future CLI upgrades do
+    # not silently remove mandatory project context routing.
+    & (Join-Path $repo 'tools\apply-openspec-downstream-overlay.ps1') -Root $probe
+    if ($LASTEXITCODE -ne 0) { throw 'ITL OpenSpec downstream overlay failed.' }
+
     Write-Host ''
     Write-Host 'Per-tool diff:'
     $stats = @()
