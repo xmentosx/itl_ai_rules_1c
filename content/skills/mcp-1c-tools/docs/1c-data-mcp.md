@@ -1,6 +1,6 @@
 # 1c-data-mcp — tool catalog
 
-Execution of BSL code, queries and event-log inspection **inside the project's live infobase** via the HTTP service `hs/mcp` published on that infobase (tools from [comol/mcp_designer_tools](https://github.com/comol/mcp_designer_tools), loaded into the *Конструктор MCP серверов для 1С* on the IB side).
+Conditional legacy execution of BSL code, queries and event-log inspection **inside the project's live infobase** via the HTTP service `hs/mcp` published on that infobase (tools from [comol/mcp_designer_tools](https://github.com/comol/mcp_designer_tools), loaded into the *Конструктор MCP серверов для 1С* on the IB side). The installer includes this server only when the project intentionally supplies a non-empty `INFOBASE_PUBLISH_URL`; an empty value is expected and requires no action when publication is disabled.
 
 > Load this file only if the `1c-data-mcp` server is actually available in the current session (its tools are visible in the agent tool schema). Mere presence in `mcp-servers.json` or in `.cursor/mcp.json` does not count as availability — the HTTP endpoint `{INFOBASE_PUBLISH_URL}/hs/mcp` must respond and must be reachable **without** authentication. Setup and troubleshooting — `content/commands/checkmcp.md` (section about `1c-data-mcp`).
 

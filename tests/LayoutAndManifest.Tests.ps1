@@ -32,8 +32,8 @@ BeforeAll {
     $script:KiloProject = Join-Path $script:LayoutRoot "kilo-only"
     New-Item -ItemType Directory -Force -Path $script:CombinedProject | Out-Null
     $script:PromptBefore = Get-SelectedPromptSnapshot
-    $result = Invoke-TestInstall -ProjectRoot $script:CombinedProject -Tools "codex,kilocode"
-    $result.ExitCode | Should -Be 0 -Because $result.Output
+    $script:CombinedInstallResult = Invoke-TestInstall -ProjectRoot $script:CombinedProject -Tools "codex,kilocode"
+    $script:CombinedInstallResult.ExitCode | Should -Be 0 -Because $script:CombinedInstallResult.Output
     foreach ($case in @(@($script:CodexProject, "codex"), @($script:KiloProject, "kilocode"))) {
         New-Item -ItemType Directory -Force -Path $case[0] | Out-Null
         $singleResult = Invoke-TestInstall -ProjectRoot $case[0] -Tools $case[1]
@@ -86,6 +86,53 @@ Describe "Modern Codex and Kilo layout" {
         @($shared.Value.owners | Sort-Object) | Should -Be @("codex", "kilocode")
         $workflow = $manifest.files.PSObject.Properties | Where-Object { $_.Name -eq ".agents/skills/doctor/SKILL.md" } | Select-Object -First 1
         @($workflow.Value.owners | Sort-Object) | Should -Be @("codex", "kilocode")
+    }
+
+    It "omits an optional server with an unresolved publication placeholder" {
+        $codexConfig = Get-Content -Raw -Encoding UTF8 (Join-Path $script:CombinedProject ".codex\config.toml")
+        $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $script:CombinedProject ".ai-rules.json") | ConvertFrom-Json
+        $codexConfig | Should -Not -Match ([regex]::Escape('1c-data-mcp'))
+        @($manifest.mcpServers) | Should -Not -Contain "1c-data-mcp"
+        $script:CombinedInstallResult.Output | Should -Not -Match "Заполните INFOBASE_PUBLISH_URL"
+        $script:CombinedInstallResult.Output | Should -Match "optional server 1c-data-mcp is disabled"
+    }
+
+    It "includes the optional server when the publication URL is populated" {
+        $copy = Join-Path $script:LayoutRoot "published-data-mcp"
+        Copy-Item -LiteralPath $script:CodexProject -Destination $copy -Recurse -Force
+        $envPath = Join-Path $copy ".dev.env"
+        $envText = Get-Content -Raw -Encoding UTF8 $envPath
+        $envText = [regex]::Replace($envText, '(?m)^INFOBASE_PUBLISH_URL=.*$', 'INFOBASE_PUBLISH_URL=http://127.0.0.1:9/demo/ru')
+        [System.IO.File]::WriteAllText($envPath, $envText, [System.Text.UTF8Encoding]::new($false))
+
+        $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "update", "-ProjectRoot", $copy, "-Source", $script:ForkRoot,
+            "-NonInteractive", "-AssumeYes", "-McpMode", "managed"
+        )
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $codexConfig = Get-Content -Raw -Encoding UTF8 (Join-Path $copy ".codex\config.toml")
+        $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $copy ".ai-rules.json") | ConvertFrom-Json
+        $codexConfig | Should -Match ([regex]::Escape('[mcp_servers."1c-data-mcp"]'))
+        $codexConfig | Should -Match ([regex]::Escape('http://127.0.0.1:9/demo/hs/mcp'))
+        @($manifest.mcpServers) | Should -Contain "1c-data-mcp"
+    }
+
+    It "fails installation when a required server placeholder is unresolved" {
+        $source = Join-Path $script:LayoutRoot "required-placeholder-source"
+        New-Item -ItemType Directory -Force -Path $source | Out-Null
+        foreach ($item in Get-ChildItem -Force -LiteralPath $script:ForkRoot | Where-Object Name -ne '.git') {
+            Copy-Item -LiteralPath $item.FullName -Destination $source -Recurse -Force
+        }
+        $catalogPath = Join-Path $source "content\mcp-servers.json"
+        $catalog = Get-Content -Raw -Encoding UTF8 $catalogPath | ConvertFrom-Json
+        ($catalog.servers | Where-Object id -eq '1c-data-mcp').required = $true
+        [System.IO.File]::WriteAllText($catalogPath, (($catalog | ConvertTo-Json -Depth 10) + "`n"), [System.Text.UTF8Encoding]::new($false))
+        $project = Join-Path $script:LayoutRoot "required-placeholder-project"
+        New-Item -ItemType Directory -Force -Path $project | Out-Null
+
+        $result = Invoke-TestInstall -ProjectRoot $project -Tools "codex" -SourceRoot $source
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match "is required, but its URL contains unresolved placeholder"
     }
 
     It "keeps a no-op update byte-idempotent" {

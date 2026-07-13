@@ -793,27 +793,39 @@ function Get-InfobasePublishUrlBase {
 }
 
 function Resolve-McpServerPlaceholders {
-    # Substitutes {INFOBASE_PUBLISH_URL} in the `url` field of every server
-    # entry that contains it. Mutates the input collection. Returns the list
-    # of server ids whose placeholder could not be resolved because
-    # INFOBASE_PUBLISH_URL was empty / `.dev.env` was missing — the caller
-    # uses this to warn the user.
+    # Substitutes {INFOBASE_PUBLISH_URL} in server URLs and returns only the
+    # servers that can be rendered. `required` is the installation contract:
+    # an unresolved required server blocks installation, while an unresolved
+    # optional server is intentionally absent from configs and the manifest.
     param(
         [array]$Servers,
         [string]$InfobaseBase
     )
-    $unresolved = @()
+    $resolved = @()
     foreach ($s in $Servers) {
-        if (-not $s.url) { continue }
-        if ($s.url -notmatch '\{INFOBASE_PUBLISH_URL\}') { continue }
-        if ($InfobaseBase) {
-            $s.url = $s.url.Replace('{INFOBASE_PUBLISH_URL}', $InfobaseBase)
+        if ($s.url -and $s.url -match '\{INFOBASE_PUBLISH_URL\}') {
+            if ($InfobaseBase) {
+                $s.url = $s.url.Replace('{INFOBASE_PUBLISH_URL}', $InfobaseBase)
+            }
+            elseif ([bool]$s.required) {
+                throw "MCP server '$($s.id)' is required, but its URL contains unresolved placeholder {INFOBASE_PUBLISH_URL}. Fill INFOBASE_PUBLISH_URL in .dev.env."
+            }
+            else {
+                Write-Info "  MCP config: optional server $($s.id) is disabled because INFOBASE_PUBLISH_URL is empty."
+                continue
+            }
         }
-        else {
-            $unresolved += $s.id
+
+        if ($s.url -and $s.url -match '\{[\w-]+\}') {
+            if ([bool]$s.required) {
+                throw "MCP server '$($s.id)' is required, but its URL contains an unresolved placeholder: $($s.url)"
+            }
+            Write-Info "  MCP config: optional server $($s.id) is disabled because its URL contains an unresolved placeholder."
+            continue
         }
+        $resolved += $s
     }
-    return , $unresolved
+    return $resolved
 }
 
 function Test-McpHttpEndpoint {
@@ -2471,15 +2483,10 @@ function Invoke-McpPhase {
 
     # Substitute {INFOBASE_PUBLISH_URL} placeholders in server URLs from the
     # project's .dev.env (Place-DevEnv runs earlier in the pipeline so the
-    # file is in place by now). Servers whose placeholder cannot be resolved
-    # keep the literal placeholder in the rendered config — the user sees a
-    # clear TODO marker and a warning telling them what to fill in.
+    # file is in place by now). Optional unresolved servers are omitted;
+    # required unresolved servers fail before any MCP config is rendered.
     $infobaseBase = Get-InfobasePublishUrlBase -Root $Root
-    $unresolved = Resolve-McpServerPlaceholders -Servers $servers -InfobaseBase $infobaseBase
-    if ($unresolved.Count -gt 0) {
-        Write-Warn ("  MCP config: следующие серверы используют плейсхолдер {INFOBASE_PUBLISH_URL}, но INFOBASE_PUBLISH_URL в .dev.env пуст: " + ($unresolved -join ', ') + '.')
-        Write-Warn '  Заполните INFOBASE_PUBLISH_URL в .dev.env (URL веб-публикации ИБ, напр. http://localhost/<infobase_name>/ru/) и запустите установщик повторно — MCP-конфиг будет перерендерен с подставленным URL.'
-    }
+    $servers = @(Resolve-McpServerPlaceholders -Servers $servers -InfobaseBase $infobaseBase)
 
     # Probe HTTP-service-based MCP servers (1c-data-mcp). The MCP HTTP client
     # does not pass any Authorization header to /hs/<service>, so the 1C
@@ -3467,8 +3474,8 @@ function Place-RootTemplates {
 # Critical fields (treated as blocking for IB-related commands when empty):
 #   PREFIX, COMPANY, DEVELOPER, PLATFORM_VERSION, PLATFORM_PATH,
 #   INFOBASE_PATH.
-# Recommended fields (warned about, but not blocking):
-#   IB_USER, INFOBASE_PUBLISH_URL.
+# Conditional fields (empty is expected until the matching capability is
+# explicitly requested): INFOBASE_PUBLISH_URL.
 # Defaulted fields (empty = silently fall back to a documented default;
 # never re-asked at task time):
 #   IB_PASSWORD (empty = no password; /P omitted),
@@ -3614,7 +3621,6 @@ function Place-DevEnv {
         $val = Read-Required 'IB_USER (пусто — без аутентификации, /N опускается)'         '';                                                  if ($val) { $text = Set-DevEnvValue -Text $text -Key 'IB_USER'             -Value $val }
         $val = Read-Required 'IB_PASSWORD (пусто — без пароля, /P опускается; не храните прод-пароли)' '';                                       if ($val) { $text = Set-DevEnvValue -Text $text -Key 'IB_PASSWORD'         -Value $val }
         $val = Read-Required 'LOG_PATH (файл лога Designer''а; пусто — $env:TEMP\1cv8.log)' '';                                                if ($val) { $text = Set-DevEnvValue -Text $text -Key 'LOG_PATH'            -Value $val }
-        $val = Read-Required 'INFOBASE_PUBLISH_URL (URL веб-публикации для UI-тестов; пусто — UI-тесты пропускаются)' '';                      if ($val) { $text = Set-DevEnvValue -Text $text -Key 'INFOBASE_PUBLISH_URL' -Value $val }
     }
 
     # Persist subagent model tiers. The values were either asked once during
@@ -3649,16 +3655,9 @@ function Place-DevEnv {
     foreach ($k in @('PREFIX', 'COMPANY', 'DEVELOPER', 'PLATFORM_VERSION', 'PLATFORM_PATH', 'INFOBASE_PATH')) {
         if (-not $values.Contains($k) -or [string]::IsNullOrWhiteSpace($values[$k])) { $criticalEmpty += $k }
     }
-    $recommendedEmpty = @()
-    foreach ($k in @('INFOBASE_PUBLISH_URL')) {
-        if (-not $values.Contains($k) -or [string]::IsNullOrWhiteSpace($values[$k])) { $recommendedEmpty += $k }
-    }
     if ($criticalEmpty.Count -gt 0) {
         Write-Warn ("  .dev.env: незаполнены критичные поля: " + ($criticalEmpty -join ', '))
         Write-Warn '  Заполните их вручную перед запуском задач генерации кода / работы с ИБ.'
-    }
-    if ($recommendedEmpty.Count -gt 0) {
-        Write-Info ("  .dev.env: рекомендуется также заполнить: " + ($recommendedEmpty -join ', '))
     }
 }
 
