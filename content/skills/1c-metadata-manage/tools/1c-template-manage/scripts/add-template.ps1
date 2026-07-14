@@ -67,6 +67,7 @@ if (-not (Test-Path $rootXmlPath)) {
 $processorDir = Join-Path $SrcDir $ObjectName
 $templatesDir = Join-Path $processorDir "Templates"
 $templateMetaPath = Join-Path $templatesDir "$TemplateName.xml"
+$synonymWasSpecified = $PSBoundParameters.ContainsKey("Synonym")
 
 $rootXmlFull = Resolve-Path $rootXmlPath
 $xmlDoc = New-Object System.Xml.XmlDocument
@@ -79,7 +80,19 @@ if (-not $childObjects) {
 	Write-Error "Не найден элемент ChildObjects в $rootXmlPath"
 	exit 1
 }
-$registeredTemplates = @($childObjects.SelectNodes("md:Template", $nsMgr) | Where-Object { $_.InnerText -eq $TemplateName })
+$registeredTemplates = @()
+foreach ($candidateTemplate in $childObjects.SelectNodes("md:Template", $nsMgr)) {
+	$elementChild = @($candidateTemplate.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })
+	$nameNode = $candidateTemplate.SelectSingleNode("md:Properties/md:Name", $nsMgr)
+	$candidateName = if ($nameNode -and $nameNode.InnerText) { $nameNode.InnerText.Trim() } else { $candidateTemplate.InnerText.Trim() }
+	if ($candidateName -eq $TemplateName) {
+		if ($elementChild.Count -gt 0) {
+			Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: Template.$TemplateName uses an unsupported structured reference"
+			exit 1
+		}
+		$registeredTemplates += $candidateTemplate
+	}
+}
 if ($registeredTemplates.Count -gt 1) {
 	Write-Error "CFE_CHILD_OBJECT_DUPLICATE: Template.$TemplateName registered $($registeredTemplates.Count) times"
 	exit 1
@@ -90,17 +103,64 @@ if ($registeredTemplates.Count -gt 1) {
 $templateDir = Join-Path $templatesDir $TemplateName
 $templateExtDir = Join-Path $templateDir "Ext"
 $templateFilePath = Join-Path $templateExtDir "Template$($tmpl.Ext)"
-if (Test-Path $templateMetaPath -PathType Leaf) {
-	if ($registeredTemplates.Count -eq 1 -and (Test-Path $templateFilePath -PathType Leaf)) {
-		Write-Host "[OK] Template.$TemplateName already exists and is registered once"
-		exit 0
+$templateMetadataExists = Test-Path $templateMetaPath -PathType Leaf
+$templateTreeExists = Test-Path $templateDir -PathType Container
+$templateUuid = $null
+if ($templateMetadataExists) {
+	$templateDoc = New-Object System.Xml.XmlDocument
+	$templateDoc.PreserveWhitespace = $true
+	try { $templateDoc.Load($templateMetaPath) } catch { Write-Error "TEMPLATE_METADATA_INVALID: $($_.Exception.Message)"; exit 1 }
+	$templateNs = New-Object System.Xml.XmlNamespaceManager($templateDoc.NameTable)
+	$templateNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$templateNs.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+	$templateRoot = $templateDoc.SelectSingleNode("/md:MetaDataObject/md:Template", $templateNs)
+	if (-not $templateRoot -or -not $templateRoot.GetAttribute("uuid")) { Write-Error "TEMPLATE_METADATA_INVALID: Template.$TemplateName UUID is missing"; exit 1 }
+	$templateUuid = $templateRoot.GetAttribute("uuid")
+	$metadataName = $templateDoc.SelectSingleNode("/md:MetaDataObject/md:Template/md:Properties/md:Name", $templateNs)
+	if (-not $metadataName -or $metadataName.InnerText -ne $TemplateName) { Write-Error "TEMPLATE_METADATA_INVALID: Template metadata Name does not match '$TemplateName'"; exit 1 }
+	$metadataType = $templateDoc.SelectSingleNode("/md:MetaDataObject/md:Template/md:Properties/md:TemplateType", $templateNs)
+	if (-not $metadataType -or $metadataType.InnerText -ne $tmpl.TemplateType) {
+		Write-Host "TEMPLATE_TYPE_CONFLICT"
+		Write-Error "TEMPLATE_TYPE_CONFLICT: Template.$TemplateName metadata type '$($metadataType.InnerText)' does not match requested '$($tmpl.TemplateType)'"
+		exit 1
 	}
-	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Template.$TemplateName is only partially present"
+	if ($registeredTemplates.Count -eq 1 -and $registeredTemplates[0].GetAttribute("uuid") -and $registeredTemplates[0].GetAttribute("uuid") -ne $templateUuid) {
+		Write-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: Template.$TemplateName parent UUID does not match metadata UUID"
+		exit 1
+	}
+}
+
+if (-not $templateMetadataExists -and $templateTreeExists -and $registeredTemplates.Count -eq 0) {
+	Write-Error "TEMPLATE_EXISTING_CONTENT_CONFLICT: Template.$TemplateName has content without trusted metadata or registration"
 	exit 1
 }
-if ($registeredTemplates.Count -eq 1) {
-	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Template.$TemplateName is registered but metadata file is missing"
+
+if (-not $templateMetadataExists -and $registeredTemplates.Count -eq 1 -and $registeredTemplates[0].GetAttribute("uuid")) {
+	Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: Template.$TemplateName has a legacy UUID but no metadata target to prove it"
 	exit 1
+}
+if (-not $templateUuid) { $templateUuid = [guid]::NewGuid().ToString() }
+
+foreach ($otherTemplate in $childObjects.SelectNodes("md:Template", $nsMgr)) {
+	$otherUuid = $otherTemplate.GetAttribute("uuid")
+	if (-not $otherUuid -or $otherUuid -ne $templateUuid) { continue }
+	$otherNameNode = $otherTemplate.SelectSingleNode("md:Properties/md:Name", $nsMgr)
+	$otherName = if ($otherNameNode -and $otherNameNode.InnerText) { $otherNameNode.InnerText.Trim() } else { $otherTemplate.InnerText.Trim() }
+	if ($otherName -ne $TemplateName) {
+		Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: UUID '$templateUuid' is also used by Template.$otherName"
+		exit 1
+	}
+}
+
+if ($templateTreeExists) {
+	$contentFiles = @(Get-ChildItem -LiteralPath $templateExtDir -File -Filter 'Template.*' -ErrorAction SilentlyContinue)
+	foreach ($contentFile in $contentFiles) {
+		if ($contentFile.Name -ne ("Template" + $tmpl.Ext)) {
+			Write-Host "TEMPLATE_TYPE_CONFLICT"
+			Write-Error "TEMPLATE_TYPE_CONFLICT: Template.$TemplateName contains '$($contentFile.Name)' but requested type uses 'Template$($tmpl.Ext)'"
+			exit 1
+		}
+	}
 }
 
 $transactionRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("template-add-" + [guid]::NewGuid().ToString("N"))
@@ -108,7 +168,10 @@ $stagedTemplatesDir = Join-Path $transactionRoot "Templates"
 $stagedTemplateMetaPath = Join-Path $stagedTemplatesDir "$TemplateName.xml"
 $stagedTemplateDir = Join-Path $stagedTemplatesDir $TemplateName
 $stagedTemplateExtDir = Join-Path $stagedTemplateDir "Ext"
+New-Item -ItemType Directory -Path $stagedTemplatesDir -Force | Out-Null
+if ($templateTreeExists) { Copy-Item -LiteralPath $templateDir -Destination $stagedTemplatesDir -Recurse -Force }
 New-Item -ItemType Directory -Path $stagedTemplateExtDir -Force | Out-Null
+if ($templateMetadataExists) { Copy-Item -LiteralPath $templateMetaPath -Destination $stagedTemplateMetaPath -Force }
 
 # --- Кодировка ---
 
@@ -136,8 +199,6 @@ $formatVersion = Detect-FormatVersion (Resolve-Path $SrcDir).Path
 
 # --- 1. Метаданные макета (Templates/<TemplateName>.xml) ---
 
-$templateUuid = [guid]::NewGuid().ToString()
-
 $templateMetaXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version=`"$formatVersion`">
@@ -157,12 +218,26 @@ $templateMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($stagedTemplateMetaPath, $templateMetaXml, $encBom)
+if (-not $templateMetadataExists) {
+	[System.IO.File]::WriteAllText($stagedTemplateMetaPath, $templateMetaXml, $encBom)
+} elseif ($synonymWasSpecified) {
+	$stagedMetaDoc = New-Object System.Xml.XmlDocument
+	$stagedMetaDoc.PreserveWhitespace = $true
+	$stagedMetaDoc.Load($stagedTemplateMetaPath)
+	$stagedMetaNs = New-Object System.Xml.XmlNamespaceManager($stagedMetaDoc.NameTable)
+	$stagedMetaNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$stagedMetaNs.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+	$synonymContent = $stagedMetaDoc.SelectSingleNode("/md:MetaDataObject/md:Template/md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", $stagedMetaNs)
+	if (-not $synonymContent) { Write-Error "TEMPLATE_METADATA_INVALID: Template.$TemplateName has no Russian synonym slot"; exit 1 }
+	$synonymContent.InnerText = $Synonym
+	$stagedMetaDoc.Save($stagedTemplateMetaPath)
+}
 
 # --- 2. Содержимое макета (Templates/<TemplateName>/Ext/Template.<ext>) ---
 
 $stagedTemplateFilePath = Join-Path $stagedTemplateExtDir "Template$($tmpl.Ext)"
 
+if (-not (Test-Path $stagedTemplateFilePath -PathType Leaf)) {
 switch ($TemplateType) {
 	"HTML" {
 		$content = @"
@@ -212,34 +287,44 @@ switch ($TemplateType) {
 		[System.IO.File]::WriteAllText($stagedTemplateFilePath, $content, $encBom)
 	}
 }
+}
 
 # --- 3. Модификация корневого XML ---
 
-# Добавить <Template> в конец ChildObjects
-$templateElem = $xmlDoc.CreateElement("Template", "http://v8.1c.ru/8.3/MDClasses")
-$templateElem.InnerText = $TemplateName
-
-if ($childObjects.ChildNodes.Count -eq 0) {
-	$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t`t")) | Out-Null
-	$childObjects.AppendChild($templateElem) | Out-Null
-	$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t")) | Out-Null
+if ($registeredTemplates.Count -eq 1) {
+	# Normalize a matching legacy UUID-bearing reference to the canonical short form.
+	$templateElem = $registeredTemplates[0]
+	$templateElem.RemoveAll()
+	$templateElem.InnerText = $TemplateName
 } else {
-	$lastChild = $childObjects.LastChild
-	# Вставить перед закрывающим whitespace (если есть), или в конец
-	if ($lastChild.NodeType -eq [System.Xml.XmlNodeType]::Whitespace) {
-		$childObjects.InsertBefore($xmlDoc.CreateWhitespace("`n`t`t`t"), $lastChild) | Out-Null
-		$childObjects.InsertBefore($templateElem, $lastChild) | Out-Null
-	} else {
+	$templateElem = $xmlDoc.CreateElement("Template", "http://v8.1c.ru/8.3/MDClasses")
+	$templateElem.InnerText = $TemplateName
+	if ($childObjects.ChildNodes.Count -eq 0) {
 		$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t`t")) | Out-Null
 		$childObjects.AppendChild($templateElem) | Out-Null
 		$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t")) | Out-Null
+	} else {
+		$lastChild = $childObjects.LastChild
+		if ($lastChild.NodeType -eq [System.Xml.XmlNodeType]::Whitespace) {
+			$childObjects.InsertBefore($xmlDoc.CreateWhitespace("`n`t`t`t"), $lastChild) | Out-Null
+			$childObjects.InsertBefore($templateElem, $lastChild) | Out-Null
+		} else {
+			$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t`t")) | Out-Null
+			$childObjects.AppendChild($templateElem) | Out-Null
+			$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t")) | Out-Null
+		}
 	}
 }
 
 # --- 4. MainDataCompositionSchema (для ExternalReport / Report) ---
 
 $mainDCSUpdated = $false
-if ($TemplateType -eq "DataCompositionSchema") {
+if ($SetMainSKD -and $TemplateType -ne "DataCompositionSchema") {
+	Write-Host "TEMPLATE_TYPE_CONFLICT"
+	Write-Error "TEMPLATE_TYPE_CONFLICT: SetMainSKD requires TemplateType=DataCompositionSchema"
+	exit 1
+}
+if ($TemplateType -eq "DataCompositionSchema" -and $SetMainSKD) {
 	# Определяем корневой элемент объекта
 	$reportLikeTypes = @("ExternalReport", "Report")
 	$objectTypeNode = $null
@@ -256,10 +341,10 @@ if ($TemplateType -eq "DataCompositionSchema") {
 	if ($objectTypeNode) {
 		$mainDCS = $xmlDoc.SelectSingleNode("//md:${objectTypeName}/md:Properties/md:MainDataCompositionSchema", $nsMgr)
 		if ($mainDCS) {
-			$isEmpty = [string]::IsNullOrWhiteSpace($mainDCS.InnerText)
-			if ($isEmpty -or $SetMainSKD) {
-				$objName = $xmlDoc.SelectSingleNode("//md:${objectTypeName}/md:Properties/md:Name", $nsMgr).InnerText
-				$mainDCS.InnerText = "$objectTypeName.$objName.Template.$TemplateName"
+			$objName = $xmlDoc.SelectSingleNode("//md:${objectTypeName}/md:Properties/md:Name", $nsMgr).InnerText
+			$desiredMainDCS = "$objectTypeName.$objName.Template.$TemplateName"
+			if ($mainDCS.InnerText -ne $desiredMainDCS) {
+				$mainDCS.InnerText = $desiredMainDCS
 				$mainDCSUpdated = $true
 			}
 		}
@@ -277,19 +362,47 @@ $xmlDoc.Save($writer)
 $writer.Close()
 $stream.Close()
 
-$committedMeta = $false
-$committedTree = $false
+$backupRoot = Join-Path $transactionRoot "backup"
+$backupTemplateMetaPath = Join-Path $backupRoot "$TemplateName.xml"
+$backupTemplateDir = Join-Path $backupRoot $TemplateName
+$backupObjectPath = Join-Path $backupRoot "Object.xml"
+New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+Copy-Item -LiteralPath $rootXmlFull.Path -Destination $backupObjectPath -Force
+if ($templateMetadataExists) { Copy-Item -LiteralPath $templateMetaPath -Destination $backupTemplateMetaPath -Force }
+if ($templateTreeExists) { Copy-Item -LiteralPath $templateDir -Destination $backupRoot -Recurse -Force }
+
+$metaReplaced = $false
+$treeRemoved = $false
+$treeInstalled = $false
+$parentReplaced = $false
 try {
 	New-Item -ItemType Directory -Path $templatesDir -Force | Out-Null
-	Move-Item -LiteralPath $stagedTemplateMetaPath -Destination $templateMetaPath
-	$committedMeta = $true
-	Move-Item -LiteralPath $stagedTemplateDir -Destination $templateDir
-	$committedTree = $true
-	Move-Item -LiteralPath $stagedObjectPath -Destination $rootXmlFull.Path -Force
+	Copy-Item -LiteralPath $stagedTemplateMetaPath -Destination $templateMetaPath -Force
+	$metaReplaced = $true
+	if (Test-Path $templateDir -PathType Container) {
+		Remove-Item -LiteralPath $templateDir -Recurse -Force
+		$treeRemoved = $true
+	}
+	Copy-Item -LiteralPath $stagedTemplateDir -Destination $templatesDir -Recurse -Force
+	$treeInstalled = $true
+	Copy-Item -LiteralPath $stagedObjectPath -Destination $rootXmlFull.Path -Force
+	$parentReplaced = $true
 } catch {
-	if ($committedTree -and (Test-Path $templateDir)) { Remove-Item -LiteralPath $templateDir -Recurse -Force }
-	if ($committedMeta -and (Test-Path $templateMetaPath)) { Remove-Item -LiteralPath $templateMetaPath -Force }
-	Write-Error "TEMPLATE_ADD_TRANSACTION_FAILED: $($_.Exception.Message)"
+	$transactionError = $_.Exception.Message
+	try {
+		if ($parentReplaced) { Copy-Item -LiteralPath $backupObjectPath -Destination $rootXmlFull.Path -Force }
+		if ($treeInstalled -or $treeRemoved) {
+			if (Test-Path $templateDir) { Remove-Item -LiteralPath $templateDir -Recurse -Force }
+			if ($templateTreeExists) { Copy-Item -LiteralPath $backupTemplateDir -Destination $templatesDir -Recurse -Force }
+		}
+		if ($metaReplaced) {
+			if ($templateMetadataExists) { Copy-Item -LiteralPath $backupTemplateMetaPath -Destination $templateMetaPath -Force }
+			elseif (Test-Path $templateMetaPath) { Remove-Item -LiteralPath $templateMetaPath -Force }
+		}
+	} catch {
+		Write-Warning "TEMPLATE_ADD_ROLLBACK_FAILED: $($_.Exception.Message)"
+	}
+	Write-Error "TEMPLATE_ADD_TRANSACTION_FAILED: $transactionError"
 	exit 1
 } finally {
 	if (Test-Path $transactionRoot) { Remove-Item -LiteralPath $transactionRoot -Recurse -Force }

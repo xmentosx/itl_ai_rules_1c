@@ -32,7 +32,12 @@ commits are reviewed and transferred individually according to
 `docs/DOWNSTREAM-PATCHES.md`; an earlier release branch is never merged wholesale.
 
 Before publishing a tag, the release must pass `scripts/check.ps1 -Mode Full`,
-have a clean worktree, and record both the upstream and fork commit IDs.
+have a clean worktree, and record both the upstream and fork commit IDs. The
+Full gate writes the ignored exact qualification record at
+`build/test-results/qualification/full.json`. Release tooling may reuse only a
+passed record whose commit, tree, clean state, complete test inventory, gate
+scripts and JUnit hashes still match; missing, corrupt or stale records cause a
+real Full run and are never a bypass for release preflight.
 
 ## Distribution authorization
 

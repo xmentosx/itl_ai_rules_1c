@@ -8,8 +8,8 @@ param(
     [string]$UpstreamRemote = "upstream",
     [string]$PublishRemote = "origin",
     [string]$RepositoryRoot = "",
-    [switch]$Push,
-    [switch]$SkipCheck
+    [string]$QualificationPath = "build\test-results\qualification\full.json",
+    [switch]$Push
 )
 
 Set-StrictMode -Version Latest
@@ -38,10 +38,56 @@ function Test-RefExists {
     return ($LASTEXITCODE -eq 0)
 }
 
+function Test-ReusableQualification {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$HeadCommit,
+        [Parameter(Mandatory = $true)][string]$HeadTree
+    )
+    if (-not (Test-Path $Path -PathType Leaf)) { return $false }
+    try {
+        $qualification = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ([int]$qualification.schemaVersion -ne 1 -or [string]$qualification.kind -ne "itl-ai-rules-full-qualification") { return $false }
+        if ([string]$qualification.status -ne "passed" -or -not [bool]$qualification.reusable) { return $false }
+        if ([string]$qualification.repository.commit -ne $HeadCommit -or [string]$qualification.repository.tree -ne $HeadTree) { return $false }
+        if (-not [bool]$qualification.repository.worktreeClean) { return $false }
+
+        $expectedTests = @($qualification.inventory.tests | ForEach-Object { [string]$_.path } | Sort-Object)
+        $testsRoot = Join-Path $RepositoryRoot "tests"
+        $actualTests = if (Test-Path $testsRoot -PathType Container) {
+            @(Get-ChildItem -LiteralPath $testsRoot -Recurse -File -Filter "*.ps1" | ForEach-Object {
+                $_.FullName.Substring($RepositoryRoot.Length).TrimStart([char[]]'\/').Replace('\', '/')
+            } | Sort-Object)
+        } else { @() }
+        if (($expectedTests -join "`n") -ne ($actualTests -join "`n")) { return $false }
+
+        $qualifiedScripts = @($qualification.inventory.scripts | ForEach-Object { ([string]$_.path).Replace('\', '/') } | Sort-Object)
+        $requiredScripts = @("scripts/check.ps1", "scripts/publish-fork-release.ps1")
+        if (($qualifiedScripts -join "`n") -ne ($requiredScripts -join "`n")) { return $false }
+
+        foreach ($entry in @($qualification.inventory.tests) + @($qualification.inventory.scripts)) {
+            $entryPath = if ([System.IO.Path]::IsPathRooted([string]$entry.path)) { [string]$entry.path } else { Join-Path $RepositoryRoot ([string]$entry.path).Replace('/', '\') }
+            if (-not (Test-Path $entryPath -PathType Leaf)) { return $false }
+            if ((Get-FileHash -LiteralPath $entryPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne ([string]$entry.sha256).ToLowerInvariant()) { return $false }
+        }
+        $junitPath = if ([System.IO.Path]::IsPathRooted([string]$qualification.junit.path)) { [string]$qualification.junit.path } else { Join-Path $RepositoryRoot ([string]$qualification.junit.path).Replace('/', '\') }
+        if (-not (Test-Path $junitPath -PathType Leaf)) { return $false }
+        if ((Get-FileHash -LiteralPath $junitPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne ([string]$qualification.junit.sha256).ToLowerInvariant()) { return $false }
+        return $true
+    } catch {
+        return $false
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
 }
 $RepositoryRoot = [System.IO.Path]::GetFullPath($RepositoryRoot)
+$qualificationFullPath = if ([System.IO.Path]::IsPathRooted($QualificationPath)) {
+    [System.IO.Path]::GetFullPath($QualificationPath)
+} else {
+    [System.IO.Path]::GetFullPath((Join-Path $RepositoryRoot $QualificationPath))
+}
 $sourceKind = $PSCmdlet.ParameterSetName.ToLowerInvariant()
 $sourceName = if ($sourceKind -eq "tag") {
     $UpstreamTag
@@ -88,15 +134,21 @@ if ($sourceKind -eq "tag") {
     }
 }
 $headCommit = [string](Invoke-RepoGit -Arguments @("rev-parse", "HEAD") | Select-Object -First 1)
+$headTree = [string](Invoke-RepoGit -Arguments @("rev-parse", "HEAD^{tree}") | Select-Object -First 1)
 & git -C $RepositoryRoot merge-base --is-ancestor $resolvedUpstreamCommit $headCommit
 if ($LASTEXITCODE -ne 0) {
     throw "Current release candidate is not based on upstream $sourceKind $upstreamRef ($resolvedUpstreamCommit)."
 }
 
-if (-not $SkipCheck) {
+if (Test-ReusableQualification -Path $qualificationFullPath -HeadCommit $headCommit -HeadTree $headTree) {
+    Write-Host "Reusing exact clean Full qualification: $qualificationFullPath"
+} else {
     $checkPath = Join-Path $RepositoryRoot "scripts\check.ps1"
-    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $checkPath -Mode Full
+    & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $checkPath -Mode Full -QualificationPath $qualificationFullPath
     if ($LASTEXITCODE -ne 0) { throw "Fork Full gate failed." }
+    if (-not (Test-ReusableQualification -Path $qualificationFullPath -HeadCommit $headCommit -HeadTree $headTree)) {
+        throw "Fork Full gate did not produce an exact reusable qualification."
+    }
 }
 
 if (Test-RefExists -Ref "refs/tags/$forkTag") { throw "Fork tag already exists locally: $forkTag" }

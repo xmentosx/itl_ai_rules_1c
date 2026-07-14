@@ -1,5 +1,48 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot "TestSupport.ps1")
+
+    function New-TestReleaseQualification([string]$ForkRoot, [string]$ArtifactRoot) {
+        $scriptsDir = Join-Path $ForkRoot "scripts"
+        New-Item -ItemType Directory -Path $scriptsDir -Force | Out-Null
+        Copy-Item -LiteralPath (Join-Path $script:ForkRoot "scripts\check.ps1") -Destination (Join-Path $scriptsDir "check.ps1") -Force
+        Copy-Item -LiteralPath (Join-Path $script:ForkRoot "scripts\publish-fork-release.ps1") -Destination (Join-Path $scriptsDir "publish-fork-release.ps1") -Force
+        [System.IO.File]::WriteAllText((Join-Path $ForkRoot ".gitignore"), "build/`n", [System.Text.UTF8Encoding]::new($false))
+        & git -C $ForkRoot add scripts .gitignore
+        & git -C $ForkRoot commit -m "fixture: add qualified release tooling" | Out-Null
+
+        New-Item -ItemType Directory -Path $ArtifactRoot -Force | Out-Null
+        $junitPath = Join-Path $ArtifactRoot "pester.xml"
+        [System.IO.File]::WriteAllText($junitPath, '<testsuites tests="0" failures="0"/>', [System.Text.UTF8Encoding]::new($false))
+        $qualificationPath = Join-Path $ArtifactRoot "full.json"
+        $commit = (& git -C $ForkRoot rev-parse HEAD).Trim()
+        $tree = (& git -C $ForkRoot rev-parse 'HEAD^{tree}').Trim()
+        $branch = (& git -C $ForkRoot branch --show-current).Trim()
+        $qualification = [ordered]@{
+            schemaVersion = 1
+            kind = "itl-ai-rules-full-qualification"
+            status = "passed"
+            reusable = $true
+            repository = [ordered]@{ name = "fixture"; commit = $commit; tree = $tree; branch = $branch; worktreeClean = $true }
+            provenance = [ordered]@{ nearestForkTag = ""; upstreamRef = ""; upstreamCommit = "" }
+            environment = [ordered]@{}
+            inventory = [ordered]@{
+                tests = @()
+                scripts = @(
+                    [ordered]@{ path = "scripts/check.ps1"; sha256 = (Get-FileHash -LiteralPath (Join-Path $scriptsDir "check.ps1") -Algorithm SHA256).Hash.ToLowerInvariant() }
+                    [ordered]@{ path = "scripts/publish-fork-release.ps1"; sha256 = (Get-FileHash -LiteralPath (Join-Path $scriptsDir "publish-fork-release.ps1") -Algorithm SHA256).Hash.ToLowerInvariant() }
+                )
+            }
+            junit = [ordered]@{ path = $junitPath.Replace('\', '/'); sha256 = (Get-FileHash -LiteralPath $junitPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+            result = [ordered]@{ passed = 0; failed = 0; skipped = 0 }
+            stages = @()
+            startedAt = [DateTime]::UtcNow.ToString("o")
+            finishedAt = [DateTime]::UtcNow.ToString("o")
+            durationMs = 0
+            error = $null
+        }
+        [System.IO.File]::WriteAllText($qualificationPath, ($qualification | ConvertTo-Json -Depth 10), [System.Text.UTF8Encoding]::new($false))
+        return $qualificationPath
+    }
 }
 
 Describe "Fork release tooling" -Tag "Fast" {
@@ -34,6 +77,18 @@ Describe "Fork release tooling" -Tag "Fast" {
         $publish | Should -Match 'push", "--atomic"'
         $publish | Should -Match 'itl-\$normalizedSource-r\$Revision'
         $publish | Should -Match 'upgrade/\$normalizedSource-r\$Revision'
+        $publish | Should -Match "Test-ReusableQualification"
+        $publish | Should -Not -Match "SkipCheck"
+    }
+
+    It "emits a versioned Full qualification with exact inventory and stage timings" {
+        $check = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\check.ps1") -Raw -Encoding UTF8
+        $check | Should -Match '\[string\]\$QualificationPath'
+        $check | Should -Match 'schemaVersion = 2'
+        $check | Should -Match 'itl-ai-rules-full-qualification'
+        $check | Should -Match 'inventory = \[ordered\]'
+        $check | Should -Match 'durationMs'
+        $check | Should -Match 'junit = \[ordered\]'
     }
 }
 
@@ -69,9 +124,10 @@ Describe "Upstream intake behavior" {
             Test-Path -LiteralPath (Join-Path $forkRoot "build\reports\upstream-intake-v2.0.0.json") | Should -BeTrue
 
             $publishPath = Join-Path $script:ForkRoot "scripts\publish-fork-release.ps1"
+            $qualificationPath = New-TestReleaseQualification -ForkRoot $forkRoot -ArtifactRoot (Join-Path $testRoot "qualification")
             $publishResult = Invoke-WindowsPowerShellFile -FilePath $publishPath -Arguments @(
                 "-UpstreamTag", "v2.0.0", "-RepositoryRoot", $forkRoot,
-                "-UpstreamRemote", "upstream", "-PublishRemote", "origin", "-SkipCheck"
+                "-UpstreamRemote", "upstream", "-PublishRemote", "origin", "-QualificationPath", $qualificationPath
             )
             $publishResult.ExitCode | Should -Be 0 -Because $publishResult.Output
             (& git -C $forkRoot cat-file -t "refs/tags/itl-v2.0.0-r1").Trim() | Should -Be "tag"
@@ -131,10 +187,11 @@ Describe "Upstream intake behavior" {
             $report.upstreamCommit | Should -Be $currentCommit
 
             $publishPath = Join-Path $script:ForkRoot "scripts\publish-fork-release.ps1"
+            $qualificationPath = New-TestReleaseQualification -ForkRoot $forkRoot -ArtifactRoot (Join-Path $testRoot "qualification")
             $publishResult = Invoke-WindowsPowerShellFile -FilePath $publishPath -Arguments @(
                 "-UpstreamCommit", $currentCommit, "-UpstreamBranch", "main",
                 "-RepositoryRoot", $forkRoot, "-UpstreamRemote", "upstream",
-                "-PublishRemote", "origin", "-SkipCheck"
+                "-PublishRemote", "origin", "-QualificationPath", $qualificationPath
             )
             $publishResult.ExitCode | Should -Be 0 -Because $publishResult.Output
             (& git -C $forkRoot cat-file -t "refs/tags/itl-$sourceId-r1").Trim() | Should -Be "tag"
@@ -145,7 +202,7 @@ Describe "Upstream intake behavior" {
             $publishR2 = Invoke-WindowsPowerShellFile -FilePath $publishPath -Arguments @(
                 "-UpstreamCommit", $currentCommit, "-UpstreamBranch", "main", "-Revision", "2",
                 "-RepositoryRoot", $forkRoot, "-UpstreamRemote", "upstream",
-                "-PublishRemote", "origin", "-SkipCheck"
+                "-PublishRemote", "origin", "-QualificationPath", $qualificationPath
             )
             $publishR2.ExitCode | Should -Be 0 -Because $publishR2.Output
             (& git -C $forkRoot cat-file -t "refs/tags/itl-$sourceId-r2").Trim() | Should -Be "tag"

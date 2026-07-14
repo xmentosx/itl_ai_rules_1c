@@ -589,6 +589,41 @@ function Validate-BorrowedSubItem {
 	return $ok
 }
 
+# Form and Template registrations are canonical only as a single short text
+# reference (for example, <Form>ObjectForm</Form>).  Older dumps may carry a
+# redundant uuid attribute.  Keep recognizing those references so callers can
+# distinguish a safe normalization from a real UUID conflict.
+function Get-FormOrTemplateReferenceInfo {
+	param($subItem, $nsm)
+
+	$nameNode = $subItem.SelectSingleNode("md:Properties/md:Name", $nsm)
+	$name = if ($nameNode -and $nameNode.InnerText) { $nameNode.InnerText.Trim() } else { $subItem.InnerText.Trim() }
+	$uuid = $subItem.GetAttribute("uuid")
+	$hasElementChildren = $false
+	foreach ($childNode in $subItem.ChildNodes) {
+		if ($childNode.NodeType -eq 'Element') {
+			$hasElementChildren = $true
+			break
+		}
+	}
+	$hasUnexpectedAttributes = $false
+	foreach ($attribute in $subItem.Attributes) {
+		if ($attribute.Name -ne 'uuid') {
+			$hasUnexpectedAttributes = $true
+			break
+		}
+	}
+
+	return @{
+		Name = $name
+		Uuid = $uuid
+		HasUuid = -not [string]::IsNullOrWhiteSpace($uuid)
+		HasElementChildren = $hasElementChildren
+		HasUnexpectedAttributes = $hasUnexpectedAttributes
+		IsCanonical = (-not $hasElementChildren -and -not $hasUnexpectedAttributes -and [string]::IsNullOrWhiteSpace($uuid))
+	}
+}
+
 if ($childObjNode) {
 	$borrowedCount = 0
 	$borrowedOk = 0
@@ -657,10 +692,17 @@ if ($childObjNode) {
 		if ($objChildObjects) {
 			$ctx = "${typeName}.${childName}"
 			$subItemIndex = @{}
+			$subReferenceUuidIndex = @{}
 			foreach ($subItem in $objChildObjects.ChildNodes) {
 				if ($subItem.NodeType -ne 'Element') { continue }
 				$subType = $subItem.LocalName
-				$subNameForIndex = if ($subItem.SelectSingleNode("md:Properties/md:Name", $objNs)) { $subItem.SelectSingleNode("md:Properties/md:Name", $objNs).InnerText } else { $subItem.InnerText }
+				$referenceInfo = $null
+				if ($subType -eq 'Form' -or $subType -eq 'Template') {
+					$referenceInfo = Get-FormOrTemplateReferenceInfo $subItem $objNs
+					$subNameForIndex = $referenceInfo.Name
+				} else {
+					$subNameForIndex = if ($subItem.SelectSingleNode("md:Properties/md:Name", $objNs)) { $subItem.SelectSingleNode("md:Properties/md:Name", $objNs).InnerText } else { $subItem.InnerText }
+				}
 				if (-not [string]::IsNullOrWhiteSpace($subNameForIndex)) {
 					$subKey = ($subType + '.' + $subNameForIndex).ToLowerInvariant()
 					if ($subItemIndex.ContainsKey($subKey)) {
@@ -668,6 +710,15 @@ if ($childObjNode) {
 						$check10Ok = $false
 					} else {
 						$subItemIndex[$subKey] = $true
+					}
+				}
+				if ($referenceInfo -and $referenceInfo.HasUuid) {
+					$uuidKey = $referenceInfo.Uuid.ToLowerInvariant()
+					if ($subReferenceUuidIndex.ContainsKey($uuidKey) -and $subReferenceUuidIndex[$uuidKey] -ne $subNameForIndex) {
+						Report-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: 10. ${ctx}: UUID '$($referenceInfo.Uuid)' is reused by ${subType}.$($subReferenceUuidIndex[$uuidKey]) and ${subType}.${subNameForIndex}"
+						$check10Ok = $false
+					} else {
+						$subReferenceUuidIndex[$uuidKey] = $subNameForIndex
 					}
 				}
 
@@ -734,7 +785,7 @@ if ($childObjNode) {
 					}
 				}
 				elseif ($subType -eq "Form") {
-					$formName = $subItem.InnerText
+					$formName = $referenceInfo.Name
 					if ($formName) {
 						$formMetaFile = Join-Path (Join-Path (Join-Path (Join-Path $configDir $dirName) $childName) "Forms") "${formName}.xml"
 						if (-not (Test-Path $formMetaFile)) {
@@ -747,10 +798,13 @@ if ($childObjNode) {
 								$formNs = New-Object System.Xml.XmlNamespaceManager($formDoc.NameTable)
 								$formNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
 								$formElement = $formDoc.SelectSingleNode("/md:MetaDataObject/md:Form", $formNs)
-								$parentUuid = $subItem.GetAttribute("uuid")
+								$parentUuid = $referenceInfo.Uuid
 								$fileUuid = if ($formElement) { $formElement.GetAttribute("uuid") } else { "" }
 								if ($parentUuid -and $fileUuid -and $parentUuid -ne $fileUuid) {
 									Report-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: 10. ${ctx}: Form.${formName} parent UUID '$parentUuid' does not match '$fileUuid'"
+									$check10Ok = $false
+								} elseif (-not $referenceInfo.IsCanonical) {
+									Report-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: 10. ${ctx}: Form.${formName} must use one canonical short reference without UUID or nested properties"
 									$check10Ok = $false
 								}
 							} catch {
@@ -766,12 +820,31 @@ if ($childObjNode) {
 					}
 				}
 				elseif ($subType -eq "Template") {
-					$templateName = $subItem.InnerText
+					$templateName = $referenceInfo.Name
 					if ($templateName) {
 						$templateMetaFile = Join-Path (Join-Path (Join-Path (Join-Path $configDir $dirName) $childName) "Templates") "${templateName}.xml"
 						if (-not (Test-Path $templateMetaFile -PathType Leaf)) {
 							Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 10. ${ctx}: Template.${templateName} metadata file missing"
 							$check10Ok = $false
+						} else {
+							try {
+								$templateDoc = New-Object System.Xml.XmlDocument
+								$templateDoc.Load($templateMetaFile)
+								$templateNs = New-Object System.Xml.XmlNamespaceManager($templateDoc.NameTable)
+								$templateNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+								$templateElement = $templateDoc.SelectSingleNode("/md:MetaDataObject/md:Template", $templateNs)
+								$fileUuid = if ($templateElement) { $templateElement.GetAttribute("uuid") } else { "" }
+								if ($referenceInfo.HasUuid -and $fileUuid -and $referenceInfo.Uuid -ne $fileUuid) {
+									Report-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: 10. ${ctx}: Template.${templateName} parent UUID '$($referenceInfo.Uuid)' does not match '$fileUuid'"
+									$check10Ok = $false
+								} elseif (-not $referenceInfo.IsCanonical) {
+									Report-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: 10. ${ctx}: Template.${templateName} must use one canonical short reference without UUID or nested properties"
+									$check10Ok = $false
+								}
+							} catch {
+								Report-Error "CFE_XML_INVALID: 10. ${ctx}: Template.${templateName} metadata XML invalid: $($_.Exception.Message)"
+								$check10Ok = $false
+							}
 						}
 						$subItemCount++
 					}

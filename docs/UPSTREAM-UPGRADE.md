@@ -27,6 +27,12 @@ Recommended commands, with `<tag>` replaced by the published upstream tag:
 .\scripts\check.ps1 -Mode Full
 ```
 
+The Full gate writes `build/test-results/qualification/full.json`. Keep that
+ignored artifact with the release candidate: `publish-fork-release.ps1`
+validates its exact commit, tree, inventory, gate-script and JUnit hashes and
+reuses it only while the worktree remains clean. A corrupt or mismatched record
+causes the Full gate to execute again.
+
 When no upstream tag exists, first inspect the remote tip, then pass that full
 SHA explicitly:
 
