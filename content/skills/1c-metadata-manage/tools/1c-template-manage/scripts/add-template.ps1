@@ -68,15 +68,47 @@ $processorDir = Join-Path $SrcDir $ObjectName
 $templatesDir = Join-Path $processorDir "Templates"
 $templateMetaPath = Join-Path $templatesDir "$TemplateName.xml"
 
-if (Test-Path $templateMetaPath) {
-	Write-Error "Макет уже существует: $templateMetaPath"
+$rootXmlFull = Resolve-Path $rootXmlPath
+$xmlDoc = New-Object System.Xml.XmlDocument
+$xmlDoc.PreserveWhitespace = $true
+$xmlDoc.Load($rootXmlFull.Path)
+$nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
+$nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+$childObjects = $xmlDoc.SelectSingleNode("//md:ChildObjects", $nsMgr)
+if (-not $childObjects) {
+	Write-Error "Не найден элемент ChildObjects в $rootXmlPath"
+	exit 1
+}
+$registeredTemplates = @($childObjects.SelectNodes("md:Template", $nsMgr) | Where-Object { $_.InnerText -eq $TemplateName })
+if ($registeredTemplates.Count -gt 1) {
+	Write-Error "CFE_CHILD_OBJECT_DUPLICATE: Template.$TemplateName registered $($registeredTemplates.Count) times"
 	exit 1
 }
 
 # --- Создание каталогов ---
 
-$templateExtDir = Join-Path (Join-Path $templatesDir $TemplateName) "Ext"
-New-Item -ItemType Directory -Path $templateExtDir -Force | Out-Null
+$templateDir = Join-Path $templatesDir $TemplateName
+$templateExtDir = Join-Path $templateDir "Ext"
+$templateFilePath = Join-Path $templateExtDir "Template$($tmpl.Ext)"
+if (Test-Path $templateMetaPath -PathType Leaf) {
+	if ($registeredTemplates.Count -eq 1 -and (Test-Path $templateFilePath -PathType Leaf)) {
+		Write-Host "[OK] Template.$TemplateName already exists and is registered once"
+		exit 0
+	}
+	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Template.$TemplateName is only partially present"
+	exit 1
+}
+if ($registeredTemplates.Count -eq 1) {
+	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Template.$TemplateName is registered but metadata file is missing"
+	exit 1
+}
+
+$transactionRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("template-add-" + [guid]::NewGuid().ToString("N"))
+$stagedTemplatesDir = Join-Path $transactionRoot "Templates"
+$stagedTemplateMetaPath = Join-Path $stagedTemplatesDir "$TemplateName.xml"
+$stagedTemplateDir = Join-Path $stagedTemplatesDir $TemplateName
+$stagedTemplateExtDir = Join-Path $stagedTemplateDir "Ext"
+New-Item -ItemType Directory -Path $stagedTemplateExtDir -Force | Out-Null
 
 # --- Кодировка ---
 
@@ -89,7 +121,8 @@ function Detect-FormatVersion([string]$dir) {
 	while ($d) {
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
-			$head = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8).Substring(0, [Math]::Min(2000, (Get-Item $cfgPath).Length))
+			$sourceText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $sourceText.Substring(0, [Math]::Min(2000, $sourceText.Length))
 			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
 		}
 		$parent = Split-Path $d -Parent
@@ -124,11 +157,11 @@ $templateMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($templateMetaPath, $templateMetaXml, $encBom)
+[System.IO.File]::WriteAllText($stagedTemplateMetaPath, $templateMetaXml, $encBom)
 
 # --- 2. Содержимое макета (Templates/<TemplateName>/Ext/Template.<ext>) ---
 
-$templateFilePath = Join-Path $templateExtDir "Template$($tmpl.Ext)"
+$stagedTemplateFilePath = Join-Path $stagedTemplateExtDir "Template$($tmpl.Ext)"
 
 switch ($TemplateType) {
 	"HTML" {
@@ -143,10 +176,10 @@ switch ($TemplateType) {
 </body>
 </html>
 "@
-		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
+		[System.IO.File]::WriteAllText($stagedTemplateFilePath, $content, $encBom)
 	}
 	"Text" {
-		[System.IO.File]::WriteAllText($templateFilePath, "", $encBom)
+		[System.IO.File]::WriteAllText($stagedTemplateFilePath, "", $encBom)
 	}
 	"SpreadsheetDocument" {
 		$content = @"
@@ -154,10 +187,10 @@ switch ($TemplateType) {
 <SpreadsheetDocument xmlns="http://v8.1c.ru/spreadsheet/document" xmlns:ss="http://v8.1c.ru/spreadsheet/document" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xs="http://www.w3.org/2001/XMLSchema">
 </SpreadsheetDocument>
 "@
-		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
+		[System.IO.File]::WriteAllText($stagedTemplateFilePath, $content, $encBom)
 	}
 	"BinaryData" {
-		[System.IO.File]::WriteAllBytes($templateFilePath, @())
+		[System.IO.File]::WriteAllBytes($stagedTemplateFilePath, @())
 	}
 	"DataCompositionSchema" {
 		$content = @"
@@ -176,25 +209,11 @@ switch ($TemplateType) {
 	</dataSource>
 </DataCompositionSchema>
 "@
-		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
+		[System.IO.File]::WriteAllText($stagedTemplateFilePath, $content, $encBom)
 	}
 }
 
 # --- 3. Модификация корневого XML ---
-
-$rootXmlFull = Resolve-Path $rootXmlPath
-$xmlDoc = New-Object System.Xml.XmlDocument
-$xmlDoc.PreserveWhitespace = $true
-$xmlDoc.Load($rootXmlFull.Path)
-
-$nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
-$nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
-
-$childObjects = $xmlDoc.SelectSingleNode("//md:ChildObjects", $nsMgr)
-if (-not $childObjects) {
-	Write-Error "Не найден элемент ChildObjects в $rootXmlPath"
-	exit 1
-}
 
 # Добавить <Template> в конец ChildObjects
 $templateElem = $xmlDoc.CreateElement("Template", "http://v8.1c.ru/8.3/MDClasses")
@@ -247,16 +266,34 @@ if ($TemplateType -eq "DataCompositionSchema") {
 	}
 }
 
-# Сохранить с BOM
+# Stage the parent XML, then commit the complete tree with rollback.
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = $encBom
 $settings.Indent = $false
-
-$stream = New-Object System.IO.FileStream($rootXmlFull.Path, [System.IO.FileMode]::Create)
+$stagedObjectPath = Join-Path $transactionRoot "Object.xml"
+$stream = New-Object System.IO.FileStream($stagedObjectPath, [System.IO.FileMode]::Create)
 $writer = [System.Xml.XmlWriter]::Create($stream, $settings)
 $xmlDoc.Save($writer)
 $writer.Close()
 $stream.Close()
+
+$committedMeta = $false
+$committedTree = $false
+try {
+	New-Item -ItemType Directory -Path $templatesDir -Force | Out-Null
+	Move-Item -LiteralPath $stagedTemplateMetaPath -Destination $templateMetaPath
+	$committedMeta = $true
+	Move-Item -LiteralPath $stagedTemplateDir -Destination $templateDir
+	$committedTree = $true
+	Move-Item -LiteralPath $stagedObjectPath -Destination $rootXmlFull.Path -Force
+} catch {
+	if ($committedTree -and (Test-Path $templateDir)) { Remove-Item -LiteralPath $templateDir -Recurse -Force }
+	if ($committedMeta -and (Test-Path $templateMetaPath)) { Remove-Item -LiteralPath $templateMetaPath -Force }
+	Write-Error "TEMPLATE_ADD_TRANSACTION_FAILED: $($_.Exception.Message)"
+	exit 1
+} finally {
+	if (Test-Path $transactionRoot) { Remove-Item -LiteralPath $transactionRoot -Recurse -Force }
+}
 
 Write-Host "[OK] Создан макет: $TemplateName ($TemplateType)"
 Write-Host "     Метаданные: $templateMetaPath"

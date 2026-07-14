@@ -25,7 +25,8 @@ function Detect-FormatVersion([string]$dir) {
 	while ($d) {
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
-			$head = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8).Substring(0, [Math]::Min(2000, (Get-Item $cfgPath).Length))
+			$sourceText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $sourceText.Substring(0, [Math]::Min(2000, $sourceText.Length))
 			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
 		}
 		$parent = Split-Path $d -Parent
@@ -154,17 +155,50 @@ switch ($Purpose) {
 $objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.Path, $null).TrimEnd('.')
 $formsDir = Join-Path $objectDir "Forms"
 $formMetaPath = Join-Path $formsDir "$FormName.xml"
-
-if (Test-Path $formMetaPath) {
-	Write-Error "Форма уже существует: $formMetaPath"
-	exit 1
-}
-
 $formDir = Join-Path $formsDir $FormName
 $formExtDir = Join-Path $formDir "Ext"
 $formModuleDir = Join-Path $formExtDir "Form"
 
-New-Item -ItemType Directory -Path $formModuleDir -Force | Out-Null
+$childObjects = $xmlDoc.SelectSingleNode("//md:${objectType}/md:ChildObjects", $nsMgr)
+if (-not $childObjects) {
+	Write-Error "Не найден элемент ChildObjects в $ObjectPath"
+	exit 1
+}
+$registeredForms = @($childObjects.SelectNodes("md:Form", $nsMgr) | Where-Object { $_.InnerText -eq $FormName })
+if ($registeredForms.Count -gt 1) {
+	Write-Error "CFE_CHILD_OBJECT_DUPLICATE: Form.$FormName registered $($registeredForms.Count) times"
+	exit 1
+}
+if (Test-Path $formMetaPath -PathType Leaf) {
+	$formDoc = New-Object System.Xml.XmlDocument
+	try { $formDoc.Load($formMetaPath) } catch { Write-Error "FORM_METADATA_INVALID: $($_.Exception.Message)"; exit 1 }
+	$formNs = New-Object System.Xml.XmlNamespaceManager($formDoc.NameTable)
+	$formNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$formRoot = $formDoc.SelectSingleNode("/md:MetaDataObject/md:Form", $formNs)
+	if (-not $formRoot -or -not $formRoot.GetAttribute("uuid")) { Write-Error "FORM_METADATA_INVALID: Form.$FormName UUID is missing"; exit 1 }
+	if ($registeredForms.Count -eq 1 -and $registeredForms[0].GetAttribute("uuid") -and $registeredForms[0].GetAttribute("uuid") -ne $formRoot.GetAttribute("uuid")) {
+		Write-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: Form.$FormName parent UUID does not match metadata UUID"
+		exit 1
+	}
+	if ($registeredForms.Count -eq 1 -and (Test-Path (Join-Path $formExtDir "Form.xml") -PathType Leaf)) {
+		Write-Host "[OK] Form.$FormName already exists and is registered once"
+		exit 0
+	}
+	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Form.$FormName is only partially present"
+	exit 1
+}
+if ($registeredForms.Count -eq 1) {
+	Write-Error "CFE_CHILD_OBJECT_TARGET_MISSING: Form.$FormName is registered but metadata file is missing"
+	exit 1
+}
+
+$transactionRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("form-add-" + [guid]::NewGuid().ToString("N"))
+$stagedFormsDir = Join-Path $transactionRoot "Forms"
+$stagedFormMetaPath = Join-Path $stagedFormsDir "$FormName.xml"
+$stagedFormDir = Join-Path $stagedFormsDir $FormName
+$stagedFormExtDir = Join-Path $stagedFormDir "Ext"
+$stagedFormModuleDir = Join-Path $stagedFormExtDir "Form"
+New-Item -ItemType Directory -Path $stagedFormModuleDir -Force | Out-Null
 
 $encBom = New-Object System.Text.UTF8Encoding($true)
 
@@ -202,11 +236,12 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+[System.IO.File]::WriteAllText($stagedFormMetaPath, $formMetaXml, $encBom)
 
 # --- 3b. Form.xml ---
 
 $formXmlPath = Join-Path $formExtDir "Form.xml"
+$stagedFormXmlPath = Join-Path $stagedFormExtDir "Form.xml"
 
 $formNsDecl = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 
@@ -306,15 +341,12 @@ if ($Purpose -eq "List" -or $Purpose -eq "Choice") {
 "@
 }
 
-if (Test-Path $formXmlPath) {
-	Write-Host "[SKIP] Form.xml already exists: $formXmlPath — not overwriting"
-} else {
-	[System.IO.File]::WriteAllText($formXmlPath, $formXml, $encBom)
-}
+[System.IO.File]::WriteAllText($stagedFormXmlPath, $formXml, $encBom)
 
 # --- 3c. Module.bsl ---
 
 $modulePath = Join-Path $formModuleDir "Module.bsl"
+$stagedModulePath = Join-Path $stagedFormModuleDir "Module.bsl"
 
 $moduleBsl = @"
 #Область ОбработчикиСобытийФормы
@@ -338,19 +370,9 @@ $moduleBsl = @"
 #КонецОбласти
 "@
 
-if (Test-Path $modulePath) {
-	Write-Host "[SKIP] Module.bsl already exists: $modulePath — not overwriting"
-} else {
-	[System.IO.File]::WriteAllText($modulePath, $moduleBsl, $encBom)
-}
+[System.IO.File]::WriteAllText($stagedModulePath, $moduleBsl, $encBom)
 
 # --- Фаза 4: Регистрация в родительском объекте ---
-
-$childObjects = $xmlDoc.SelectSingleNode("//md:${objectType}/md:ChildObjects", $nsMgr)
-if (-not $childObjects) {
-	Write-Error "Не найден элемент ChildObjects в $ObjectPath"
-	exit 1
-}
 
 # Добавить <Form>$FormName</Form>
 $formElem = $xmlDoc.CreateElement("Form", "http://v8.1c.ru/8.3/MDClasses")
@@ -442,16 +464,34 @@ if ($SetDefault -or $isFirstFormForPurpose) {
 	}
 }
 
-# Сохранить с BOM
+# Save the parent into the transaction tree before changing any target file.
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = $encBom
 $settings.Indent = $false
-
-$stream = New-Object System.IO.FileStream($objectXmlFull.Path, [System.IO.FileMode]::Create)
+$stagedObjectPath = Join-Path $transactionRoot "Object.xml"
+$stream = New-Object System.IO.FileStream($stagedObjectPath, [System.IO.FileMode]::Create)
 $writer = [System.Xml.XmlWriter]::Create($stream, $settings)
 $xmlDoc.Save($writer)
 $writer.Close()
 $stream.Close()
+
+$committedMeta = $false
+$committedTree = $false
+try {
+	New-Item -ItemType Directory -Path $formsDir -Force | Out-Null
+	Move-Item -LiteralPath $stagedFormMetaPath -Destination $formMetaPath
+	$committedMeta = $true
+	Move-Item -LiteralPath $stagedFormDir -Destination $formDir
+	$committedTree = $true
+	Move-Item -LiteralPath $stagedObjectPath -Destination $objectXmlFull.Path -Force
+} catch {
+	if ($committedTree -and (Test-Path $formDir)) { Remove-Item -LiteralPath $formDir -Recurse -Force }
+	if ($committedMeta -and (Test-Path $formMetaPath)) { Remove-Item -LiteralPath $formMetaPath -Force }
+	Write-Error "FORM_ADD_TRANSACTION_FAILED: $($_.Exception.Message)"
+	exit 1
+} finally {
+	if (Test-Path $transactionRoot) { Remove-Item -LiteralPath $transactionRoot -Recurse -Force }
+}
 
 # --- Фаза 5: Вывод ---
 

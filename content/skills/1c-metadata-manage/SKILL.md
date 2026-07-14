@@ -64,3 +64,5 @@ The subagent already knows how to read the skill docs, execute PowerShell script
 | Unpack / rebuild CF, CFE, EPF binaries without 1C platform | v8unpack, binary unpack, headless extract, no platform | [v8unpack-cf.md](docs/v8unpack-cf.md) |
 
 **If the task spans multiple domains**, the subagent will read all relevant docs automatically (or read each one directly for simple tasks).
+
+Form and template creation have exclusive routes: use `1c-form-scaffold/scripts/form-add.ps1` for forms and `1c-template-manage/scripts/add-template.ps1` for templates. Never use `meta-edit add-form` or `meta-edit add-template`; `meta-edit` owns only inline child/property edits that do not create the corresponding file tree.

@@ -106,6 +106,14 @@ This block is the artifact-level analogue of the "list context sources actually 
 
 The subagents that own OpenSpec artifacts (`1c-analytic`, `1c-architect`, `1c-planner`, `1c-explorer` — see the mapping table below) inherit this discipline. Their prompts in `content/agents/` do not have to repeat these rules; they are bound by this file and by `AGENTS.md`. A subagent that delivers a non-trivial spec without the `Context sources` block, or with a TODO that an exposed MCP tool could have closed, has failed the same way a developer subagent fails if it skips `syntaxcheck`.
 
+## Test design and authoring contract
+
+For changes to 1C configuration, extensions, or observable behavior, `/opsx-propose` creates `changes/<id>/test-plan.md` alongside the standard artifacts. It contains a verifiable goal and 2-3 scenarios by default; a fourth scenario needs a short justification. Each scenario records ID, linked requirement/spec scenario, `unit-like|integration|UI`, minimal preconditions, action, observable result, meaningful boundary/negative aspect, and the task or observable slice it proves. Form, command, and visible-behavior requirements require UI evidence. Preparatory tasks attach to the nearest observable slice. Docs/tooling-only changes use their native checks and do not receive an artificial Vanessa plan.
+
+Proposal authors do not write Gherkin, inspect Vanessa step catalogs, read `VANESSA-TESTS-GUIDE.md`, or create `.feature` files. Automation impossibility must be resolved during propose, before apply-ready status.
+
+`/opsx-apply` reads `test-plan.md` in addition to CLI `contextFiles`. Before its first `.feature` edit it reads the local `VANESSA-TESTS-GUIDE.md` once and may inspect only 1-2 nearest examples. Tests are implemented with their observable slices. A small change implements the complete plan and runs one final `/itl-check`; a large change runs a focused scenario per slice and the full set at the end. Technical adaptation is allowed only when observable proof is not weakened. Removing a scenario, weakening its result, or replacing required UI evidence requires an approved artifact update. Apply writes `test-report.md` with scenario IDs/types/results, Vanessa report path, and defects fixed while testing.
+
 ## Question-asking discipline across phases — overview
 
 Clarification questions must be **front-loaded** into the propose phase, with a single consolidated preflight round at the start of apply, and effectively zero questions during the apply implementation loop. This is the inverse of the "ask whenever in doubt" default — by the time code is being written, the user must not be paying a clarification tax that should have been paid at design time.

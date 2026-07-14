@@ -163,7 +163,7 @@ try {
 } catch {
 	Out-Line "=== Validation: Extension (parse failed) ==="
 	Out-Line ""
-	Report-Error "1. XML parse failed: $($_.Exception.Message)"
+	Report-Error "CFE_XML_INVALID: 1. XML parse failed: $($_.Exception.Message)"
 	& $finalize
 	exit 1
 }
@@ -303,7 +303,8 @@ if (-not $propsNode) {
 	# ObjectBelonging = Adopted
 	$obNode = $propsNode.SelectSingleNode("md:ObjectBelonging", $ns)
 	if (-not $obNode -or $obNode.InnerText -ne "Adopted") {
-		Report-Error "3. ObjectBelonging must be 'Adopted', got '$($obNode.InnerText)'"
+		$actualObjectBelonging = if ($obNode) { $obNode.InnerText } else { "<missing>" }
+		Report-Error "CFE_OBJECT_BELONGING_INVALID: 3. ObjectBelonging must be 'Adopted', got '$actualObjectBelonging'"
 		$check3Ok = $false
 	}
 
@@ -419,7 +420,7 @@ if (-not $childObjNode) {
 		if (-not $script:childObjectIndex.ContainsKey($typeName)) { $script:childObjectIndex[$typeName] = @{} }
 		if ($script:childObjectIndex[$typeName].ContainsKey($objNameVal)) {
 			if (-not $duplicates.ContainsKey("$typeName.$objNameVal")) {
-				Report-Error "5. Duplicate: $typeName.$objNameVal"
+				Report-Error "CFE_CHILD_OBJECT_DUPLICATE: 5. Duplicate: $typeName.$objNameVal"
 				$duplicates["$typeName.$objNameVal"] = $true
 				$check5Ok = $false
 			}
@@ -484,7 +485,7 @@ if ($childObjNode) {
 			if (Test-Path $langFile) {
 				$existCount++
 			} else {
-				Report-Warn "7. Language file missing: Languages/$ln.xml"
+				Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 7. Language file missing: Languages/$ln.xml"
 			}
 		}
 		if ($existCount -eq $langNames.Count) {
@@ -527,7 +528,16 @@ if ($childObjNode) {
 		Report-OK "8. Object directories: $($dirsToCheck.Count) directories, all exist"
 	} else {
 		foreach ($md in $missingDirs) {
-			Report-Warn "8. Missing directory: $md"
+			Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 8. Missing directory: $md"
+		}
+	}
+
+	foreach ($child in $childObjNode.ChildNodes) {
+		if ($child.NodeType -ne 'Element' -or $child.LocalName -eq 'Language') { continue }
+		if (-not $childTypeDirMap.ContainsKey($child.LocalName)) { continue }
+		$target = Join-Path (Join-Path $configDir $childTypeDirMap[$child.LocalName]) ($child.InnerText + '.xml')
+		if (-not (Test-Path $target -PathType Leaf)) {
+			Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 8. $($child.LocalName).$($child.InnerText) metadata file missing: $target"
 		}
 	}
 }
@@ -560,7 +570,7 @@ function Validate-BorrowedSubItem {
 	$ok = $true
 	$subOb = $subProps.SelectSingleNode("md:ObjectBelonging", $nsm)
 	if (-not $subOb -or $subOb.InnerText -ne "Adopted") {
-		Report-Error "${checkNum}. ${context}: ${subType} ObjectBelonging must be 'Adopted'"
+		Report-Error "CFE_OBJECT_BELONGING_INVALID: ${checkNum}. ${context}: ${subType} ObjectBelonging must be 'Adopted'"
 		$ok = $false
 	}
 	$subName = $subProps.SelectSingleNode("md:Name", $nsm)
@@ -605,7 +615,8 @@ if ($childObjNode) {
 			$objDoc.PreserveWhitespace = $false
 			$objDoc.Load($objFile)
 		} catch {
-			Report-Warn "9. Cannot parse $dirName/$childName.xml: $($_.Exception.Message)"
+			Report-Error "CFE_XML_INVALID: 9. Cannot parse $dirName/$childName.xml: $($_.Exception.Message)"
+			$check9Ok = $false
 			continue
 		}
 
@@ -645,9 +656,20 @@ if ($childObjNode) {
 		$objChildObjects = $objEl.SelectSingleNode("md:ChildObjects", $objNs)
 		if ($objChildObjects) {
 			$ctx = "${typeName}.${childName}"
+			$subItemIndex = @{}
 			foreach ($subItem in $objChildObjects.ChildNodes) {
 				if ($subItem.NodeType -ne 'Element') { continue }
 				$subType = $subItem.LocalName
+				$subNameForIndex = if ($subItem.SelectSingleNode("md:Properties/md:Name", $objNs)) { $subItem.SelectSingleNode("md:Properties/md:Name", $objNs).InnerText } else { $subItem.InnerText }
+				if (-not [string]::IsNullOrWhiteSpace($subNameForIndex)) {
+					$subKey = ($subType + '.' + $subNameForIndex).ToLowerInvariant()
+					if ($subItemIndex.ContainsKey($subKey)) {
+						Report-Error "CFE_CHILD_OBJECT_DUPLICATE: 10. ${ctx}: duplicate ${subType}.${subNameForIndex}"
+						$check10Ok = $false
+					} else {
+						$subItemIndex[$subKey] = $true
+					}
+				}
 
 				if ($subType -eq "Attribute") {
 					if (-not (Test-BorrowedSubItem $subItem $objNs)) { continue }
@@ -716,12 +738,40 @@ if ($childObjNode) {
 					if ($formName) {
 						$formMetaFile = Join-Path (Join-Path (Join-Path (Join-Path $configDir $dirName) $childName) "Forms") "${formName}.xml"
 						if (-not (Test-Path $formMetaFile)) {
-							Report-Error "10. ${ctx}: Form.${formName} metadata file missing"
+							Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 10. ${ctx}: Form.${formName} metadata file missing"
 							$check10Ok = $false
+						} else {
+							try {
+								$formDoc = New-Object System.Xml.XmlDocument
+								$formDoc.Load($formMetaFile)
+								$formNs = New-Object System.Xml.XmlNamespaceManager($formDoc.NameTable)
+								$formNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+								$formElement = $formDoc.SelectSingleNode("/md:MetaDataObject/md:Form", $formNs)
+								$parentUuid = $subItem.GetAttribute("uuid")
+								$fileUuid = if ($formElement) { $formElement.GetAttribute("uuid") } else { "" }
+								if ($parentUuid -and $fileUuid -and $parentUuid -ne $fileUuid) {
+									Report-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: 10. ${ctx}: Form.${formName} parent UUID '$parentUuid' does not match '$fileUuid'"
+									$check10Ok = $false
+								}
+							} catch {
+								Report-Error "CFE_XML_INVALID: 10. ${ctx}: Form.${formName} metadata XML invalid: $($_.Exception.Message)"
+								$check10Ok = $false
+							}
 						}
 						$script:formList += @{
 							TypeName = $typeName; ObjName = $childName
 							FormName = $formName; DirName = $dirName
+						}
+						$subItemCount++
+					}
+				}
+				elseif ($subType -eq "Template") {
+					$templateName = $subItem.InnerText
+					if ($templateName) {
+						$templateMetaFile = Join-Path (Join-Path (Join-Path (Join-Path $configDir $dirName) $childName) "Templates") "${templateName}.xml"
+						if (-not (Test-Path $templateMetaFile -PathType Leaf)) {
+							Report-Error "CFE_CHILD_OBJECT_TARGET_MISSING: 10. ${ctx}: Template.${templateName} metadata file missing"
+							$check10Ok = $false
 						}
 						$subItemCount++
 					}
@@ -785,6 +835,10 @@ foreach ($fi in $script:formList) {
 							$check11Ok = $false
 						}
 					}
+					elseif ($fmOb -and $fmOb.InnerText -and $fmOb.InnerText -ne "Adopted") {
+						Report-Error "CFE_OBJECT_BELONGING_INVALID: 11. ${ctx}: Form ObjectBelonging must be 'Adopted'"
+						$check11Ok = $false
+					}
 					$fmType = $fmProps.SelectSingleNode("md:FormType", $fmNs)
 					if ($fmType -and $fmType.InnerText -ne "Managed") {
 						Report-Error "11. ${ctx}: FormType must be 'Managed', got '$($fmType.InnerText)'"
@@ -793,7 +847,8 @@ foreach ($fi in $script:formList) {
 				}
 			}
 		} catch {
-			Report-Warn "11. ${ctx}: Cannot parse metadata: $($_.Exception.Message)"
+			Report-Error "CFE_XML_INVALID: 11. ${ctx}: Cannot parse metadata: $($_.Exception.Message)"
+			$check11Ok = $false
 		}
 	}
 
