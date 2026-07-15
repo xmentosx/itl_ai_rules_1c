@@ -20,6 +20,23 @@ Layout, spec format, delta format, and the full workflow are described in the wo
 
 Read those files before writing or editing OpenSpec artifacts.
 
+## Mandatory project-skill preflight
+
+Before `explore`, `propose`, or `apply` answers, investigation, or artifact
+work, read root `AGENTS.md` and `USER-RULES.md` and activate every skill they
+make mandatory for the current subject or phase. Do this before broad
+repository traversal. Kilo activates a project skill with
+`skill("<skill-name>")`; clients with native skill activation use their native
+mechanism.
+
+When a mandatory skill requires an external product source, search it first and
+then verify the result against code, tests, current metadata, and available MCP
+evidence. If the skill or source is unavailable, provide the concrete recovery
+action and label code-only findings as provisional; do not present architecture
+or product intent as confirmed. Artifacts created or updated in that phase must
+contain `## Context Sources` with the material external pages and any conflicts
+with repository evidence.
+
 ## MCP discipline for OpenSpec authoring
 
 OpenSpec artifacts (`proposal.md`, `design.md`, `tasks.md`, delta specs under `changes/<id>/specs/` and current specs under `specs/`) are Markdown, but they make **factual claims about the 1C system** — metadata names, attributes, tabular sections, public API signatures, БСП subsystem names, platform-version behaviour, project conventions. Every such claim must be grounded in evidence from the relevant MCP tools, not from memory or guessing. This is the **spec-authoring path** from `AGENTS.md → Development Procedure → Triage`.
@@ -88,6 +105,14 @@ This block is the artifact-level analogue of the "list context sources actually 
 ### Subagent obligations
 
 The subagents that own OpenSpec artifacts (`1c-analytic`, `1c-architect`, `1c-planner`, `1c-explorer` — see the mapping table below) inherit this discipline. Their prompts in `content/agents/` do not have to repeat these rules; they are bound by this file and by `AGENTS.md`. A subagent that delivers a non-trivial spec without the `Context sources` block, or with a TODO that an exposed MCP tool could have closed, has failed the same way a developer subagent fails if it skips `syntaxcheck`.
+
+## Test design and authoring contract
+
+For changes to 1C configuration, extensions, or observable behavior, `/opsx-propose` creates `changes/<id>/test-plan.md` alongside the standard artifacts. It contains a verifiable goal and 2-3 scenarios by default; a fourth scenario needs a short justification. Each scenario records ID, linked requirement/spec scenario, `unit-like|integration|UI`, minimal preconditions, action, observable result, meaningful boundary/negative aspect, and the task or observable slice it proves. Form, command, and visible-behavior requirements require UI evidence. Preparatory tasks attach to the nearest observable slice. Docs/tooling-only changes use their native checks and do not receive an artificial Vanessa plan.
+
+Proposal authors do not write Gherkin, inspect Vanessa step catalogs, read `VANESSA-TESTS-GUIDE.md`, or create `.feature` files. Automation impossibility must be resolved during propose, before apply-ready status.
+
+`/opsx-apply` reads `test-plan.md` in addition to CLI `contextFiles`. Before its first `.feature` edit it reads the local `VANESSA-TESTS-GUIDE.md` once and may inspect only 1-2 nearest examples. Tests are implemented with their observable slices. A small change implements the complete plan and runs one final `/itl-check`; a large change runs a focused scenario per slice and the full set at the end. Technical adaptation is allowed only when observable proof is not weakened. Removing a scenario, weakening its result, or replacing required UI evidence requires an approved artifact update. Apply writes `test-report.md` with scenario IDs/types/results, Vanessa report path, and defects fixed while testing.
 
 ## Question-asking discipline across phases — overview
 

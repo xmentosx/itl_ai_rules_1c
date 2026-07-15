@@ -219,7 +219,9 @@ Batch via `;;` in all operations. Detailed syntax in linked reference files.
 | `add-resource` | `Name: Type` | `"Сумма: Number(15,2)"` |
 | `add-enumValue` | `Name` | `"Value1 ;; Value2"` |
 | `add-column` | `Name: Type` | `"Тип: EnumRef.ТипыДокументов"` |
-| `add-form` / `add-template` / `add-command` | `Name` | `"ItemForm"` |
+| `add-command` | `Name` | `"ItemCommand"` |
+
+Forms and templates are intentionally excluded from `meta-edit`: use `form-add.ps1` and `add-template.ps1`, which own the full file tree, UUID checks, and idempotent `ChildObjects` registration.
 | `add-ts-attribute` | `TS.Name: Type` | `"Товары.Скидка: Number(15,2)"` |
 | `remove-*` | `Name` | `"OldAttribute ;; AnotherOne"` |
 | `remove-ts-attribute` | `TS.Name` | `"Товары.ObsoleteAttr"` |

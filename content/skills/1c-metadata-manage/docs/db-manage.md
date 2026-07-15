@@ -10,6 +10,13 @@ Manages the `.v8-project.json` file — the project's infobase registry. Stores 
 
 > **Relationship with `.dev.env`.** Across the rest of the 1c-rules toolkit (slash commands `/loadfrom1cbase`, `/update1cbase`, `/getconfigfiles`, `/deploy-and-test`, the `1c-tester` subagent and all on-demand rules), the **single source of truth** for project parameters — including the current dev infobase — is `.dev.env` at the project root (created by the 1c-rules installer). `.v8-project.json` is an **optional advanced multi-base registry** for the `1c-metadata-manage` skill scripts when you need to juggle several infobases bound to Git branches/aliases. When both files are present, keep them in sync: the `default` entry in `.v8-project.json` should mirror `INFOBASE_PATH`, `IB_USER`, `IB_PASSWORD`, `EXTENSION_NAME`, `PLATFORM_PATH` (`v8path`) from `.dev.env`. For single-base projects `.v8-project.json` is not required at all — the skill scripts accept the same parameters via command-line flags driven by `.dev.env` values.
 
+> **ITL extension projects.** When `.agents/skills/1c-workflow` is present,
+> initialize the extension through `init-dev-branch-extension`; the workflow
+> owns snapshot/rollback and the final `src/cfe/<ExtensionName>` dump. Use the
+> DB scripts below only for recovery or non-ITL projects. Designer loads use
+> `-Extension <name>` (not `/Extension`) and can create an absent extension
+> from XML or CFE; Designer Agent and `AgentMode` are not prerequisites.
+
 ### Usage
 
 ```

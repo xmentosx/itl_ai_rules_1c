@@ -1,4 +1,5 @@
 ---
+name: installmcp
 description: Download the 1C MCP server distribution from vibecoding1c.ru and install all servers from it
 ---
 

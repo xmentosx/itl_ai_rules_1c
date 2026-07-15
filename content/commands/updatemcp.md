@@ -1,4 +1,5 @@
 ---
+name: updatemcp
 description: Re-download the 1C MCP server distribution from vibecoding1c.ru, pull new images, refresh keys, and restart installed servers
 ---
 

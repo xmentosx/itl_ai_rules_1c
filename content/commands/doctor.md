@@ -1,4 +1,5 @@
 ---
+name: doctor
 description: Diagnose whether 1c-rules is installed, connected, configured, and usable by the current agent
 ---
 
@@ -36,9 +37,9 @@ After the table, list only actionable fixes. Do not include secret values from `
 6. Verify that the current tool has the files it can actually load:
    - Cursor: `.cursor/rules/`, `.cursor/commands/`, `.cursor/mcp.json` when installed;
    - Claude Code: `.claude/rules/`, `.claude/agents/`, `.claude/commands/`, MCP config when installed;
-   - Codex: `.codex/skills/`, `.codex/config.toml` when installed;
+   - Codex: shared repo skills under `.agents/skills/`, plus `.codex/config.toml` when installed;
    - OpenCode: `.opencode/command/`, `.opencode/agent/`, `.opencode/rules/`, and `opencode.json` at the **project root** (top-level `mcp` key) when installed — MCP lives in the root `opencode.json`, **not** `.opencode/opencode.json` (OpenCode does not read a config file under `.opencode/`); a leftover `.opencode/opencode.json` from older installs is **legacy** and the `update` flow removes it;
-   - Kilo Code: `.kilo/rules/`, `.kilo/commands/`, `.kilo/agents/`, `.kilo/skills/`, `.kilo/kilo.json` (top-level `mcp` key) when installed; a leftover `.kilocode/mcp.json` from older installs is **legacy** — current Kilo CLI / Kilo Code v7.x+ no longer reads it and the `update` flow removes it;
+   - Kilo Code: `.kilo/rules/`, `.kilo/agents/`, shared repo skills under `.agents/skills/`, OpenSpec commands under `.kilo/commands/`, and `.kilo/kilo.json` (top-level `mcp` key) when installed; any leftover `.kilocode` tree from older installs is **legacy** and the `update` flow removes hash-matching managed artifacts;
    - other: `.ai-agent/rules/`, `.ai-agent/agents/`, `.ai-agent/commands/`, `.ai-agent/skills/`, `.ai-agent/mcp.json`.
 
 Pass criterion: the root always-on files exist, and either the installed tool layout is present or the repository is clearly the `1c-rules` source repository being edited directly.
@@ -114,7 +115,7 @@ Evaluate whether the installed rules match the current repository and current ag
 1. If the repository contains 1C source files or metadata XML, confirm the 1C ruleset is appropriate.
 2. If the repository is only the `1c-rules` source repository, report that BSL validators are not applicable to docs-only edits unless BSL examples are changed.
 3. Confirm that `AGENTS.md` points to source or installed on-demand rules that the current agent can read.
-4. Confirm that command names in `content/commands/` are available in the active tool's command location after installation.
+4. Confirm that command names in `content/commands/` are available in the active tool's command location, or as `.agents/skills/<name>/SKILL.md` for Codex and Kilo, after installation.
 5. Confirm that `caveman` is dev-only: enabled for implementation / debugging / deployment, off for review / analysis / documentation.
 
 Pass criterion: the current agent has the always-on rules, can reach on-demand rules or their source copies, and the rule triggers match the current task type.
@@ -125,7 +126,7 @@ Static check that the rule corpus is internally consistent. Operate on the **sou
 
 Scope:
 
-1. **Rule index completeness.** Every file under `content/rules/*.md` (source) or the canonical rules directory (installed) is listed in `AGENTS.md → Additional rules`. Any file present on disk but missing from the index is an **orphan**; any name in the index without a matching file is a **dangling reference**. Report both.
+1. **Rule index completeness.** Every file under `content/rules/*.md` (source) or the canonical rules directory (installed) is listed directly in `AGENTS.md` or in the routed `rule-index.md`. Any file present on disk but missing from both indexes is an **orphan**; any indexed name without a matching file is a **dangling reference**. Report both.
 2. **Subagent index completeness.** Every file under `content/agents/*.md` is listed in `content/rules/subagents.md → Subagent catalog`. The subagent count claimed in `AGENTS.md` and `subagents.md` matches the actual file count.
 3. **Skill index completeness.** Every SKILL package under `content/skills/<name>/SKILL.md` is mentioned at least once in `AGENTS.md` (in the always-on or supplementary skill list) or in `README.md → Сопутствующие скиллы`.
 4. **Inline path references resolve.** For every reference in the form `` `content/rules/<name>.md` ``, `` `content/agents/<name>.md` ``, `` `content/skills/<name>/SKILL.md` ``, `` `content/skills/<name>/docs/<doc>.md` ``, `` `<name>.md` `` (rule-style bare references), or `` `<name>` `` (skill alias) inside `AGENTS.md`, `README.md`, `AGENT-INSTALL.md`, files under `content/rules/`, `content/agents/`, `content/skills/`, the target file exists.

@@ -286,6 +286,8 @@ Creates a managed form (metadata XML + Form.xml + Module.bsl) and registers it i
 powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-form-scaffold/scripts/form-add.ps1 -ObjectPath "<ObjectPath>" -FormName "<FormName>" [-Purpose "<Purpose>"] [-Synonym "<Synonym>"] [-SetDefault]
 ```
 
+`form-add.ps1` is the exclusive form-creation route. It is idempotent for an already complete form, rejects duplicate registration or UUID conflicts, and stages the metadata tree before committing it. Do not use `meta-edit add-form`.
+
 The script auto-detects the format version of `Form.xml` from the nearest `Configuration.xml` (8.3.27+, 8.5).
 
 #### Purpose — Form Assignment

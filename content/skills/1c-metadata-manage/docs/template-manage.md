@@ -22,6 +22,8 @@ Creates or removes a template (layout) of specified type and registers/unregiste
 pwsh -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/add-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" -TemplateType "<TemplateType>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"]
 ```
 
+`add-template.ps1` is the exclusive template-creation route. Repeating it for a complete existing template is a no-op; partial or duplicate registrations fail before writes. Do not use `meta-edit add-template`.
+
 ### Type Mapping
 
 User may specify type in free form. Determine the correct one from context:

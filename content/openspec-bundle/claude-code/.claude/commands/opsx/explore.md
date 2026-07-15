@@ -5,6 +5,17 @@ category: Workflow
 tags: [workflow, explore, experimental, thinking]
 ---
 
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before answering, investigating the repository, planning, proposing, or applying:
+
+1. Read the project root `AGENTS.md` and `USER-RULES.md` and identify every skill they make mandatory for the current subject or phase.
+2. Activate those skills before broad repository traversal. Kilo must call `skill("<skill-name>")`; clients with native skill activation use their native mechanism.
+3. If a mandatory skill requires an external product source, search that source first, then verify the result against code, tests, metadata, and available MCP evidence.
+4. If a mandatory skill or source is unavailable, show the exact recovery action and do not present architecture or product intent as confirmed; label code-only findings as provisional.
+5. When creating or updating OpenSpec artifacts, add a `## Context Sources` section listing the material external pages used and any conflicts with repository evidence.
+
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
 **IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY create OpenSpec artifacts (proposals, designs, specs) if the user asks—that's capturing thinking, not implementing.
@@ -59,10 +70,10 @@ Depending on what the user brings, you might:
 │     Use ASCII diagrams liberally        │
 ├─────────────────────────────────────────┤
 │                                         │
-│   ┌────────┐         ┌────────┐        │
-│   │ State  │────────▶│ State  │        │
-│   │   A    │         │   B    │        │
-│   └────────┘         └────────┘        │
+│      ┌────────┐         ┌────────┐      │
+│      │ State  │────────▶│ State  │      │
+│      │   A    │         │   B    │      │
+│      └────────┘         └────────┘      │
 │                                         │
 │   System diagrams, state machines,      │
 │   data flows, architecture sketches,    │
@@ -107,11 +118,10 @@ Think freely. When insights crystallize, you might offer:
 
 If the user mentions a change or you detect one is relevant:
 
-1. **Read existing artifacts for context**
-   - `openspec/changes/<name>/proposal.md`
-   - `openspec/changes/<name>/design.md`
-   - `openspec/changes/<name>/tasks.md`
-   - etc.
+1. **Resolve and read existing artifacts for context**
+   - Run `openspec status --change "<name>" --json`.
+   - Use `changeRoot`, `artifactPaths`, and `actionContext` from the status JSON.
+   - Read existing files from `artifactPaths.<artifact>.existingOutputPaths`.
 
 2. **Reference them naturally in conversation**
    - "Your design mentions using Redis, but we just realized SQLite fits better..."
@@ -119,14 +129,14 @@ If the user mentions a change or you detect one is relevant:
 
 3. **Offer to capture when decisions are made**
 
-   | Insight Type | Where to Capture |
-   |--------------|------------------|
-   | New requirement discovered | `specs/<capability>/spec.md` |
-   | Requirement changed | `specs/<capability>/spec.md` |
-   | Design decision made | `design.md` |
-   | Scope changed | `proposal.md` |
-   | New work identified | `tasks.md` |
-   | Assumption invalidated | Relevant artifact |
+    | Insight Type               | Where to Capture               |
+    |----------------------------|--------------------------------|
+    | New requirement discovered | `specs/<capability>/spec.md` |
+    | Requirement changed        | `specs/<capability>/spec.md` |
+    | Design decision made       | `design.md`                  |
+    | Scope changed              | `proposal.md`                |
+    | New work identified        | `tasks.md`                   |
+    | Assumption invalidated     | Relevant artifact              |
 
    Example offers:
    - "That's a design decision. Capture it in design.md?"

@@ -6,8 +6,23 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
-  generatedBy: "1.2.0"
+  generatedBy: "1.4.1"
 ---
+
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before answering, investigating the repository, planning, proposing, or applying:
+
+1. Read the project root `AGENTS.md` and `USER-RULES.md` and identify every skill they make mandatory for the current subject or phase.
+2. Activate those skills before broad repository traversal. Kilo must call `skill("<skill-name>")`; clients with native skill activation use their native mechanism.
+3. If a mandatory skill requires an external product source, search that source first, then verify the result against code, tests, metadata, and available MCP evidence.
+4. If a mandatory skill or source is unavailable, show the exact recovery action and do not present architecture or product intent as confirmed; label code-only findings as provisional.
+5. When creating or updating OpenSpec artifacts, add a `## Context Sources` section listing the material external pages used and any conflicts with repository evidence.
+<!-- itl:propose-test-design -->
+## 1C test design (ITL downstream)
+
+For a configuration, extension, or observable 1C behavior change, create `openspec/changes/<change-id>/test-plan.md` before declaring the change apply-ready. Follow `content/rules/sdd-integrations.md`: plan 2-3 scenarios by default (a fourth needs a written reason), link each scenario to a requirement and task/observable slice, and include type, minimal preconditions, action, observable result, and boundary/negative aspect. UI requirements require a UI scenario. Do not read `VANESSA-TESTS-GUIDE.md` and do not create or edit `.feature` files during propose. Docs/tooling-only changes use their native checks instead of an artificial Vanessa plan.
 
 Propose a new change - create the change and generate all artifacts in one step.
 
@@ -17,22 +32,6 @@ I'll create a change with artifacts:
 - tasks.md (implementation steps)
 
 When ready to implement, run /opsx:apply
-
-## Question-asking discipline (read first)
-
-The propose phase is where every clarifiable architectural decision **must** be settled. Apply phase is not the time for clarifications — by the time code is being written, the user must not be paying a clarification tax that should have been paid here.
-
-- **Ask the user now, do not defer to apply.** The upstream OpenSpec default "prefer making reasonable decisions to keep momentum" is **overridden** for this project. If a decision is architecturally meaningful and ambiguous (placement / provider / data scope / settings storage / key handling / transactional boundaries / error-handling pattern / logging strategy / library / БСП subsystem / platform-version target / public common-module signatures), ask the user **here**, not at apply time.
-- **Do not ask the user about facts an MCP call could close.** Names, attributes, tabular sections, БСП subsystem availability, platform-API signatures — resolve via `recall` / `resolve_qualified_name` / `search_metadata` / `ssl_search` / `docinfo` before reaching for `AskUserQuestion`.
-- **Pin defaults the user is unlikely to care about with a one-line rationale in `design.md` and move on.** Do not ask about cache-eviction policy, private helper names, internal module splits when no NFR or convention exists.
-- **The full rule lives in `content/rules/sdd-integrations.md → Propose-phase clarification discipline`. Load it before authoring any non-trivial proposal.**
-
-Forbidden in finalized artifacts (each is a propose-phase defect of the same severity as a missing `Context sources` block):
-
-- "TODO: clarify with the user during apply" / "уточнить при реализации" — every such marker is an admission that this phase failed. Either decide now with the user, or capture as a numbered item in `design.md → ## Open Questions` with the exact future question, the artifact section it will update, and the dependent task ID — **and only if** the answer genuinely depends on facts that surface later, not on a user decision you skipped asking.
-- "We'll decide once we see the code" / "будем смотреть по ходу" — almost never legitimate.
-- Vague verbs in delta `### Requirement:` blocks: "appropriately", "if needed", "as required", "по необходимости", "при необходимости".
-- Phantom defaults — two equally weighted options listed without a written rationale for the default.
 
 ---
 
@@ -53,7 +52,7 @@ Forbidden in finalized artifacts (each is a propose-phase defect of the same sev
    ```bash
    openspec new change "<name>"
    ```
-   This creates a scaffolded change at `openspec/changes/<name>/` with `.openspec.yaml`.
+   This creates a scaffolded change in the planning home resolved by the CLI with `.openspec.yaml`.
 
 3. **Get the artifact build order**
    ```bash
@@ -62,6 +61,7 @@ Forbidden in finalized artifacts (each is a propose-phase defect of the same sev
    Parse the JSON to get:
    - `applyRequires`: array of artifact IDs needed before implementation (e.g., `["tasks"]`)
    - `artifacts`: list of all artifacts with their status and dependencies
+   - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context. Use these instead of assuming repo-local paths.
 
 4. **Create artifacts in sequence until apply-ready**
 
@@ -79,10 +79,10 @@ Forbidden in finalized artifacts (each is a propose-phase defect of the same sev
         - `rules`: Artifact-specific rules (constraints for you - do NOT include in output)
         - `template`: The structure to use for your output file
         - `instruction`: Schema-specific guidance for this artifact type
-        - `outputPath`: Where to write the artifact
+        - `resolvedOutputPath`: Resolved path or pattern to write the artifact
         - `dependencies`: Completed artifacts to read for context
       - Read any completed dependency files for context
-      - Create the artifact file using `template` as the structure
+      - Create the artifact file using `template` as the structure and write it to `resolvedOutputPath`
       - Apply `context` and `rules` as constraints - but do NOT copy them into the file
       - Show brief progress: "Created <artifact-id>"
 
@@ -92,26 +92,10 @@ Forbidden in finalized artifacts (each is a propose-phase defect of the same sev
       - Stop when all `applyRequires` artifacts are done
 
    c. **If an artifact requires user input** (unclear context):
-      - Use **AskUserQuestion tool** to clarify **now**, not later. Apply phase will not get a second chance to ask routine architectural / scope / naming questions.
+      - Use **AskUserQuestion tool** to clarify
       - Then continue with creation
 
-5. **Pre-finalization clarification gate**
-
-   **Before** declaring "All artifacts created! Ready for implementation.", run a final consolidation pass:
-
-   a. **Re-read every `### Requirement:`** in delta `specs/` and every decision in `design.md`. For each one: can the implementer execute the code that satisfies this requirement / decision from the artifacts alone, without a follow-up question to the user? Any "no" → add to a single batched question list.
-
-   b. **Re-read `proposal.md → Constraints` / `Out of scope` / `Non-goals`.** For each scope edge: is the wording sharp enough that an implementer cannot accidentally cross it? Sharpen now, or batch a clarification.
-
-   c. **Re-read `tasks.md`.** Each task should be executable from the current artifacts alone. Tasks like "implement reasonable defaults" or "decide between approaches" indicate the gate is not yet passed — settle the choice in `design.md`, then re-write the task.
-
-   d. **Audit `design.md → ## Open Questions`.** Each entry is a promise that the user will be asked again at apply time. Allowed only if the answer genuinely depends on facts that surface later (production data, performance measurements, a not-yet-implemented module's actual shape). "I forgot to ask" / "user wasn't sure yet" / "let's see what apply finds" — **not** legitimate. Either close the question now (with a `CONFUSION` block to the user) or remove it.
-
-   e. **If the batched question list is non-empty** — present it to the user in **one** consolidated `AskUserQuestion` round (open-ended for free-text answers, preset options where applicable). Apply the answers to the artifacts. Then re-run the gate. Repeat until the batched list is empty.
-
-   The proposal is "ready" only when this gate passes: empty batched list, every artifact internally consistent, `## Open Questions` contains only items that legitimately depend on later facts.
-
-6. **Show final status**
+5. **Show final status**
    ```bash
    openspec status --change "<name>"
    ```
@@ -137,8 +121,6 @@ After completing all artifacts, summarize:
 **Guardrails**
 - Create ALL artifacts needed for implementation (as defined by schema's `apply.requires`)
 - Always read dependency artifacts before creating a new one
-- **Ask the user about every ambiguous architectural / scope / naming / placement / storage / library / БСП / transactional decision during this phase — do NOT defer to apply.** "Prefer making reasonable decisions to keep momentum" is **not** the rule for this project; the rule is in `content/rules/sdd-integrations.md → Propose-phase clarification discipline`.
-- Resolve facts the project already knows (`recall`) or that an MCP call can close (`resolve_qualified_name`, `search_metadata`, `ssl_search`, `docinfo`) **before** reaching for `AskUserQuestion`.
-- **The pre-finalization clarification gate (step 5) is non-negotiable.** Declaring "Ready for implementation" with `TODO: clarify during apply` markers, vague requirement verbs ("appropriately", "if needed"), or `## Open Questions` items that the user could have answered now is a propose-phase defect.
+- If context is critically unclear, ask the user - but prefer making reasonable decisions to keep momentum
 - If a change with that name already exists, ask if user wants to continue it or create a new one
 - Verify each artifact file exists after writing before proceeding to next
