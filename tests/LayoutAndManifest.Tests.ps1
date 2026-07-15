@@ -328,6 +328,7 @@ Describe "Always-on context budget" -Tag "Fast" {
         $agentsPath = Join-Path $script:ForkRoot "AGENTS.md"
         (Get-Item $agentsPath).Length | Should -BeLessOrEqual 24576
         $text = Get-Content -Raw -Encoding UTF8 $agentsPath
+        ([Text.UTF8Encoding]::new($false).GetByteCount(($text -replace "`r`n", "`n"))) | Should -BeLessOrEqual 7354
         foreach ($match in [regex]::Matches($text, 'content/rules/([A-Za-z0-9-]+\.md)')) {
             Test-Path (Join-Path $script:ForkRoot ("content\rules\" + $match.Groups[1].Value)) | Should -BeTrue
         }
@@ -336,8 +337,22 @@ Describe "Always-on context budget" -Tag "Fast" {
 
     It "records all functional downstream patch identifiers" {
         $ledger = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "docs\DOWNSTREAM-PATCHES.md")
-        foreach ($id in @("ITL-INSTALL-001", "ITL-MANIFEST-001", "ITL-LAYOUT-001", "ITL-CODEX-001", "ITL-KILO-001", "ITL-CONTEXT-001")) {
+        foreach ($id in @("ITL-INSTALL-001", "ITL-MANIFEST-001", "ITL-LAYOUT-001", "ITL-CODEX-001", "ITL-KILO-001", "ITL-KILO-002", "ITL-CONTEXT-001")) {
             $ledger | Should -Match $id
         }
+    }
+
+    It "routes implementation through USER-RULES without weakening quick-fix verification" {
+        $agents = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "AGENTS.md")
+        $agents | Should -Match '(?is)before the first.*edit.*USER-RULES\.md.*development-process\.md'
+        $agents | Should -Match '(?is)completion gate.*stale.*failed.*missing.*blocker.*not completion'
+
+        $pipeline = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content\rules\subagent-pipeline.md")
+        $pipeline | Should -Not -Match '(?i)direct edit\s*\+\s*`?syntaxcheck'
+        $pipeline | Should -Not -Match '(?i)syntaxcheck only'
+        $pipeline | Should -Match '(?is)quick-fix.*focused regression scenario.*project-required final gate'
+
+        $adapter = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "adapters\kilocode.yaml")
+        $adapter | Should -Match '(?ms)^projectInstructions:\s*\r?\n\s+target:\s+"\.kilo/kilo\.json"\s*\r?\n\s+files:\s+\["USER-RULES\.md"\]'
     }
 }

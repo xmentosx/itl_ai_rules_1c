@@ -23,9 +23,9 @@ this file and win on conflict. Never put secrets in tracked files or output.
 
 ## Development Procedure
 
-Detailed process, escalation rules, clarification format, and delivery contract:
-`content/rules/development-process.md`. Load it for any implementation, fix,
-refactor, metadata change, or OpenSpec authoring task.
+Before the first implementation, fix, refactor, metadata, or OpenSpec edit,
+read root `USER-RULES.md` and `content/rules/development-process.md`, then
+extract the project gates.
 
 ### Triage: Quick-fix vs Docs-fix vs Spec-authoring vs Full-cycle
 
@@ -64,9 +64,9 @@ failures, and do not repeat validators without a code change.
 
 ### 5. Deliver Clearly
 
-Report what changed, the affected files, tests/evidence, and real residual
-risks. Do not claim completion while a required gate is stale, failed, or
-missing.
+Report changes, files, evidence, and residual risks. Match evidence to the
+project completion gate; if any required gate is stale, failed, or missing,
+report a blocker, not completion.
 
 ## Project info
 

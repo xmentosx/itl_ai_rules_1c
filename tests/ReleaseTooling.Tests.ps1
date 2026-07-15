@@ -89,6 +89,8 @@ Describe "Fork release tooling" -Tag "Fast" {
         $check | Should -Match 'inventory = \[ordered\]'
         $check | Should -Match 'durationMs'
         $check | Should -Match 'junit = \[ordered\]'
+        $check | Should -Match 'git tag --merged HEAD --list "itl-\*"'
+        $check | Should -Not -Match 'git describe --tags'
     }
 }
 

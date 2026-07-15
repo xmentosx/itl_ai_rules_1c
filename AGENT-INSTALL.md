@@ -139,7 +139,7 @@ When the MCP servers were installed by the MCP vendor distribution's **`INSTALL.
 
 ### Always-on layer placement
 
-`AGENTS.md`, `USER-RULES.md`, and `memory.md` always live at the **project root**. This is required: every supported tool (Cursor, Claude Code, Codex, OpenCode, Kilo Code) reads `AGENTS.md` from the project root as its always-on context. Placing them under `.cursor/`, `.claude/` etc. would prevent the tools from picking them up.
+`AGENTS.md`, `USER-RULES.md`, and `memory.md` always live at the **project root**. Every supported tool reads root `AGENTS.md` as always-on context. Kilo additionally receives `USER-RULES.md` through the project-level `.kilo/kilo.json` `instructions` array, because it does not auto-discover that filename. Placing these files under tool directories would break the shared project contract.
 
 `AGENTS.md` placement is a readable-copy step with deterministic path rewriting:
 
@@ -258,7 +258,7 @@ Do not execute raw script text from GitHub with `Invoke-Expression`; download or
 
 ## USER-RULES.md
 
-AI agents read `USER-RULES.md` together with `AGENTS.md`, so anything added there becomes part of the always-on context.
+`USER-RULES.md` extends `AGENTS.md`. Kilo installation/update idempotently adds it to project `instructions`; other clients follow the explicit pre-edit route in `AGENTS.md`. Anything added there therefore becomes project-specific agent context.
 
 Typical contents:
 

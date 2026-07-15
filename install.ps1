@@ -2473,6 +2473,132 @@ function Convert-AgentsMdPaths {
 # SECTION 11: MCP PHASE
 # ============================================================================
 
+# Kilo auto-loads root AGENTS.md, but project-specific instruction files are
+# loaded only when the shared project config lists them. Keep this independent
+# from MCP ownership: delegated/external MCP still needs USER-RULES.md.
+function Get-KiloProjectInstructionsContract {
+    param(
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    if ($ActiveTools -notcontains 'kilocode') { return $null }
+    $adapter = $Adapters['kilocode']
+    if (-not $adapter -or -not $adapter.projectInstructions) {
+        throw 'KILO_INSTRUCTIONS_INVALID: kilocode adapter is missing projectInstructions contract.'
+    }
+    $target = [string]$adapter.projectInstructions.target
+    $files = @($adapter.projectInstructions.files | ForEach-Object { [string]$_ })
+    if ([string]::IsNullOrWhiteSpace($target) -or $files.Count -eq 0) {
+        throw 'KILO_INSTRUCTIONS_INVALID: kilocode projectInstructions target/files are empty.'
+    }
+    return [pscustomobject]@{ Target = $target; Files = $files }
+}
+
+function Read-KiloProjectInstructionsConfig {
+    param(
+        [string]$Root,
+        [Parameter(Mandatory = $true)]$Contract
+    )
+    $path = Join-Path $Root $Contract.Target
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return [pscustomobject]@{ Path = $path; Exists = $false; Raw = ''; Value = [pscustomobject]@{} }
+    }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -ErrorAction Stop
+        $value = $raw | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) is not valid JSON. $($_.Exception.Message)"
+    }
+    $property = $value.PSObject.Properties['instructions']
+    if ($property) {
+        if ($null -eq $property.Value -or -not ($property.Value -is [System.Array])) {
+            throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) top-level instructions must be a JSON array."
+        }
+        foreach ($entry in @($property.Value)) {
+            if (-not ($entry -is [string])) {
+                throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) instructions entries must be strings."
+            }
+        }
+    }
+    return [pscustomobject]@{ Path = $path; Exists = $true; Raw = $raw; Value = $value }
+}
+
+function Assert-KiloProjectInstructionsConfig {
+    param(
+        [string]$Root,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    $contract = Get-KiloProjectInstructionsContract -ActiveTools $ActiveTools -Adapters $Adapters
+    if (-not $contract) { return }
+    [void](Read-KiloProjectInstructionsConfig -Root $Root -Contract $contract)
+}
+
+function Ensure-KiloProjectInstructions {
+    param(
+        [string]$Root,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters,
+        [System.Collections.IDictionary]$Manifest
+    )
+    $contract = Get-KiloProjectInstructionsContract -ActiveTools $ActiveTools -Adapters $Adapters
+    if (-not $contract) { return }
+    $config = Read-KiloProjectInstructionsConfig -Root $Root -Contract $contract
+    $existingInstructions = @()
+    $hasInstructions = $false
+    foreach ($property in $config.Value.PSObject.Properties) {
+        if ($property.Name -eq 'instructions') {
+            $hasInstructions = $true
+            $existingInstructions = @($property.Value)
+        }
+    }
+
+    $normalized = New-Object System.Collections.ArrayList
+    $managedSeen = @{}
+    foreach ($entry in $existingInstructions) {
+        $isManaged = $false
+        foreach ($managed in $contract.Files) {
+            if ([string]::Equals([string]$entry, [string]$managed, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isManaged = $true
+                if (-not $managedSeen.ContainsKey($managed)) {
+                    [void]$normalized.Add($managed)
+                    $managedSeen[$managed] = $true
+                }
+                break
+            }
+        }
+        if (-not $isManaged) { [void]$normalized.Add($entry) }
+    }
+    foreach ($managed in $contract.Files) {
+        if (-not $managedSeen.ContainsKey($managed)) {
+            [void]$normalized.Add($managed)
+            $managedSeen[$managed] = $true
+        }
+    }
+
+    $changed = -not $hasInstructions -or (($existingInstructions -join "`n") -cne (@($normalized) -join "`n"))
+    if (-not $changed) {
+        Write-Info "  [kilocode] project instructions already current: $($contract.Target)"
+        return
+    }
+    $result = [ordered]@{}
+    foreach ($property in $config.Value.PSObject.Properties) {
+        if ($property.Name -eq 'instructions') {
+            $result['instructions'] = @($normalized)
+        }
+        else {
+            $result[$property.Name] = $property.Value
+        }
+    }
+    if (-not $hasInstructions) { $result['instructions'] = @($normalized) }
+    Write-TextFile -Path $config.Path -Content ((ConvertTo-Json $result -Depth 20) + "`n")
+    if ($Manifest -and $Manifest.files.Contains($contract.Target)) {
+        $Manifest.files[$contract.Target]['installedHash'] = Get-FileSha256 $config.Path
+    }
+    Write-Info "  [kilocode] project instructions: $($contract.Target) -> $($contract.Files -join ', ')"
+}
+
 function Invoke-McpPhase {
     param(
         [string]$Root,
@@ -3817,6 +3943,7 @@ function Invoke-Init {
     Write-Info ("Active tools: " + ($activeTools -join ', '))
 
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $activeTools -Adapters $adapters
     $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
 
     Write-Section 'Phase 2-3: Scan foreign files + integrations'
@@ -3876,6 +4003,9 @@ function Invoke-Init {
     # .dev.env when rendering per-tool MCP configs.
     Write-Section 'Phase 7: .dev.env (project parameters, single source of truth)'
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
+
+    Write-Section 'Phase 7b: Kilo project instructions'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
 
     Write-Section 'Phase 8: MCP'
     $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
@@ -3943,10 +4073,15 @@ function Write-RestartRecommendation {
         [string[]]$ActiveTools,
         [int]$McpCount = 0
     )
-    if ($McpCount -le 0) { return }
+    if ($McpCount -le 0 -and $ActiveTools -notcontains 'kilocode') { return }
     Write-Info ""
-    Write-Info "ВАЖНО: перезапустите AI-клиент (CLI / IDE), чтобы он перечитал MCP-конфигурацию и определения агентов."
-    Write-Info "       MCP-серверы и новые субагенты подхватываются только при старте клиента — без перезапуска они не появятся в текущей сессии."
+    Write-Info "ВАЖНО: перечитайте изменённую конфигурацию AI-клиента."
+    if ($McpCount -gt 0) {
+        Write-Info "       MCP-серверы и новые субагенты подхватываются после reload/restart клиента."
+    }
+    if ($ActiveTools -contains 'kilocode') {
+        Write-Info "       Kilo Code: выполните /reload либо откройте новую сессию, чтобы применить project instructions, agents, skills и commands."
+    }
     if ($ActiveTools -contains 'opencode') {
         Write-Info "       OpenCode: полностью завершите и заново запустите сессию OpenCode (config читается при старте)."
     }
@@ -4041,6 +4176,7 @@ function Invoke-Update {
 
     $activeTools = @($manifest.tools)
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $activeTools -Adapters $adapters
     $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
     Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
     $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
@@ -4199,6 +4335,9 @@ function Invoke-Update {
     Write-Section '.dev.env (update — placed only if missing)'
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
 
+    Write-Section 'Kilo project instructions (update)'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
+
     Write-Section 'MCP (update)'
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиги инструментов НЕ изменяются.'
@@ -4286,6 +4425,7 @@ function Invoke-Add {
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
     $allPlannedTools = @(@($manifest.tools) + @($NewTool) | Sort-Object -Unique)
     $allPlannedAdapters = Load-Adapters -SourceRoot $sourceRoot -Tools $allPlannedTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
     $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
     Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
     $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
@@ -4305,6 +4445,8 @@ function Invoke-Add {
     # placeholders in `content/mcp-servers.json` substitute against the
     # actual project value when rendering the newly-added tool's MCP config.
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
+    Write-Section 'Kilo project instructions (add)'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters -Manifest $manifest
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиг для нового инструмента НЕ создаётся.'
     }

@@ -122,7 +122,7 @@ Describe "Current upstream installer smoke" {
 }
 
 Describe "Delegated MCP ownership" -Tag "Fast" {
-    It "preserves existing client config bytes on init" {
+    It "preserves delegated MCP data while adding Kilo project instructions on init" {
         $testRoot = New-ForkTestRoot
         try {
             $projectRoot = Join-Path $testRoot "delegated-init"
@@ -133,22 +133,23 @@ Describe "Delegated MCP ownership" -Tag "Fast" {
             [System.IO.File]::WriteAllText($codexPath, "[mcp_servers.ITL]`nurl = `"http://127.0.0.1:9991/mcp`"`n", [System.Text.UTF8Encoding]::new($false))
             [System.IO.File]::WriteAllText($kiloPath, '{"theme":"user","mcp":{"ITL":{"type":"remote","url":"http://127.0.0.1:9992/mcp"}}}', [System.Text.UTF8Encoding]::new($false))
             $beforeCodex = (Get-FileHash -Algorithm SHA256 -LiteralPath $codexPath).Hash
-            $beforeKilo = (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash
-
             $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
                 "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
                 "-Tools", "codex,kilocode", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
             )
             $result.ExitCode | Should -Be 0 -Because $result.Output
             (Get-FileHash -Algorithm SHA256 -LiteralPath $codexPath).Hash | Should -Be $beforeCodex
-            (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash | Should -Be $beforeKilo
+            $kilo = Get-Content -Raw -Encoding UTF8 $kiloPath | ConvertFrom-Json
+            $kilo.theme | Should -Be "user"
+            $kilo.mcp.ITL.url | Should -Be "http://127.0.0.1:9992/mcp"
+            @($kilo.instructions) | Should -Be @("USER-RULES.md")
             $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $projectRoot ".ai-rules.json") | ConvertFrom-Json
             $manifest.integrations.mcp.mode | Should -Be "delegated"
             $manifest.integrations.mcp.owner | Should -Be "ITL"
             @($manifest.mcpServers) | Should -BeNullOrEmpty
             @($manifest.files.PSObject.Properties.Name) | Should -Not -Contain ".codex/config.toml"
             @($manifest.files.PSObject.Properties.Name) | Should -Not -Contain ".kilo/kilo.json"
-            $result.Output | Should -Not -Match "перезапустите AI-клиент"
+            $result.Output | Should -Match "/reload"
         } finally {
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
@@ -170,8 +171,6 @@ Describe "Delegated MCP ownership" -Tag "Fast" {
             [System.IO.File]::WriteAllText($codexPath, "[mcp_servers.ITL]`nurl = `"http://127.0.0.1:9993/mcp`"`n", [System.Text.UTF8Encoding]::new($false))
             [System.IO.File]::WriteAllText($kiloPath, '{"mcp":{"ITL":{"type":"remote","url":"http://127.0.0.1:9994/mcp"}}}', [System.Text.UTF8Encoding]::new($false))
             $beforeCodex = (Get-FileHash -Algorithm SHA256 -LiteralPath $codexPath).Hash
-            $beforeKilo = (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash
-
             $result = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
                 "update", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
                 "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
@@ -179,7 +178,9 @@ Describe "Delegated MCP ownership" -Tag "Fast" {
             $result.ExitCode | Should -Be 0 -Because $result.Output
             $result.Output | Should -Not -Match "User-modified files detected"
             (Get-FileHash -Algorithm SHA256 -LiteralPath $codexPath).Hash | Should -Be $beforeCodex
-            (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash | Should -Be $beforeKilo
+            $kilo = Get-Content -Raw -Encoding UTF8 $kiloPath | ConvertFrom-Json
+            $kilo.mcp.ITL.url | Should -Be "http://127.0.0.1:9994/mcp"
+            @($kilo.instructions) | Should -Be @("USER-RULES.md")
             $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $projectRoot ".ai-rules.json") | ConvertFrom-Json
             $manifest.integrations.mcp.mode | Should -Be "delegated"
             @($manifest.files.PSObject.Properties.Name) | Should -Not -Contain ".codex/config.toml"
@@ -203,18 +204,97 @@ Describe "Delegated MCP ownership" -Tag "Fast" {
             $kiloPath = Join-Path $projectRoot ".kilo\kilo.json"
             New-Item -ItemType Directory -Force -Path (Split-Path -Parent $kiloPath) | Out-Null
             [System.IO.File]::WriteAllText($kiloPath, '{"permission":{"bash":"ask"}}', [System.Text.UTF8Encoding]::new($false))
-            $before = (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash
-
             $result = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
                 "add", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot, "-Tool", "kilocode",
                 "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
             )
             $result.ExitCode | Should -Be 0 -Because $result.Output
-            (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash | Should -Be $before
+            $kilo = Get-Content -Raw -Encoding UTF8 $kiloPath | ConvertFrom-Json
+            $kilo.permission.bash | Should -Be "ask"
+            @($kilo.instructions) | Should -Be @("USER-RULES.md")
             $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $projectRoot ".ai-rules.json") | ConvertFrom-Json
             @($manifest.tools | Sort-Object) | Should -Be @("codex", "kilocode")
             $manifest.integrations.mcp.mode | Should -Be "delegated"
             @($manifest.files.PSObject.Properties.Name) | Should -Not -Contain ".kilo/kilo.json"
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Describe "Kilo project instructions" -Tag "Fast" {
+    It "adds USER-RULES once and preserves config keys and instruction order" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $projectRoot = Join-Path $testRoot "kilo-instructions"
+            $kiloPath = Join-Path $projectRoot ".kilo\kilo.json"
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $kiloPath) | Out-Null
+            $source = '{"$schema":"https://example.test/kilo.schema.json","instructions":["docs/a.md","user-rules.md","USER-RULES.md","docs/b.md"],"mcp":{"custom":{"type":"remote","url":"http://127.0.0.1:9999/mcp"}},"permission":{"bash":"ask"},"agent":{"review":{"model":"custom"}},"skills":{"paths":["skills"]},"theme":"user"}'
+            [System.IO.File]::WriteAllText($kiloPath, $source, [System.Text.UTF8Encoding]::new($false))
+            $installer = Join-Path $script:ForkRoot "install.ps1"
+
+            $init = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-Tools", "kilocode", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $init.ExitCode | Should -Be 0 -Because $init.Output
+            $config = Get-Content -Raw -Encoding UTF8 $kiloPath | ConvertFrom-Json
+            @($config.instructions) | Should -Be @("docs/a.md", "USER-RULES.md", "docs/b.md")
+            $config.'$schema' | Should -Be "https://example.test/kilo.schema.json"
+            $config.mcp.custom.url | Should -Be "http://127.0.0.1:9999/mcp"
+            $config.permission.bash | Should -Be "ask"
+            $config.agent.review.model | Should -Be "custom"
+            @($config.skills.paths) | Should -Be @("skills")
+            $config.theme | Should -Be "user"
+
+            $before = (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash
+            $update = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "update", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $update.ExitCode | Should -Be 0 -Because $update.Output
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash | Should -Be $before
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "creates the instructions array when the Kilo config is absent" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $projectRoot = Join-Path $testRoot "kilo-empty"
+            New-Item -ItemType Directory -Force -Path $projectRoot | Out-Null
+            $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+                "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-Tools", "kilocode", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $result.ExitCode | Should -Be 0 -Because $result.Output
+            $config = Get-Content -Raw -Encoding UTF8 (Join-Path $projectRoot ".kilo\kilo.json") | ConvertFrom-Json
+            @($config.instructions) | Should -Be @("USER-RULES.md")
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It "fails without changing invalid JSON or a non-array instructions value" -TestCases @(
+        @{ Name = "invalid-json"; Json = '{broken' },
+        @{ Name = "wrong-type"; Json = '{"instructions":"USER-RULES.md","theme":"user"}' }
+    ) {
+        param($Name, $Json)
+        $testRoot = New-ForkTestRoot
+        try {
+            $projectRoot = Join-Path $testRoot $Name
+            $kiloPath = Join-Path $projectRoot ".kilo\kilo.json"
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $kiloPath) | Out-Null
+            [System.IO.File]::WriteAllText($kiloPath, $Json, [System.Text.UTF8Encoding]::new($false))
+            $before = (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash
+            $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+                "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-Tools", "kilocode", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $result.ExitCode | Should -Not -Be 0
+            $result.Output | Should -Match "KILO_INSTRUCTIONS_INVALID"
+            (Get-FileHash -Algorithm SHA256 -LiteralPath $kiloPath).Hash | Should -Be $before
         } finally {
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }

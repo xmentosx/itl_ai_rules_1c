@@ -28,6 +28,9 @@
 #     https://kilo.ai/docs/automate/mcp/using-in-cli. Past installs that
 #     placed MCP into `.kilocode/mcp.json` produced silently empty MCP
 #     listings; on `update` the installer rewrites to the modern path.
+#   - Project-specific `USER-RULES.md` is an explicit Kilo instruction. Kilo
+#     auto-discovers root `AGENTS.md`, but additional root files must be listed
+#     in the shared project config. This phase is independent of MCP ownership.
 #   - Kilo Code distinguishes primary agents from subagents via a `mode` field:
 #     `subagent` (only invoked via delegation) or `all` (both primary and
 #     subagent). Source flag `isSubagent: true` maps to `mode: subagent`;
@@ -84,6 +87,10 @@ commands:
 skills:
   copyTo: ".agents/skills/{name}/"
   mode: verbatim
+
+projectInstructions:
+  target: ".kilo/kilo.json"
+  files: ["USER-RULES.md"]
 
 mcp:
   source: "content/mcp-servers.json"

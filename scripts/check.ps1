@@ -112,7 +112,10 @@ try {
     $tree = [string](& git rev-parse 'HEAD^{tree}' 2>$null)
     $branch = [string](& git branch --show-current 2>$null)
     $dirty = @(& git status --porcelain --untracked-files=all).Count -gt 0
-    $baseTag = [string](& git describe --tags --match "itl-*" --abbrev=0 HEAD 2>$null)
+    # A new downstream revision is intentionally branched straight from the
+    # immutable upstream snapshot, so it may have no reachable fork tag yet.
+    # `git describe` exits non-zero in that valid pre-release state.
+    $baseTag = [string](@(& git tag --merged HEAD --list "itl-*" --sort=-version:refname | Select-Object -First 1))
     $baseTagContents = if ($baseTag) { [string](& git for-each-ref --format='%(contents)' "refs/tags/$baseTag" 2>$null) } else { "" }
     $upstreamCommit = ""
     $upstreamRef = ""
