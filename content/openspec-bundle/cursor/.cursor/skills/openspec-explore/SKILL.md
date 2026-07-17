@@ -9,6 +9,16 @@ metadata:
   generatedBy: "1.2.0"
 ---
 
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before repository exploration, proposal, or implementation:
+
+1. Read project-root `AGENTS.md` and `USER-RULES.md`; their project and ITL gates override generic rules.
+2. Activate every project skill required for the subject and current OpenSpec phase.
+3. Query mandatory product/documentation sources before broad repository traversal, then verify findings against code, tests, metadata, and available MCP evidence.
+4. Record material sources and conflicts in `## Context Sources`. If a required source is unavailable, label code-only conclusions as provisional and show the recovery action.
+
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
 **IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, and investigate the codebase, but you must NEVER write code or implement features. If the user asks you to implement something, remind them to exit explore mode first and create a change proposal. You MAY create OpenSpec artifacts (proposals, designs, specs) if the user asks—that's capturing thinking, not implementing.

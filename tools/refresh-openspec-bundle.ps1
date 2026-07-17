@@ -180,6 +180,11 @@ try {
         Write-Host ("  {0,-12} added={1,-3} updated={2,-3} removed={3,-3}" -f $s.Tool, $s.Added, $s.Updated, $s.Removed)
     }
 
+    if (-not $DryRun) {
+        & (Join-Path $RepoRoot 'tools/apply-openspec-downstream-overlay.ps1') -Root $bundleRoot
+        if ($LASTEXITCODE -ne 0) { throw 'OpenSpec downstream overlay failed.' }
+    }
+
     $verFile = Join-Path $bundleRoot 'version.txt'
     $existingVersion = ''
     if (Test-Path $verFile) { $existingVersion = ((Get-Content -Raw -Path $verFile) -replace '\s+$', '').Trim() }

@@ -69,7 +69,9 @@
     render MCP configs from `content/mcp-servers.json` (legacy behaviour),
     even when an external installation is detected. `external` — require
     the external installation (fail if the env signal or manifest is
-    missing) and skip MCP config rendering.
+    missing) and skip MCP config rendering. `delegated` — delegate all MCP
+    ownership to the host workflow: do not render, inspect, delete, probe, or
+    track tool MCP config files. Existing MCP config bytes are preserved.
 
 .PARAMETER ProjectRoot
     Project root directory to install into. Defaults to the current working
@@ -111,7 +113,7 @@ param(
     [switch]$Force,
     [string[]]$ForcePaths,
 
-    [ValidateSet('auto', 'managed', 'external')]
+    [ValidateSet('auto', 'managed', 'external', 'delegated')]
     [string]$McpMode = 'auto'
 )
 
@@ -127,7 +129,7 @@ $script:MemoryFileName = 'memory.md'
 $script:LlmRulesFileName = 'LLM-RULES.md'
 $script:DevEnvFileName = '.dev.env'
 $script:DevEnvExampleName = '.dev.env.example'
-$script:SupportedTools = @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode', 'other')
+$script:SupportedTools = @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode')
 $script:ManagedBlocks = @('core', 'user-defined', 'openspec')
 $script:LastChannel = 'powershell'
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding $false
@@ -794,27 +796,39 @@ function Get-InfobasePublishUrlBase {
 }
 
 function Resolve-McpServerPlaceholders {
-    # Substitutes {INFOBASE_PUBLISH_URL} in the `url` field of every server
-    # entry that contains it. Mutates the input collection. Returns the list
-    # of server ids whose placeholder could not be resolved because
-    # INFOBASE_PUBLISH_URL was empty / `.dev.env` was missing — the caller
-    # uses this to warn the user.
+    # Substitutes {INFOBASE_PUBLISH_URL} in server URLs and returns only the
+    # servers that can be rendered. `required` is the installation contract:
+    # an unresolved required server blocks installation, while an unresolved
+    # optional server is intentionally absent from configs and the manifest.
     param(
         [array]$Servers,
         [string]$InfobaseBase
     )
-    $unresolved = @()
+    $resolved = @()
     foreach ($s in $Servers) {
-        if (-not $s.url) { continue }
-        if ($s.url -notmatch '\{INFOBASE_PUBLISH_URL\}') { continue }
-        if ($InfobaseBase) {
-            $s.url = $s.url.Replace('{INFOBASE_PUBLISH_URL}', $InfobaseBase)
+        if ($s.url -and $s.url -match '\{INFOBASE_PUBLISH_URL\}') {
+            if ($InfobaseBase) {
+                $s.url = $s.url.Replace('{INFOBASE_PUBLISH_URL}', $InfobaseBase)
+            }
+            elseif ([bool]$s.required) {
+                throw "MCP server '$($s.id)' is required, but its URL contains unresolved placeholder {INFOBASE_PUBLISH_URL}. Fill INFOBASE_PUBLISH_URL in .dev.env."
+            }
+            else {
+                Write-Info "  MCP config: optional server $($s.id) is disabled because INFOBASE_PUBLISH_URL is empty."
+                continue
+            }
         }
-        else {
-            $unresolved += $s.id
+
+        if ($s.url -and $s.url -match '\{[\w-]+\}') {
+            if ([bool]$s.required) {
+                throw "MCP server '$($s.id)' is required, but its URL contains an unresolved placeholder: $($s.url)"
+            }
+            Write-Info "  MCP config: optional server $($s.id) is disabled because its URL contains an unresolved placeholder."
+            continue
         }
+        $resolved += $s
     }
-    return , $unresolved
+    return $resolved
 }
 
 function Test-McpHttpEndpoint {
@@ -945,16 +959,6 @@ function New-McpConfig-Kilocode {
     return (ConvertTo-Json $root -Depth 10)
 }
 
-function New-McpConfig-Other {
-    # Universal fallback adapter — uses the standard `mcpServers` JSON
-    # dictionary schema (same shape as Cursor / Claude Code / Kilo Code), so
-    # reuse the same renderer. The output is written to `.ai-agent/mcp.json`
-    # per `adapters/other.yaml` and is consumable by any AI client that
-    # supports the de-facto `mcpServers` JSON convention.
-    param([array]$Servers)
-    return New-McpConfig-Cursor $Servers
-}
-
 function ConvertTo-OpenCodeMcpKey {
     # OpenCode exposes MCP tools to the model as `<server-key>_<tool>`, taking
     # the key verbatim from the `mcp` object (it only replaces characters
@@ -1039,7 +1043,6 @@ function New-McpConfig {
         'codex' { return (New-McpConfig-Codex $Servers) }
         'opencode' { return (New-McpConfig-OpenCode $Servers) }
         'kilocode' { return (New-McpConfig-Kilocode $Servers) }
-        'other' { return (New-McpConfig-Other $Servers) }
         default { throw "Unknown tool id: $ToolId" }
     }
 }
@@ -1067,6 +1070,10 @@ function New-Manifest {
         files         = [ordered]@{}
         foreignFiles  = [ordered]@{}
         integrations  = [ordered]@{}
+        legacyArtifacts = [ordered]@{
+            userScope       = @()
+            preservedProject = @()
+        }
     }
     return $m
 }
@@ -1077,7 +1084,47 @@ function Read-Manifest {
     if (-not (Test-Path $path)) { return $null }
     $json = Read-TextFile $path
     $obj = $json | ConvertFrom-Json
-    return (ConvertTo-OrderedHashtable $obj)
+    $manifest = ConvertTo-OrderedHashtable $obj
+    if (-not $manifest.Contains('legacyArtifacts')) {
+        $manifest['legacyArtifacts'] = [ordered]@{ userScope = @(); preservedProject = @() }
+    }
+    if (-not $manifest.legacyArtifacts.Contains('userScope')) { $manifest.legacyArtifacts['userScope'] = @() }
+    if (-not $manifest.legacyArtifacts.Contains('preservedProject')) { $manifest.legacyArtifacts['preservedProject'] = @() }
+
+    # Protocol 1.0 could track absolute user-scope Codex prompts in `files`.
+    # Protocol 1.1 deliberately relinquishes ownership: keep the files on disk,
+    # record only a home-relative audit entry, and never verify/update/remove it.
+    foreach ($key in @($manifest.files.Keys)) {
+        $entry = $manifest.files[$key]
+        $isUserScope = [System.IO.Path]::IsPathRooted([string]$key) -or ([string]$key).StartsWith('~/') -or ([string]$key).StartsWith('~\')
+        if ($isUserScope) {
+            $displayPath = [string]$key
+            $userProfilePath = [Environment]::GetFolderPath('UserProfile').TrimEnd('\', '/')
+            if ($userProfilePath -and $displayPath.StartsWith($userProfilePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $displayPath = '~/' + $displayPath.Substring($userProfilePath.Length).TrimStart('\', '/').Replace('\', '/')
+            }
+            $manifest.legacyArtifacts.userScope = @($manifest.legacyArtifacts.userScope) + @([ordered]@{
+                path          = $displayPath
+                source        = [string]$entry.source
+                lastKnownHash = [string]$entry.installedHash
+                action        = 'manual-review'
+            })
+            [void]$manifest.files.Remove($key)
+            continue
+        }
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('legacy') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
+    $manifest.protocol = $script:ProtocolVersion
+    return $manifest
+}
+
+function Merge-ManifestOwners {
+    param($Existing, [string[]]$Owners)
+    $result = @()
+    if ($Existing -and $Existing.Contains('owners')) { $result += @($Existing.owners) }
+    $result += @($Owners)
+    return @($result | Where-Object { $_ } | Sort-Object -Unique)
 }
 
 function Write-Manifest {
@@ -1085,6 +1132,12 @@ function Write-Manifest {
         [string]$Root,
         [System.Collections.IDictionary]$Manifest
     )
+    Normalize-ManifestForWrite -Manifest $Manifest
+    foreach ($key in @($Manifest.files.Keys)) {
+        $entry = $Manifest.files[$key]
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('core') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
     $path = Join-Path $Root $script:ManifestFileName
     $json = ConvertTo-Json $Manifest -Depth 15
     Write-TextFile -Path $path -Content ($json + "`n")
@@ -1127,8 +1180,6 @@ function Get-ToolDetectionSignals {
         'codex'       = @((Test-Path (Join-Path $Root '.codex')))
         'opencode'    = @((Test-Path (Join-Path $Root '.opencode')), (Test-Path (Join-Path $Root 'opencode.json')))
         'kilocode'    = @((Test-Path (Join-Path $Root '.kilo')), (Test-Path (Join-Path $Root '.kilocode')))
-        # 'other' is a manual-only fallback — never auto-detected.
-        'other'       = @()
     }
     $detected = @()
     foreach ($t in $script:SupportedTools) {
@@ -1148,7 +1199,11 @@ function Invoke-Detection {
         if ($invalid) {
             throw "Unknown tool id(s): $($invalid -join ', '). Supported: $($script:SupportedTools -join ', ')"
         }
-        return $RequestedTools
+        $selected = @($RequestedTools | Sort-Object -Unique)
+        if ($selected.Count -ne 1) {
+            throw "Exactly one tool must be selected. Received: $($selected -join ', ')."
+        }
+        return $selected
     }
     # Auto-silent semantics:
     #   - exactly 1 detected -> proceed without prompting (single common case)
@@ -1165,25 +1220,55 @@ function Invoke-Detection {
         }
         Write-Info 'No AI tool directories detected in this project.'
         Write-Info "Supported tools: $($script:SupportedTools -join ', ')"
-        $ans = Read-Host 'Enter comma-separated tool ids to install for'
+        $ans = Read-Host 'Enter exactly one tool id to install for'
         $list = @($ans -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-        if ($list.Count -eq 0) { throw 'No tools selected; aborting.' }
+        if ($list.Count -ne 1) { throw 'Exactly one tool must be selected; aborting.' }
         return $list
     }
     Write-Info ("Detected tools: " + ($detectedArr -join ', '))
-    if ($NonInteractive -or $AssumeYes) { return $detectedArr }
-    $ans = Read-Host "Press Enter to accept all, or enter comma-separated subset"
-    if ([string]::IsNullOrWhiteSpace($ans)) { return $detectedArr }
+    if ($NonInteractive -or $AssumeYes) {
+        throw 'Multiple tools detected. Pass -Tools with exactly one active client.'
+    }
+    $ans = Read-Host "Enter exactly one active tool id"
     $list = @($ans -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-    if ($list.Count -eq 0) { return $detectedArr }
+    if ($list.Count -ne 1) { throw 'Exactly one tool must be selected; aborting.' }
     return $list
+}
+
+function Assert-SingleActiveTool {
+    param([string[]]$Tools, [string]$Context = 'installation')
+    $selected = @($Tools | Where-Object { $_ } | Sort-Object -Unique)
+    if ($selected.Count -ne 1) {
+        throw "SINGLE_CLIENT_REQUIRED: $Context requires exactly one active tool; found $($selected.Count): $($selected -join ', ')."
+    }
+    if ($selected[0] -notin $script:SupportedTools) {
+        throw "SINGLE_CLIENT_REQUIRED: unsupported tool '$($selected[0])'. Supported: $($script:SupportedTools -join ', ')."
+    }
+    return $selected[0]
+}
+
+function Test-AdapterArtifactIncluded {
+    param(
+        [System.Collections.IDictionary]$Definition,
+        [string]$Name,
+        [string]$Section,
+        [string]$SourceRoot
+    )
+    if ($Definition -and $Definition.include) {
+        if (@($Definition.include) -notcontains $Name) { return $false }
+    }
+    if ($Section -eq 'commands' -and $Definition.skipWhenNativeSkillExists) {
+        $nativeSkill = Join-Path $SourceRoot ("content/skills/$Name/SKILL.md")
+        if (Test-Path -LiteralPath $nativeSkill -PathType Leaf) { return $false }
+    }
+    return $true
 }
 
 # Return the canonical primary directory for a tool — the leading top-level
 # segment of the first defined `<section>.copyTo` (rules → agents → commands
 # → skills). Used purely for human-readable progress messages so the user
-# sees the real install location (e.g. `.kilo` for Kilo Code, `.ai-agent`
-# for the universal `other` fallback) instead of a heuristic `.<tool-id>`
+# sees the real install location (for example `.kilo` for Kilo Code) instead
+# of a heuristic `.<tool-id>`
 # guess that is wrong for those two adapters.
 function Get-AdapterPrimaryDir {
     param([System.Collections.IDictionary]$Adapter)
@@ -1348,6 +1433,9 @@ function Get-OpenSpecBundleDestRel {
             return '.kilo/' + $Rel.Substring('.kilocode/'.Length)
         }
     }
+    if ($Tool -eq 'codex' -and $Rel -like '.codex/skills/*') {
+        return '.agents/skills/' + $Rel.Substring('.codex/skills/'.Length)
+    }
     return $Rel
 }
 
@@ -1449,7 +1537,9 @@ function Invoke-OpenSpecArtifacts {
                 }
             }
             $absTarget = Join-Path $Root $destRel
-            if ((Test-Path $absTarget) -and -not $Manifest.files.Contains($destRel)) {
+            $previousFilesVariable = Get-Variable -Name PreviousFiles -Scope Script -ErrorAction SilentlyContinue
+            $wasPreviouslyManaged = $previousFilesVariable -and $script:PreviousFiles.ContainsKey($destRel)
+            if ((Test-Path $absTarget) -and -not $Manifest.files.Contains($destRel) -and -not $wasPreviouslyManaged) {
                 # Pre-existing OpenSpec command/skill is user-owned. The bundle
                 # is skip-if-exists on first install; never adopt and overwrite it.
                 $toolKept++
@@ -1460,9 +1550,12 @@ function Invoke-OpenSpecArtifacts {
                 New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
             }
             Copy-Item -Path $_.FullName -Destination $absTarget -Force
+            $existingEntry = if ($Manifest.files.Contains($destRel)) { $Manifest.files[$destRel] } else { $null }
             $Manifest.files[$destRel] = [ordered]@{
                 source        = "content/openspec-bundle/$tool/$rel"
                 installedHash = (Get-FileSha256 $absTarget)
+                owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners @($tool))
+                scope         = 'project'
             }
             $toolCopied++
         }
@@ -1915,7 +2008,8 @@ function Invoke-PlaceArtifactFile {
         [string]$Template,
         [System.Collections.IDictionary]$Manifest,
         [string]$ContentSource,
-        [string]$OwnerTool
+        [string[]]$Owners = @('core'),
+        [ValidateSet('project')][string]$Scope = 'project'
     )
     # Respect user modifications: if manifest marks this path as userModified,
     # keep the user's edits and leave the manifest entry unchanged — unless the
@@ -1924,7 +2018,7 @@ function Invoke-PlaceArtifactFile {
     if ($Manifest -and $Manifest.files -and $Manifest.files.Contains($TargetRel)) {
         $existing = $Manifest.files[$TargetRel]
         if ($existing -and $existing.userModified -and -not (Test-ForcePath $TargetRel)) {
-            $existing['owners'] = @(Merge-ManifestOwners -Entry $existing -OwnerTool $OwnerTool)
+            $existing['owners'] = @(Merge-ManifestOwners -Existing $existing -Owners $Owners)
             return
         }
     }
@@ -1957,14 +2051,27 @@ function Invoke-PlaceArtifactFile {
         Write-TextFile -Path $absTarget -Content $full
     }
     $hash = Get-FileSha256 $absTarget
-    $previousEntry = if ($Manifest.files.Contains($TargetRel)) { $Manifest.files[$TargetRel] } else { $null }
-    $entry = [ordered]@{
+    $existingEntry = if ($Manifest.files.Contains($TargetRel)) { $Manifest.files[$TargetRel] } else { $null }
+    $Manifest.files[$TargetRel] = [ordered]@{
         source        = $ContentSource
         installedHash = $hash
+        owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners $Owners)
+        scope         = $Scope
     }
-    $owners = @(Merge-ManifestOwners -Entry $previousEntry -OwnerTool $OwnerTool)
-    if ($owners.Count -gt 0) { $entry['owners'] = $owners }
-    $Manifest.files[$TargetRel] = $entry
+}
+
+function Normalize-ManifestForWrite {
+    param([System.Collections.IDictionary]$Manifest)
+    if (-not $Manifest -or -not $Manifest.Contains('files')) { return }
+    $sortedFiles = [ordered]@{}
+    foreach ($key in @($Manifest.files.Keys) | Sort-Object) {
+        $entry = $Manifest.files[$key]
+        if ($entry -and $entry.Contains('owners')) {
+            $entry.owners = @($entry.owners | Where-Object { $_ } | Sort-Object -Unique)
+        }
+        $sortedFiles[$key] = $entry
+    }
+    $Manifest.files = $sortedFiles
 }
 
 function Invoke-PlaceSkill {
@@ -1982,7 +2089,8 @@ function Invoke-PlaceSkill {
         [string]$TargetDir,
         [System.Collections.IDictionary]$Manifest,
         [string]$ContentSource,
-        [string]$OwnerTool
+        [string[]]$Owners = @('core'),
+        [ValidateSet('project')][string]$Scope = 'project'
     )
     $absTarget = Join-Path $Root $TargetDir
     $srcFull = (Resolve-Path $SourceDir).Path.TrimEnd('\', '/')
@@ -2000,7 +2108,7 @@ function Invoke-PlaceSkill {
         if ($Manifest.files.Contains($key)) {
             $skEntry = $Manifest.files[$key]
             if ($skEntry -and $skEntry.userModified -and -not (Test-ForcePath $key)) {
-                $skEntry['owners'] = @(Merge-ManifestOwners -Entry $skEntry -OwnerTool $OwnerTool)
+                $skEntry['owners'] = @(Merge-ManifestOwners -Existing $skEntry -Owners $Owners)
                 continue
             }
         }
@@ -2010,14 +2118,13 @@ function Invoke-PlaceSkill {
             New-Item -ItemType Directory -Force -Path $destDir | Out-Null
         }
         Copy-Item -Path $sf.FullName -Destination $destFull -Force
-        $previousEntry = if ($Manifest.files.Contains($key)) { $Manifest.files[$key] } else { $null }
-        $entry = [ordered]@{
+        $existingEntry = if ($Manifest.files.Contains($key)) { $Manifest.files[$key] } else { $null }
+        $Manifest.files[$key] = [ordered]@{
             source        = $ContentSource
             installedHash = (Get-FileSha256 $destFull)
+            owners        = @(Merge-ManifestOwners -Existing $existingEntry -Owners $Owners)
+            scope         = $Scope
         }
-        $owners = @(Merge-ManifestOwners -Entry $previousEntry -OwnerTool $OwnerTool)
-        if ($owners.Count -gt 0) { $entry['owners'] = $owners }
-        $Manifest.files[$key] = $entry
     }
 
     # 2) Prune files that are no longer shipped, keeping user-modified ones.
@@ -2167,6 +2274,138 @@ function Resolve-AgentModelTier {
     return $result
 }
 
+function Get-StringSha256 {
+    param([string]$Value)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$Value)
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant()
+    }
+    finally { $sha.Dispose() }
+}
+
+function Add-InstallationPlanEntry {
+    param(
+        [System.Collections.IDictionary]$Plan,
+        [string]$Root,
+        [string]$Target,
+        [string]$ContentHash,
+        [string]$Source,
+        [string]$Owner,
+        [string]$Kind
+    )
+    if ([System.IO.Path]::IsPathRooted($Target) -or $Target.StartsWith('~/') -or $Target.StartsWith('~\')) {
+        throw "Installation plan contains a non-project target: $Target ($Source)"
+    }
+    $normalized = $Target.Replace('\', '/').TrimStart('/')
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+    $targetFull = [System.IO.Path]::GetFullPath((Join-Path $Root $normalized))
+    if (-not $targetFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Installation plan target escapes project root: $Target ($Source)"
+    }
+    $key = $normalized.ToLowerInvariant()
+    if ($Plan.Contains($key)) {
+        $existing = $Plan[$key]
+        if ([string]$existing.contentHash -ne $ContentHash) {
+            throw "Installation plan conflict for '$normalized': $($existing.source) and $Source render different content."
+        }
+        $existing.owners = @(@($existing.owners) + @($Owner) | Sort-Object -Unique)
+        return
+    }
+    $Plan[$key] = [ordered]@{
+        target      = $normalized
+        source      = $Source
+        contentHash = $ContentHash
+        owners      = @($Owner)
+        scope       = 'project'
+        kind        = $Kind
+    }
+}
+
+function Get-PlannedArtifactHash {
+    param(
+        [string]$SourcePath,
+        [System.Collections.IDictionary]$SourceFm,
+        [string]$SourceBody,
+        [System.Collections.IDictionary]$FrontmatterOps,
+        [string]$Mode,
+        [string]$Template
+    )
+    if ($Mode -eq 'verbatim') { return (Get-FileSha256 $SourcePath).ToLowerInvariant() }
+    if ($Mode -eq 'rebuild-toml') {
+        return Get-StringSha256 (Invoke-CodexAgentTemplate -Template $Template -Fm $SourceFm -Body $SourceBody)
+    }
+    $newFm = Invoke-FrontmatterOps -Source $SourceFm -Ops $FrontmatterOps
+    $fmText = Format-Frontmatter $newFm
+    $rendered = if ($fmText) { $fmText + "`n" + $SourceBody } else { $SourceBody }
+    return Get-StringSha256 $rendered
+}
+
+function New-InstallationPlan {
+    param(
+        [string]$Root,
+        [string]$SourceRoot,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    $plan = [ordered]@{}
+    foreach ($tool in $ActiveTools) {
+        $adapter = $Adapters[$tool]
+        foreach ($section in @('rules', 'agents', 'commands')) {
+            $definition = $adapter[$section]
+            if (-not $definition -or -not $definition.copyTo) { continue }
+            $sourceDir = Join-Path $SourceRoot ("content/" + $section)
+            if (-not (Test-Path $sourceDir)) { continue }
+            $mode = if ($definition.mode) { [string]$definition.mode } else { 'transform' }
+            foreach ($file in Get-ChildItem -File $sourceDir -Filter *.md) {
+                $parts = Split-FrontmatterAndBody (Read-TextFile $file.FullName)
+                $fm = if ($section -eq 'agents') { Resolve-AgentModelTier -Frontmatter $parts.Frontmatter -Root $Root } else { $parts.Frontmatter }
+                $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+                if (-not (Test-AdapterArtifactIncluded -Definition $definition -Name $name -Section $section -SourceRoot $SourceRoot)) { continue }
+                $target = Resolve-CopyToPath ([string]$definition.copyTo) $name
+                $hash = Get-PlannedArtifactHash -SourcePath $file.FullName -SourceFm $fm -SourceBody $parts.Body `
+                    -FrontmatterOps $definition.frontmatter -Mode $mode -Template $definition.template
+                Add-InstallationPlanEntry -Plan $plan -Root $Root -Target $target -ContentHash $hash `
+                    -Source ("content/$section/" + $file.Name) -Owner $tool -Kind $section
+            }
+        }
+
+        if ($adapter.skills -and $adapter.skills.copyTo) {
+            $dirTemplate = ([string]$adapter.skills.copyTo).TrimEnd('/', '\')
+            foreach ($skillDir in Get-ChildItem -Directory (Join-Path $SourceRoot 'content/skills')) {
+                if (-not (Test-Path (Join-Path $skillDir.FullName 'SKILL.md'))) { continue }
+                $targetDir = Resolve-CopyToPath $dirTemplate $skillDir.Name
+                $sourceBase = (Resolve-Path $skillDir.FullName).Path.TrimEnd('\', '/')
+                foreach ($skillFile in Get-ChildItem -Recurse -File $skillDir.FullName) {
+                    $relative = $skillFile.FullName.Substring($sourceBase.Length + 1).Replace('\', '/')
+                    Add-InstallationPlanEntry -Plan $plan -Root $Root -Target ($targetDir.TrimEnd('/', '\') + '/' + $relative) `
+                        -ContentHash ((Get-FileSha256 $skillFile.FullName).ToLowerInvariant()) `
+                        -Source ("content/skills/$($skillDir.Name)/$relative") -Owner $tool -Kind 'skill'
+                }
+            }
+        }
+
+        $bundleRoot = Join-Path $SourceRoot ("content/openspec-bundle/" + $tool)
+        if (Test-Path $bundleRoot) {
+            $bundleBase = (Resolve-Path $bundleRoot).Path.TrimEnd('\', '/')
+            foreach ($bundleFile in Get-ChildItem -Recurse -File $bundleRoot) {
+                $relative = $bundleFile.FullName.Substring($bundleBase.Length + 1).Replace('\', '/')
+                $destRel = Get-OpenSpecBundleDestRel -Tool $tool -Rel $relative
+                Add-InstallationPlanEntry -Plan $plan -Root $Root -Target $destRel `
+                    -ContentHash ((Get-FileSha256 $bundleFile.FullName).ToLowerInvariant()) `
+                    -Source ("content/openspec-bundle/$tool/$relative") -Owner $tool -Kind 'openspec'
+            }
+        }
+
+        if ($adapter.mcp -and $adapter.mcp.target) {
+            $descriptor = @($adapter.mcp.source, $adapter.mcp.schema, $adapter.mcp.format, $adapter.mcp.merge) -join '|'
+            Add-InstallationPlanEntry -Plan $plan -Root $Root -Target ([string]$adapter.mcp.target) `
+                -ContentHash (Get-StringSha256 $descriptor) -Source ("adapters/$tool.yaml#mcp") -Owner $tool -Kind 'mcp'
+        }
+    }
+    return $plan
+}
+
 function Invoke-PlacePhase {
     param(
         [string]$Root,
@@ -2191,7 +2430,7 @@ function Invoke-PlacePhase {
                 Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                     -TargetRel $target -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                     -FrontmatterOps $fmOps -Mode $mode `
-                    -Manifest $Manifest -ContentSource ("content/rules/" + $f.Name) -OwnerTool $tool
+                    -Manifest $Manifest -ContentSource ("content/rules/" + $f.Name) -Owners @($tool)
             }
         }
 
@@ -2209,7 +2448,7 @@ function Invoke-PlacePhase {
                 Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                     -TargetRel $target -SourceFm $agentFm -SourceBody $parts.Body `
                     -FrontmatterOps $fmOps -Mode $mode -Template $template `
-                    -Manifest $Manifest -ContentSource ("content/agents/" + $f.Name) -OwnerTool $tool
+                    -Manifest $Manifest -ContentSource ("content/agents/" + $f.Name) -Owners @($tool)
             }
         }
 
@@ -2221,20 +2460,21 @@ function Invoke-PlacePhase {
             foreach ($f in Get-ChildItem -File (Join-Path $SourceRoot 'content/commands') -Filter *.md) {
                 $parts = Split-FrontmatterAndBody (Read-TextFile $f.FullName)
                 $name = [System.IO.Path]::GetFileNameWithoutExtension($f.Name)
+                if (-not (Test-AdapterArtifactIncluded -Definition $adapter.commands -Name $name -Section 'commands' -SourceRoot $SourceRoot)) { continue }
                 $targetRaw = Resolve-CopyToPath $copyTpl $name
                 # If target starts with ~/ (absolute home path), we need to write outside root
                 if ($copyTpl.StartsWith('~/')) {
                     Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                         -TargetRel $targetRaw -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                         -FrontmatterOps $fmOps -Mode $mode `
-                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -OwnerTool $tool
+                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -Owners @($tool)
                     Write-Warn "  command written to user scope: $targetRaw (shared across projects)"
                 }
                 else {
                     Invoke-PlaceArtifactFile -Root $Root -SourcePath $f.FullName `
                         -TargetRel $targetRaw -SourceFm $parts.Frontmatter -SourceBody $parts.Body `
                         -FrontmatterOps $fmOps -Mode $mode `
-                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -OwnerTool $tool
+                        -Manifest $Manifest -ContentSource ("content/commands/" + $f.Name) -Owners @($tool)
                 }
             }
         }
@@ -2248,7 +2488,7 @@ function Invoke-PlacePhase {
                 $name = $sd.Name
                 $targetDir = Resolve-CopyToPath $dirTpl $name
                 Invoke-PlaceSkill -Root $Root -SourceDir $sd.FullName -TargetDir $targetDir `
-                    -Manifest $Manifest -ContentSource ("content/skills/" + $name) -OwnerTool $tool
+                    -Manifest $Manifest -ContentSource ("content/skills/" + $name) -Owners @($tool)
             }
         }
 
@@ -2306,13 +2546,9 @@ function Invoke-PlacePhase {
     # the canonical tool's directory, resolved by `Resolve-CanonicalRulesDir`.
 }
 
-# Priority order for choosing the "canonical" rules directory referenced by
-# AGENTS.md. Lower index = higher priority. The first active tool in this
-# order whose adapter defines a `rules.copyTo` wins. The universal fallback
-# `other` is intentionally last: when combined with any "real" tool the real
-# tool's rules dir wins; `.ai-agent/rules/` becomes canonical only when
-# `other` is the only active tool.
-$script:RulesDirPriority = @('cursor', 'claude-code', 'kilocode', 'opencode', 'codex', 'other')
+# Stable order retained for deterministic rendering. The single-client
+# contract means exactly one entry can match in normal operation.
+$script:RulesDirPriority = @('cursor', 'claude-code', 'kilocode', 'opencode', 'codex')
 
 function Resolve-CanonicalRulesLayout {
     # Returns @{ Dir = <path>; Ext = <ext-without-dot> } for the highest-priority
@@ -2435,6 +2671,136 @@ function Convert-AgentsMdPaths {
 # SECTION 11: MCP PHASE
 # ============================================================================
 
+# Kilo auto-loads root AGENTS.md, but project-specific instruction files are
+# loaded only when the shared project config lists them. Keep this independent
+# from MCP ownership: delegated/external MCP still needs USER-RULES.md.
+function Get-KiloProjectInstructionsContract {
+    param(
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    if ($ActiveTools -notcontains 'kilocode') { return $null }
+    $adapter = $Adapters['kilocode']
+    if (-not $adapter -or -not $adapter.projectInstructions) {
+        throw 'KILO_INSTRUCTIONS_INVALID: kilocode adapter is missing projectInstructions contract.'
+    }
+    $target = [string]$adapter.projectInstructions.target
+    $files = @($adapter.projectInstructions.files | ForEach-Object { [string]$_ })
+    if ([string]::IsNullOrWhiteSpace($target) -or $files.Count -eq 0) {
+        throw 'KILO_INSTRUCTIONS_INVALID: kilocode projectInstructions target/files are empty.'
+    }
+    return [pscustomobject]@{ Target = $target; Files = $files }
+}
+
+function Read-KiloProjectInstructionsConfig {
+    param(
+        [string]$Root,
+        [Parameter(Mandatory = $true)]$Contract
+    )
+    $path = Join-Path $Root $Contract.Target
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        return [pscustomobject]@{ Path = $path; Exists = $false; Raw = ''; Value = [pscustomobject]@{} }
+    }
+    try {
+        $raw = Get-Content -LiteralPath $path -Raw -Encoding UTF8 -ErrorAction Stop
+        $value = $raw | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) is not valid JSON. $($_.Exception.Message)"
+    }
+    $property = $value.PSObject.Properties['instructions']
+    if ($property) {
+        if ($null -eq $property.Value -or -not ($property.Value -is [System.Array])) {
+            throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) top-level instructions must be a JSON array."
+        }
+        foreach ($entry in @($property.Value)) {
+            if (-not ($entry -is [string])) {
+                throw "KILO_INSTRUCTIONS_INVALID: $($Contract.Target) instructions entries must be strings."
+            }
+        }
+    }
+    return [pscustomobject]@{ Path = $path; Exists = $true; Raw = $raw; Value = $value }
+}
+
+function Assert-KiloProjectInstructionsConfig {
+    param(
+        [string]$Root,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+    $contract = Get-KiloProjectInstructionsContract -ActiveTools $ActiveTools -Adapters $Adapters
+    if (-not $contract) { return }
+    $jsoncPath = Join-Path $Root '.kilo/kilo.jsonc'
+    if (Test-Path -LiteralPath $jsoncPath -PathType Leaf) {
+        throw 'KILO_CONFIG_COLLISION: .kilo/kilo.jsonc exists next to managed .kilo/kilo.json. Consolidate the configs explicitly before installation.'
+    }
+    [void](Read-KiloProjectInstructionsConfig -Root $Root -Contract $contract)
+}
+
+function Ensure-KiloProjectInstructions {
+    param(
+        [string]$Root,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters,
+        [System.Collections.IDictionary]$Manifest
+    )
+    $contract = Get-KiloProjectInstructionsContract -ActiveTools $ActiveTools -Adapters $Adapters
+    if (-not $contract) { return }
+    $config = Read-KiloProjectInstructionsConfig -Root $Root -Contract $contract
+    $existingInstructions = @()
+    $hasInstructions = $false
+    foreach ($property in $config.Value.PSObject.Properties) {
+        if ($property.Name -eq 'instructions') {
+            $hasInstructions = $true
+            $existingInstructions = @($property.Value)
+        }
+    }
+
+    $normalized = New-Object System.Collections.ArrayList
+    $managedSeen = @{}
+    foreach ($entry in $existingInstructions) {
+        $isManaged = $false
+        foreach ($managed in $contract.Files) {
+            if ([string]::Equals([string]$entry, [string]$managed, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $isManaged = $true
+                if (-not $managedSeen.ContainsKey($managed)) {
+                    [void]$normalized.Add($managed)
+                    $managedSeen[$managed] = $true
+                }
+                break
+            }
+        }
+        if (-not $isManaged) { [void]$normalized.Add($entry) }
+    }
+    foreach ($managed in $contract.Files) {
+        if (-not $managedSeen.ContainsKey($managed)) {
+            [void]$normalized.Add($managed)
+            $managedSeen[$managed] = $true
+        }
+    }
+
+    $changed = -not $hasInstructions -or (($existingInstructions -join "`n") -cne (@($normalized) -join "`n"))
+    if (-not $changed) {
+        Write-Info "  [kilocode] project instructions already current: $($contract.Target)"
+        return
+    }
+    $result = [ordered]@{}
+    foreach ($property in $config.Value.PSObject.Properties) {
+        if ($property.Name -eq 'instructions') {
+            $result['instructions'] = @($normalized)
+        }
+        else {
+            $result[$property.Name] = $property.Value
+        }
+    }
+    if (-not $hasInstructions) { $result['instructions'] = @($normalized) }
+    Write-TextFile -Path $config.Path -Content ((ConvertTo-Json $result -Depth 20) + "`n")
+    if ($Manifest -and $Manifest.files.Contains($contract.Target)) {
+        $Manifest.files[$contract.Target]['installedHash'] = Get-FileSha256 $config.Path
+    }
+    Write-Info "  [kilocode] project instructions: $($contract.Target) -> $($contract.Files -join ', ')"
+}
+
 function Invoke-McpPhase {
     param(
         [string]$Root,
@@ -2447,15 +2813,10 @@ function Invoke-McpPhase {
 
     # Substitute {INFOBASE_PUBLISH_URL} placeholders in server URLs from the
     # project's .dev.env (Place-DevEnv runs earlier in the pipeline so the
-    # file is in place by now). Servers whose placeholder cannot be resolved
-    # keep the literal placeholder in the rendered config — the user sees a
-    # clear TODO marker and a warning telling them what to fill in.
+    # file is in place by now). Optional unresolved servers are omitted;
+    # required unresolved servers fail before any MCP config is rendered.
     $infobaseBase = Get-InfobasePublishUrlBase -Root $Root
-    $unresolved = Resolve-McpServerPlaceholders -Servers $servers -InfobaseBase $infobaseBase
-    if ($unresolved.Count -gt 0) {
-        Write-Warn ("  MCP config: следующие серверы используют плейсхолдер {INFOBASE_PUBLISH_URL}, но INFOBASE_PUBLISH_URL в .dev.env пуст: " + ($unresolved -join ', ') + '.')
-        Write-Warn '  Заполните INFOBASE_PUBLISH_URL в .dev.env (URL веб-публикации ИБ, напр. http://localhost/<infobase_name>/ru/) и запустите установщик повторно — MCP-конфиг будет перерендерен с подставленным URL.'
-    }
+    $servers = @(Resolve-McpServerPlaceholders -Servers $servers -InfobaseBase $infobaseBase)
 
     # Probe HTTP-service-based MCP servers (1c-data-mcp). The MCP HTTP client
     # does not pass any Authorization header to /hs/<service>, so the 1C
@@ -2597,9 +2958,12 @@ function Invoke-McpPhase {
         }
 
         Write-TextFile -Path $absTarget -Content ($finalContent + "`n")
+        $mcpPrevious = if ($Manifest.files.Contains($target)) { $Manifest.files[$target] } else { $null }
         $mcpEntry = [ordered]@{
             source        = 'content/mcp-servers.json'
             installedHash = (Get-FileSha256 $absTarget)
+            owners        = @(Merge-ManifestOwners -Existing $mcpPrevious -Owners @($tool))
+            scope         = 'project'
         }
         # `merged` marks a SHARED config (opencode.json / .kilo/kilo.json) that
         # carries user keys besides `mcp`. On `remove`, such a file must NOT be
@@ -2930,6 +3294,7 @@ function Resolve-ExternalMcpMode {
     param([string]$ProjectRoot)
     switch ($script:McpMode) {
         'managed' { return @{ Mode = 'managed' } }
+        'delegated' { return @{ Mode = 'delegated' } }
         'external' {
             $det = Detect-ExternalMcp -ProjectRoot $ProjectRoot
             if ($det.Mode -ne 'external') {
@@ -2944,6 +3309,44 @@ function Resolve-ExternalMcpMode {
             return $det
         }
     }
+}
+
+function Remove-McpTargetsFromManifest {
+    param(
+        [System.Collections.IDictionary]$Manifest,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters,
+        [string]$OwnerLabel = 'delegated owner'
+    )
+
+    if (-not $Manifest -or -not $ActiveTools -or -not $Adapters) { return }
+    foreach ($tool in $ActiveTools) {
+        $adapter = $Adapters[$tool]
+        if (-not $adapter -or -not $adapter.mcp) { continue }
+        $mcpTarget = $adapter.mcp.target
+        if ($mcpTarget -and $Manifest.files.Contains($mcpTarget)) {
+            [void]$Manifest.files.Remove($mcpTarget)
+            Write-Info "  [$tool] MCP config: $mcpTarget removed from installer manifest ownership ($OwnerLabel)."
+        }
+    }
+}
+
+function Invoke-DelegatedMcpPhase {
+    param(
+        [System.Collections.IDictionary]$Manifest,
+        [string[]]$ActiveTools,
+        [hashtable]$Adapters
+    )
+
+    Remove-McpTargetsFromManifest -Manifest $Manifest -ActiveTools $ActiveTools -Adapters $Adapters -OwnerLabel 'ITL workflow'
+    if (-not $Manifest.integrations) { $Manifest.integrations = [ordered]@{} }
+    $Manifest.integrations['mcp'] = [ordered]@{
+        mode           = 'delegated'
+        owner          = 'ITL'
+        contractSource = 'host workflow'
+        managedTargets = @()
+    }
+    $Manifest.mcpServers = @()
 }
 
 function Get-RegistryProjectForRoot {
@@ -3515,8 +3918,8 @@ function Place-RootTemplates {
 # Critical fields (treated as blocking for IB-related commands when empty):
 #   PREFIX, COMPANY, DEVELOPER, PLATFORM_VERSION, PLATFORM_PATH,
 #   INFOBASE_PATH.
-# Recommended fields (warned about, but not blocking):
-#   IB_USER, INFOBASE_PUBLISH_URL.
+# Conditional fields (empty is expected until the matching capability is
+# explicitly requested): INFOBASE_PUBLISH_URL.
 # Defaulted fields (empty = silently fall back to a documented default;
 # never re-asked at task time):
 #   IB_PASSWORD (empty = no password; /P omitted),
@@ -3669,7 +4072,6 @@ function Place-DevEnv {
         $val = Read-Required 'IB_USER (пусто — без аутентификации, /N опускается)'         '';                                                  if ($val) { $text = Set-DevEnvValue -Text $text -Key 'IB_USER'             -Value $val }
         $val = Read-Required 'IB_PASSWORD (пусто — без пароля, /P опускается; не храните прод-пароли)' '';                                       if ($val) { $text = Set-DevEnvValue -Text $text -Key 'IB_PASSWORD'         -Value $val }
         $val = Read-Required 'LOG_PATH (файл лога Designer''а; пусто — $env:TEMP\1cv8.log)' '';                                                if ($val) { $text = Set-DevEnvValue -Text $text -Key 'LOG_PATH'            -Value $val }
-        $val = Read-Required 'INFOBASE_PUBLISH_URL (URL веб-публикации для UI-тестов; пусто — UI-тесты пропускаются)' '';                      if ($val) { $text = Set-DevEnvValue -Text $text -Key 'INFOBASE_PUBLISH_URL' -Value $val }
     }
 
     # Persist subagent model tiers. The values were either asked once during
@@ -3768,7 +4170,6 @@ function Invoke-LegacyInfobaseSettingsMigration {
         Write-Warn '  infobasesettings.md contains no recognized KEY=value or KEY: value entries; file kept'
         return
     }
-
     $text = Read-TextFile $devEnvPath
     $current = Read-DevEnvKeys -Path $devEnvPath
     $migratedKeys = @()
@@ -3929,9 +4330,12 @@ function Invoke-Init {
     }
 
     $activeTools = Invoke-Detection -Root $Root -RequestedTools $RequestedTools
+    [void](Assert-SingleActiveTool -Tools $activeTools -Context 'init')
     Write-Info ("Active tools: " + ($activeTools -join ', '))
 
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $activeTools -Adapters $adapters
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
 
     if (-not $existing) {
         Write-Section 'Migration: existing root instructions'
@@ -3954,6 +4358,7 @@ function Invoke-Init {
         $planDirs += "$t -> $primary/"
     }
     Write-Info ("Will write per-tool files into: " + ($planDirs -join ', '))
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
     Write-Info "MCP servers will be added to each tool's MCP config."
     if (-not $AssumeYes -and -not $NonInteractive) {
         if (-not (Read-YesNo 'Proceed with installation?' $true)) { return }
@@ -4008,10 +4413,16 @@ function Invoke-Init {
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
     Invoke-LegacyInfobaseSettingsMigration -Root $Root -Manifest $manifest
 
+    Write-Section 'Phase 7b: Kilo project instructions'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
+
     Write-Section 'Phase 8: MCP'
     $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиги инструментов НЕ изменяются.'
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — tool MCP configs are not inspected or changed.'
     }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
@@ -4030,6 +4441,11 @@ function Invoke-Init {
         Write-Section 'Phase 8d: External MCP (USER-RULES.md sync)'
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. Конфиги не тронуты. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Section 'Phase 8d: Delegated MCP ownership'
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
     }
 
     Write-Section 'Phase 9: Manifest'
@@ -4079,10 +4495,15 @@ function Write-RestartRecommendation {
         [string[]]$ActiveTools,
         [int]$McpCount = 0
     )
-    if ($McpCount -le 0) { return }
+    if ($McpCount -le 0 -and $ActiveTools -notcontains 'kilocode') { return }
     Write-Info ""
-    Write-Info "ВАЖНО: перезапустите AI-клиент (CLI / IDE), чтобы он перечитал MCP-конфигурацию и определения агентов."
-    Write-Info "       MCP-серверы и новые субагенты подхватываются только при старте клиента — без перезапуска они не появятся в текущей сессии."
+    Write-Info "ВАЖНО: перечитайте изменённую конфигурацию AI-клиента."
+    if ($McpCount -gt 0) {
+        Write-Info "       MCP-серверы и новые субагенты подхватываются после reload/restart клиента."
+    }
+    if ($ActiveTools -contains 'kilocode') {
+        Write-Info "       Kilo Code: выполните /reload либо откройте новую сессию, чтобы применить project instructions, agents, skills и commands."
+    }
     if ($ActiveTools -contains 'opencode') {
         Write-Info "       OpenCode: полностью завершите и заново запустите сессию OpenCode (config читается при старте)."
     }
@@ -4096,6 +4517,7 @@ function Invoke-Verify {
     $mismatches = @()
     $count = 0
     foreach ($rel in $Manifest.files.Keys) {
+        if ($Manifest.files[$rel].userModified) { continue }
         $abs = Resolve-ManifestPath -Root $Root -Rel $rel
         if (-not (Test-Path $abs)) { $mismatches += "missing: $rel"; continue }
         $count++
@@ -4106,11 +4528,65 @@ function Invoke-Verify {
     return @{ Ok = ($mismatches.Count -eq 0); Count = $count; Mismatches = $mismatches }
 }
 
+function Invoke-LegacyClientLayoutMigration {
+    param(
+        [string]$Root,
+        [System.Collections.IDictionary]$Manifest,
+        [System.Collections.IDictionary]$InstallationPlan
+    )
+    $legacyPatterns = @('.codex/skills/*', '.kilo/skills/*', '.kilocode/skills/*', '.kilocode/workflows/*')
+    $removed = @()
+    $preserved = @()
+    foreach ($key in @($Manifest.files.Keys)) {
+        $normalized = ([string]$key).Replace('\', '/')
+        if (-not @($legacyPatterns | Where-Object { $normalized -like $_ }).Count) { continue }
+        if ($InstallationPlan.Contains($normalized.ToLowerInvariant())) { continue }
+        $entry = $Manifest.files[$key]
+        if (-not (@($entry.owners) -contains 'legacy')) { continue }
+        $abs = Resolve-ManifestPath -Root $Root -Rel $key
+        $exists = Test-Path -LiteralPath $abs -PathType Leaf
+        $matches = $exists -and $entry.installedHash -and ((Get-FileSha256 $abs) -eq [string]$entry.installedHash)
+        if ($matches -and -not $entry.userModified) {
+            Remove-Item -LiteralPath $abs -Force
+            [void]$Manifest.files.Remove($key)
+            $removed += $normalized
+            continue
+        }
+        if ($exists) {
+            $entry['userModified'] = $true
+            $record = [ordered]@{ path = $normalized; source = [string]$entry.source; reason = 'user-modified' }
+            $Manifest.legacyArtifacts.preservedProject = @($Manifest.legacyArtifacts.preservedProject) + @($record)
+            $preserved += $normalized
+        }
+        else {
+            [void]$Manifest.files.Remove($key)
+        }
+    }
+
+    foreach ($relativeDir in @('.kilocode', '.codex/skills', '.kilo/skills')) {
+        $dir = Join-Path $Root $relativeDir
+        if (-not (Test-Path $dir -PathType Container)) { continue }
+        $remainingFiles = @(Get-ChildItem -LiteralPath $dir -Recurse -File -Force -ErrorAction SilentlyContinue)
+        if ($remainingFiles.Count -eq 0) { Remove-Item -LiteralPath $dir -Recurse -Force }
+    }
+    if ($removed.Count -gt 0) { Write-Info "Migrated legacy client layout: removed $($removed.Count) managed file(s)." }
+    if ($preserved.Count -gt 0) {
+        Write-Warn "Preserved $($preserved.Count) user-modified legacy client file(s):"
+        $preserved | ForEach-Object { Write-Warn "  $_" }
+    }
+    if (@($Manifest.legacyArtifacts.userScope).Count -gt 0) {
+        Write-Warn 'Legacy user-scope Codex prompts were preserved and are no longer installer-managed:'
+        @($Manifest.legacyArtifacts.userScope) | ForEach-Object { Write-Warn "  $($_.path)" }
+    }
+}
+
 function Invoke-Update {
     param(
         [string]$Root,
         [string]$SourceRootRequested
     )
+    $manifestPath = Join-Path $Root $script:ManifestFileName
+    $manifestOriginalText = Read-TextFile $manifestPath
     $manifest = Read-Manifest -Root $Root
     if (-not $manifest) { throw 'No manifest found. Run init first.' }
     if ($manifest.protocol -and [version]$manifest.protocol -gt [version]$script:ProtocolVersion) {
@@ -4124,7 +4600,17 @@ function Invoke-Update {
     Write-Info "Source: $sourceRoot"
 
     $activeTools = @($manifest.tools)
+    [void](Assert-SingleActiveTool -Tools $activeTools -Context 'update')
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $activeTools -Adapters $adapters
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
+    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
+    if ($extMcp.Mode -eq 'delegated') {
+        # Ownership must be removed before drift detection. Otherwise a config
+        # changed by the host workflow is falsely reported as userModified.
+        Remove-McpTargetsFromManifest -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters -OwnerLabel 'ITL workflow'
+    }
 
     Write-Section 'Migration: legacy .ai-rules/rules/ mirror'
     $legacyKeys = @($manifest.files.Keys | Where-Object { $_ -like '.ai-rules/rules/*' })
@@ -4237,7 +4723,10 @@ function Invoke-Update {
     # userModified on every update.
     $newFiles = [ordered]@{}
     foreach ($k in $manifest.files.Keys) {
-        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName) { $newFiles[$k] = $manifest.files[$k] }
+        $entryOwners = @($manifest.files[$k].owners)
+        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName -or $entryOwners -contains 'legacy') {
+            $newFiles[$k] = $manifest.files[$k]
+        }
     }
     $manifest.files = $newFiles
 
@@ -4260,6 +4749,9 @@ function Invoke-Update {
     Write-Section 'OpenSpec artefacts (update)'
     Invoke-OpenSpecArtifacts -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Manifest $manifest
 
+    Write-Section 'Migration: legacy Codex/Kilo client layout'
+    Invoke-LegacyClientLayoutMigration -Root $Root -Manifest $manifest -InstallationPlan $installationPlan
+
     Write-Section 'OpenSpec project.md (update / 1C autodetect)'
     Invoke-OpenSpecProjectMd -Root $Root -Manifest $manifest
 
@@ -4270,10 +4762,15 @@ function Invoke-Update {
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
     Invoke-LegacyInfobaseSettingsMigration -Root $Root -Manifest $manifest
 
+    Write-Section 'Kilo project instructions (update)'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
+
     Write-Section 'MCP (update)'
-    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиги инструментов НЕ изменяются.'
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — tool MCP configs are not inspected or changed.'
     }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
@@ -4290,12 +4787,34 @@ function Invoke-Update {
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. Конфиги не тронуты. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
     }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Section 'Delegated MCP ownership'
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
+    }
 
-    $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
     $manifest.lastChannel = $script:LastChannel
     $manifest.version = Get-SourceVersion -SourceRoot $sourceRoot
-
-    Write-Manifest -Root $Root -Manifest $manifest
+    foreach ($key in @($manifest.files.Keys)) {
+        $entry = $manifest.files[$key]
+        if (-not $entry.Contains('owners')) { $entry['owners'] = @('core') }
+        if (-not $entry.Contains('scope')) { $entry['scope'] = 'project' }
+    }
+    $previousUpdatedAt = [string]$manifest.updatedAt
+    $manifest.updatedAt = '__compare__'
+    Normalize-ManifestForWrite -Manifest $manifest
+    $manifestCandidateText = (ConvertTo-Json $manifest -Depth 15) + "`n"
+    $updatedAtPattern = '(?m)("updatedAt"\s*:\s*)"[^"]*"'
+    $originalComparable = [regex]::Replace($manifestOriginalText, $updatedAtPattern, '$1"__compare__"')
+    $candidateComparable = [regex]::Replace($manifestCandidateText, $updatedAtPattern, '$1"__compare__"')
+    if ($candidateComparable -ne $originalComparable) {
+        $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        Write-Manifest -Root $Root -Manifest $manifest
+    }
+    else {
+        $manifest.updatedAt = $previousUpdatedAt
+        Write-Info 'Manifest unchanged; preserving updatedAt and file bytes.'
+    }
 
     Write-Section 'Report'
     Write-Info 'Update complete.'
@@ -4321,6 +4840,7 @@ function Invoke-Add {
     )
     if (-not $NewTool) { throw '-Tool is required for add command' }
     if ($NewTool -notin $script:SupportedTools) { throw "Unknown tool: $NewTool" }
+    throw 'SINGLE_CLIENT_REQUIRED: add is disabled. Use the host workflow client-switch operation to replace the active client transactionally.'
 
     $manifest = Read-Manifest -Root $Root
     if (-not $manifest) { throw 'No manifest found. Run init first.' }
@@ -4332,6 +4852,15 @@ function Invoke-Add {
     $sourceRoot = Resolve-SourceRoot -Requested $SourceRootRequested
     $activeTools = @($NewTool)
     $adapters = Load-Adapters -SourceRoot $sourceRoot -Tools $activeTools
+    $allPlannedTools = @(@($manifest.tools) + @($NewTool) | Sort-Object -Unique)
+    $allPlannedAdapters = Load-Adapters -SourceRoot $sourceRoot -Tools $allPlannedTools
+    Assert-KiloProjectInstructionsConfig -Root $Root -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
+    $installationPlan = New-InstallationPlan -Root $Root -SourceRoot $sourceRoot -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters
+    Write-Info "Validated installation plan: $($installationPlan.Count) unique project target(s)."
+    $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
+    if ($extMcp.Mode -eq 'delegated') {
+        Remove-McpTargetsFromManifest -Manifest $manifest -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters -OwnerLabel 'ITL workflow'
+    }
 
     $foreign = Invoke-ScanForeign -Root $Root -ActiveTools $activeTools -Manifest $manifest -Adapters $adapters
     $integrations = $manifest.integrations
@@ -4346,9 +4875,14 @@ function Invoke-Add {
     # actual project value when rendering the newly-added tool's MCP config.
     Place-DevEnv -Root $Root -SourceRoot $sourceRoot -Manifest $manifest
     Invoke-LegacyInfobaseSettingsMigration -Root $Root -Manifest $manifest
+    Write-Section 'Kilo project instructions (add)'
+    Ensure-KiloProjectInstructions -Root $Root -ActiveTools $allPlannedTools -Adapters $allPlannedAdapters -Manifest $manifest
     $extMcp = Resolve-ExternalMcpMode -ProjectRoot $Root
     if ($extMcp.Mode -eq 'external') {
         Write-Info '  Обнаружена внешняя установка MCP (install.manifest.json) — MCP-конфиг для нового инструмента НЕ создаётся.'
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Write-Info '  MCP ownership delegated to the host workflow — no MCP config is created for the new tool.'
     }
     else {
         Invoke-McpPhase -Root $Root -SourceRoot $sourceRoot -ActiveTools $activeTools -Adapters $adapters -Manifest $manifest
@@ -4372,6 +4906,10 @@ function Invoke-Add {
     if ($extMcp.Mode -eq 'external') {
         $extResult = Invoke-ExternalMcpPhase -ProjectRoot $Root -Detection $extMcp -Manifest $manifest -ActiveTools $activeTools -Adapters $adapters
         Write-Info "  MCP: external. USER-RULES.md синхронизирован ($($extResult.GlobalCount) глобальных + $($extResult.ProjectCount) проектных серверов)."
+    }
+    elseif ($extMcp.Mode -eq 'delegated') {
+        Invoke-DelegatedMcpPhase -Manifest $manifest -ActiveTools $allActive -Adapters $allAdapters
+        Write-Info '  MCP: delegated to ITL. Config files were not inspected or changed.'
     }
 
     $manifest.updatedAt = [datetime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
@@ -4417,6 +4955,18 @@ function Test-MergedMcpEntry {
     return ($Entry -is [System.Collections.IDictionary] -and $Entry.Contains('merged') -and $Entry['merged'])
 }
 
+function Remove-EmptyManagedParents {
+    param([string]$Root, [string]$Path)
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $current = Split-Path -Parent $Path
+    while ($current -and $current.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase) -and $current -ne $rootFull) {
+        $items = @(Get-ChildItem -LiteralPath $current -Force -ErrorAction SilentlyContinue)
+        if ($items.Count -gt 0) { break }
+        Remove-Item -LiteralPath $current -Force -ErrorAction SilentlyContinue
+        $current = Split-Path -Parent $current
+    }
+}
+
 function Invoke-Remove {
     param(
         [string]$Root,
@@ -4428,29 +4978,16 @@ function Invoke-Remove {
     if ($ScopeTool) {
         if ($ScopeTool -notin $manifest.tools) { Write-Warn "$ScopeTool is not installed."; return }
         Write-Info "Removing rules for $ScopeTool only."
-        $toolPrefixes = @(".$ScopeTool/")
-        # Claude uses `.claude/` but also generates `CLAUDE.md` entry; Codex uses `.codex/` + `AGENTS.md` edits; handle per-tool cleanup:
-        switch ($ScopeTool) {
-            'claude-code' { $toolPrefixes = @('.claude/', 'CLAUDE.md', '.mcp.json') }
-            'codex'       { $toolPrefixes = @('.codex/') }
-            'opencode'    { $toolPrefixes = @('.opencode/', 'opencode.json') }
-            'kilocode'    { $toolPrefixes = @('.kilo/', '.kilocode/') }
-            'cursor'      { $toolPrefixes = @('.cursor/') }
-            'other'       { $toolPrefixes = @('.ai-agent/') }
-        }
         $toRemove = @()
         foreach ($rel in @($manifest.files.Keys)) {
             $entry = $manifest.files[$rel]
-            if ($entry -is [System.Collections.IDictionary] -and
-                $entry.Contains('owners') -and
-                $ScopeTool -in @($entry['owners'])) {
-                $toRemove += $rel
-                continue
+            if (-not (@($entry.owners) -contains $ScopeTool)) { continue }
+            $remainingOwners = @(@($entry.owners) | Where-Object { $_ -ne $ScopeTool })
+            if ($remainingOwners.Count -gt 0) {
+                $entry['owners'] = $remainingOwners
             }
-            foreach ($p in $toolPrefixes) {
-                if ($rel -eq $p -or $rel.StartsWith($p.TrimEnd('/') + '/')) {
-                    $toRemove += $rel; break
-                }
+            else {
+                $toRemove += $rel
             }
         }
         $removedCount = 0
@@ -4478,6 +5015,7 @@ function Invoke-Remove {
             }
             elseif (Test-Path $abs) {
                 Remove-Item -Force $abs -ErrorAction SilentlyContinue
+                Remove-EmptyManagedParents -Root $Root -Path $abs
             }
             $manifest.files.Remove($rel)
             $removedCount++
@@ -4527,7 +5065,6 @@ function Invoke-Remove {
         # Clean up empty per-tool directories
         $cleanupDirs = @('.ai-rules')
         foreach ($t in $manifest.tools) {
-            if ($t -eq 'other') { $cleanupDirs += '.ai-agent' }
             else { $cleanupDirs += ".$t" }
         }
         foreach ($rel in $cleanupDirs) {

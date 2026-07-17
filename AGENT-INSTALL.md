@@ -17,11 +17,11 @@ If the user asks you to install or update `1c-rules`, follow this protocol from 
 
 ### Project root is mandatory — no global installs
 
-`1c-rules` is a **project-scoped** toolkit. Every supported tool (Cursor, Claude Code, Codex, OpenCode, Kilo Code, `other`) reads its always-on context from the project root, and every on-demand rule / agent / command / skill lands under a project-local tool directory (`.cursor/`, `.claude/`, `.kilo/`, `.codex/`, `.opencode/`, `.ai-agent/`). Installing into a tool's **global CLI configuration directory** (`~/.config/kilo/`, `~/.codex/`, `~/.claude/`, `~/.opencode/`, `%APPDATA%\…\<tool>\`, etc.) is **not supported and is forbidden**: such directories are owned by the CLI itself, the adapter targets (`.kilo/commands/`, `.kilo/agents/`, …) do not match what the CLI looks up globally, `AGENTS.md` path rewriting yields broken links, and `.dev.env` / OpenSpec / `.ai-rules.json` have no project to bind to. A "global" install is always wrong, even when the user has not opened a project — there is nothing meaningful for the rules to attach to.
+`1c-rules` is a **project-scoped, single-client** toolkit. Exactly one supported tool (Cursor, Claude Code, Codex, OpenCode, or Kilo Code) is active, and every managed rule / agent / command / skill lands in that client's project-local discovery paths. Installing into a tool's **global CLI configuration directory** is unsupported and forbidden.
 
 Before doing **any** filesystem operation, resolve the project root:
 
-1. Use the working directory the agent was launched in if it is plausibly a project root (contains `Configuration.xml`, `ConfigurationExtension.xml`, a `src/` / `cf/` source dump, a `.cursor/` / `.claude/` / `.kilo/` / `.codex/` / `.opencode/` / `.ai-agent/` directory, a `.git/`, or an existing `AGENTS.md` / `.ai-rules.json`).
+1. Use the working directory the agent was launched in if it is plausibly a project root (contains `Configuration.xml`, `ConfigurationExtension.xml`, a `src/` / `cf/` source dump, a supported client directory, `.git/`, or an existing `AGENTS.md` / `.ai-rules.json`).
 2. If the working directory **is** a tool CLI config directory (path matches `~/.config/<tool>`, `~/.codex`, `~/.claude`, `~/.opencode`, `%APPDATA%\…\<tool>`, or contains the CLI's own marker files such as `kilo.jsonc`, `config.toml` next to `prompts/`, `package.json` with `@kilocode/plugin` / `@openai/codex` / etc., or `bun.lock` / `package-lock.json` shipped by the CLI installer) — **STOP**. Do not install there.
 3. If the working directory is anonymous (user's home, `Documents`, `Desktop`, `Downloads`, `/tmp`, `$env:TEMP`) — **STOP**.
 4. When stopping, ask the user once: *"Установить правила в текущий каталог `<path>` — это похоже на конфиг-каталог Kilo CLI / Codex CLI / домашнюю папку, а правила ставятся per-project. Укажите путь к корню 1C-проекта, в который ставить правила."* Do not proceed with a guessed path, do not "install globally as a workaround", do not create a synthetic project folder.
@@ -32,11 +32,10 @@ The same rule applies to the PowerShell fallback: `install.ps1` requires being r
 
 - **Channel** — agent-driven by default. Do not ask the user to choose between the agent and PowerShell channels. If you cannot perform filesystem operations, fall back to PowerShell silently.
 - **Source** — local clone of `1c-rules` if the user pointed at one; otherwise `https://github.com/comol/ai_rules_1c` (default).
-- **Active tools** — auto-detect from the project. A tool is "active" if its `detection:` block in `adapters/<tool>.yaml` matches (e.g. `.cursor/` for Cursor, `CLAUDE.md` or `.claude/` for Claude Code, etc.).
+- **Active client** — auto-detect from the project. A client matches when its `detection:` block in `adapters/<tool>.yaml` matches.
   - **Exactly one tool detected** — proceed silently with that tool. Do not ask.
-  - **Zero tools detected** — ask once: "No AI tool directory detected. Which tools should I install for? (`cursor`, `claude-code`, `codex`, `opencode`, `kilocode`, `other`)". The `other` option is a universal fallback for any AI client that is not in the explicit list — it places `AGENTS.md` at the project root and writes on-demand rules / agents / commands / skills / MCP config under `.ai-agent/` in a portable, tool-agnostic layout.
-  - **Two or more tools detected** — ask once: "Detected: `<list>`. Press Enter to install for all, or specify a subset.".
-- **`other` is never auto-detected.** It is selected only when the user explicitly types it in the prompt above or passes `-Tools other` to the PowerShell installer. When `other` is combined with a "real" tool, `AGENTS.md` still references the real tool's rules directory (priority order `cursor → claude-code → kilocode → opencode → codex → other`); `.ai-agent/rules/` becomes the canonical referenced directory only when `other` is the sole active tool.
+  - **Zero tools detected** — ask once for exactly one of `cursor`, `claude-code`, `codex`, `opencode`, or `kilocode`.
+  - **Two or more tools detected** — ask once which single client owns this project. Never install all detected clients.
 - **Confirmation** — only required when migrating an existing user-modified `AGENTS.md`/`CLAUDE.md`, or when the operation would overwrite user-modified managed files. See *Confirm before destructive actions* below.
 
 ### Lean placement — do not read every file
@@ -49,14 +48,14 @@ Use this lean sequence:
 
 2. **Read adapters only.** For each active tool open `adapters/<tool>.yaml` from the clone. These files are small and define, in a closed schema:
    - `detection` — how to confirm the tool is active.
-   - `rules`, `agents`, `commands`, `skills` — `copyTo` target paths (with `{name}` placeholder), `frontmatter.keep`/`drop`/`rename`/`addIf`/`toolsToPermission` operations, and copy `mode` (default per-file with frontmatter ops; `verbatim` for skills; `rebuild-toml` for Codex agents). `toolsToPermission` (OpenCode only) converts the source `tools` array into OpenCode's `permission` object — see *OpenCode agents: `tools` array → `permission` object* below.
+   - `rules`, `agents`, `commands`, `skills` — `copyTo` target paths, command `include` allowlist, frontmatter operations, and copy mode.
    - `mcp` — how `content/mcp-servers.json` is rendered into the tool's MCP config.
    - `entry` — optional entry-point template (e.g. minimal `CLAUDE.md` pointing at `AGENTS.md`).
 
 3. **Bulk-copy directories.** For each active tool, copy whole directories from `content/` to the adapter's target paths in one shell call each. Do **not** open file bodies during the copy:
    - `content/rules/` → `<rules.copyTo dir>/`
    - `content/agents/` → `<agents.copyTo dir>/`
-   - `content/commands/` → `<commands.copyTo dir>/`
+   - Published files from `content/commands/` → `<commands.copyTo dir>/`, filtered by `commands.include`. Suppressed commands are not copied. Codex commands are project-local skills and a command is skipped when the same native skill already exists.
    - `content/skills/` → `<skills.copyTo dir>/` (mode `verbatim` — copy **every** skill folder as-is, no transformation). Copy the whole `content/skills/` directory; do **not** cherry-pick a subset. All skills are required, including the non-1C-domain ones (`caveman`, `prompt-enhancer`, `handoff`, `mermaid-diagrams`, `transcribe`, `md-to-docx`, `img-grid-analysis`) — `AGENTS.md` references them and silently skipping any of them leaves a degraded ruleset. Use a single directory copy, not per-skill judgement calls.
    - `content/openspec-bundle/<tool>/` → at the locations encoded in that snapshot, **skip-if-exists**.
 
@@ -68,7 +67,7 @@ Use this lean sequence:
    - For sections with `mode: verbatim` (skills) — skip the frontmatter step entirely.
    - For Codex agents (`mode: rebuild-toml`) — render via the adapter's `template`. This is the one case that requires the body, but only for those agent files in `content/agents/` (a small set).
 
-5. **Render the MCP config** from `content/mcp-servers.json` according to the adapter's `mcp.schema`. **External MCP check first:** before rendering anything, detect an external MCP installation (user env `BASESAI_MCP_GLOBAL_ROOT`, fallback `MCP_GLOBAL_ROOT` in the project `.dev.env`, pointing at a folder that contains `install.manifest.json`) — see *External MCP installation (INSTALL.md, режим 3)* below. When detected, **skip this step entirely for every tool** (do not write `.cursor/mcp.json` or any other `mcp.target`), sync the `mcp:install_forme` section of `USER-RULES.md` from the install artifacts, and record `integrations.mcp.mode = "external"` in `.ai-rules.json`. Otherwise render from `content/mcp-servers.json` according to the adapter's `mcp.schema` (mcpServers JSON dictionary, OpenCode `mcp[id]` schema, or Codex TOML `[mcp_servers.<id>]`). **OpenCode only:** normalize each server key to start with a letter before writing it under `mcp` — leading `1c`/`1C` → `onec` (so `1c-syntax-checker-mcp` → `onec-syntax-checker-mcp`, `1C-docs-mcp` → `onec-docs-mcp`), any other non-letter-leading id gets an `mcp-` prefix. OpenCode names MCP tools `<server-key>_<tool>` and providers like Moonshot/Kimi reject function names that do not start with a letter (`^[a-zA-Z_]…`), which otherwise breaks the whole request with *"function name is invalid, must start with a letter"*. Canonical ids in `content/mcp-servers.json` and the docs stay `1c-…`; only the OpenCode-rendered key changes. The other adapters keep the verbatim id (Cursor/Claude prefix tool names with `mcp_`/`mcp__`, so a digit-leading key is already safe there). **Target file & merge:** write each tool's MCP into the path declared by `mcp.target` — for OpenCode this is `opencode.json` at the **project root** (NOT `.opencode/opencode.json`, which OpenCode never reads; `.opencode/` holds only agents/commands/modes/plugins/skills/tools/themes), and for Kilo Code it is `.kilo/kilo.json` under the top-level `mcp` key. Both are **shared** user configs (`mcp.merge: true`): deep-merge **only** the top-level `mcp` key and preserve every other key the user has. **OpenCode validates each MCP entry with a strict schema** — emit only `{ type: "remote", url, enabled }` (or `{ type: "local", command: [...], enabled }`); any extra key such as `description` or `connection_id` makes OpenCode reject the whole config and the servers silently never load. After writing it, **recommend that the user restart the AI client** — see *Recommend a restart after MCP changes* below.
+5. **Render MCP once for the active client.** Preserve user keys and modify only managed entries. OpenCode uses root `opencode.json`; Kilo uses `.kilo/kilo.json`. If `.kilo/kilo.jsonc` also exists, stop before writing and require explicit consolidation. A host workflow may additionally block tracked shared configs pending explicit migration. Delegated/external MCP ownership continues to skip client config writes.
 
 6. **Place the always-on layer** (`AGENTS.md`, `USER-RULES.md`, `memory.md`, `LLM-RULES.md`) — see the next section.
 
@@ -76,7 +75,7 @@ Use this lean sequence:
 
 8. **Scaffold OpenSpec.** Copy `openspec/` into the project in skip-if-exists mode (no overwrites).
 
-9. **Write the manifest** `.ai-rules.json` at the project root: list all placed files with their content sources and `owners` (one or more active tools for shared paths), the active tools, the source version (`git describe --tags --always` from the clone), the protocol version (`1.1`), the canonical rules directory used for diagnostics / updates, and any detected foreign user-authored files under `foreignFiles`.
+9. **Write the manifest** `.ai-rules.json`: protocol `1.1`, exactly one item in `tools`, managed ownership/hashes, source version, canonical rules directory, and foreign user-authored files.
 
 ### OpenCode agents: `tools` array → `permission` object
 
@@ -110,7 +109,7 @@ mode: subagent
 ---
 ```
 
-**OpenCode model format.** OpenCode requires the `model` value in `provider/model` form (optional `#variant`, e.g. `anthropic/claude-sonnet-4-5#high`), using the ids shown by `/models` — a bare slug (`opus`, `glm-5.2-max`) does not resolve and an invalid id can make OpenCode reject the config and fail to start. The installer writes `SUBAGENT_MODEL_*` verbatim, so on OpenCode these keys **must** hold `provider/model` ids; the `/economymode` command enforces this when it asks for models. Cursor / Claude Code / Codex use their own bare-slug formats, so `.dev.env` model values are client-specific — set them for the client actually installed.
+**OpenCode and Kilo model format.** Both require `provider/model` ids (OpenCode may add an optional `#variant`, e.g. `anthropic/claude-sonnet-4-5#high`). Bare slugs do not resolve. Cursor / Claude Code / Codex use their own formats, so `.dev.env` model values are client-specific and must be cleared when the active client changes.
 
 ### Recommend a restart after MCP changes
 
@@ -150,11 +149,11 @@ When the MCP servers were installed by the MCP vendor distribution's **`INSTALL.
 `AGENTS.md` placement is a readable-copy step with deterministic path rewriting:
 
 1. Read the source `AGENTS.md` from the clone. It is maintained as a human-readable source document with explicit source-repository paths (`content/rules/<name>.md`, `content/agents/<name>.md`, `content/commands/<name>.md`, `content/skills/<rest>`), not as an opaque placeholder-heavy template.
-2. Resolve the **canonical artefact layout** per section. For each of `rules`, `agents`, `commands`, `skills`, walk the priority order `cursor → claude-code → kilocode → opencode → codex → other` and pick the first active tool whose adapter declares `<section>.copyTo`. The result is, per section, a `(directory, extension)` pair derived by stripping `{name}...` from the `copyTo` template. Record the canonical rules directory in `.ai-rules.json` for diagnostics and update logic; the other sections are recomputed on every refresh from the active tool set.
+2. Resolve the **active client's artefact layout** per section. Exactly one of `cursor`, `claude-code`, `kilocode`, `opencode`, or `codex` is active. Derive each `(directory, extension)` pair from that adapter's `<section>.copyTo` and record the canonical rules directory in `.ai-rules.json`.
 3. Rewrite the source text by substituting `content/<section>/...` paths with the per-section canonical installed paths so every path in the file resolves to an existing project-local file:
    - `content/rules/<name>.md` → `<rulesDir>/<name>.<rulesExt>` (e.g. `.cursor/rules/<name>.mdc`, `.claude/rules/<name>.md`).
    - `content/agents/<name>.md` → `<agentsDir>/<name>.<agentsExt>` (e.g. `.codex/agents/<name>.toml` when Codex is canonical).
-   - `content/commands/<name>.md` → `<commandsDir>/<name>.<commandsExt>` (Codex commands resolve to `~/.codex/prompts/<name>.md` when Codex is the only active tool).
+   - `content/commands/<name>.md` → `<commandsDir>/<name>.<commandsExt>`; Codex command surfaces are project-local skills under `.agents/skills/<name>/SKILL.md`, never user-global prompts.
    - `content/skills/<rest>` → `<skillsDir>/<rest>` — skills are copied verbatim, so any subpath after `content/skills/` (`SKILL.md`, `docs/<file>.md`, `tools/...`) is preserved untouched.
    - The name regex matches both real names and prose placeholders like `<name>`, so illustrative paths in the body are also rewritten consistently.
 4. Write the rewritten text to the project root as `AGENTS.md`. Refresh on update only if the local file is unmodified since the previous installer write (manifest hash matches) — preserve user edits otherwise.
@@ -230,8 +229,8 @@ The script implements the protocol above. Notes:
 
 - `-Source` accepts a local path or a Git source URL (`https://...`, `git@...`, or a value ending with `.git`). URL sources are cloned into the installer's cache before placement.
 - Run from the **project root**; the script writes there.
-- Commands: `init` / `update` / `add <tool>` / `remove [<tool>]` / `doctor` (read-only diagnostic) / `eject` (delete the manifest, leave files in place).
-- Flags: `-Tools cursor,claude-code` (explicit list), `-NonInteractive` (auto-resolve prompts), `-AssumeYes` (answer yes to confirmations but still pause on destructive conflicts unless `-NonInteractive` is also set), `-Force` (on `update`: overwrite user-modified files with the shipped version), `-ForcePaths <path>[,<path>…]` (on `update`: restrict the overwrite to the listed project-relative paths, comma-separated; exact match or `*`/`?` wildcard; implies `-Force`), `-McpMode auto|managed|external` (MCP phase behaviour — see *External MCP installation* above; default `auto` detects an external installation and leaves MCP configs untouched when found).
+- Commands: `init` / `update` / `remove [<tool>]` / `doctor` (read-only diagnostic) / `eject` (delete the manifest, leave files in place). `add` fails by design; the host workflow performs transactional client replacement.
+- Flags: `-Tools <one-client>` (exactly one required when detection is ambiguous), `-NonInteractive`, `-AssumeYes`, `-Force`, `-ForcePaths <path>[,<path>…]`, `-McpMode auto|managed|external`.
 
 ### Do NOT pipe `install.ps1` into `Invoke-Expression`
 
@@ -260,7 +259,7 @@ Do not execute raw script text from GitHub with `Invoke-Expression`; download or
 - `memory.md` — project memory file at the project root. Created on first install and not overwritten by the installer.
 - `LLM-RULES.md` — agent-maintained self-improvement rule layer at the project root, written only by the `/evolve` command with per-entry user approval (precedence and capture discipline — `AGENTS.md → Rules self-improvement`). Created on first install (template) and **never** overwritten by the installer.
 - `.dev.env` — single source of truth for project parameters (code generation + infobase connection + web-publish URL for tests). Created on first install with auto-detected values where possible (PLATFORM_VERSION, PLATFORM_PATH, PREFIX) and prompts for the rest in interactive mode. **Never** overwritten by the installer; gitignored by default.
-- On-demand rule files — placed under each active tool's `rules.copyTo` directory (`.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.kilo/rules-1c/*.md`, `.codex/rules/*.md`, `.opencode/rules/*.md`, `.ai-agent/rules/*.md` for `other`). Kilo intentionally uses `rules-1c` rather than the eagerly auto-loaded `.kilo/rules/`; its rules are loaded through the rewritten paths in `AGENTS.md`. All copies contain the same authoritative text; per-tool frontmatter differs (e.g. Cursor keeps `globs`/`alwaysApply`; `other` keeps only the minimum portable subset `description` + `alwaysApply`). `AGENTS.md` references one canonical directory — the highest-priority active tool's. Other active tools' rules dirs are still populated for their own discovery or explicit path loading.
+- On-demand rule files are placed only under the active client's `rules.copyTo` directory (`.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.kilo/rules-1c/*.md`, `.codex/rules/*.md`, or `.opencode/rules/*.md`).
 - `content/agents/*.md` — full role descriptions and prompts for the 13 specialized subagents. Source file names use short names such as `developer.md` / `explorer.md`; the installed agent id is defined by each file's frontmatter. Each AI tool discovers them from its own agents directory after install.
 
 ## USER-RULES.md
@@ -293,4 +292,4 @@ The project ships an [OpenSpec](https://github.com/Fission-AI/OpenSpec) workspac
 
 OpenSpec slash commands (`/opsx:propose`, `/opsx:apply`, `/opsx:archive`, `/opsx:explore`) and the matching SKILLs are placed automatically by the `1c-rules` installer for every active tool from a bundled snapshot of `openspec init` output (see `content/openspec-bundle/`); no `npm` and no OpenSpec CLI are required at install time. The snapshot's CLI version is recorded in `.ai-rules.json` under `integrations.openspec.artifactsBundleVersion` and is refreshed whenever `1c-rules` is updated.
 
-Bundles are shipped for `cursor`, `claude-code`, `codex`, `opencode`, `kilocode`. The `other` adapter (universal fallback) has no OpenSpec bundle — its users continue to read `openspec/specs/` and `openspec/changes/` directly and invoke OpenSpec workflows manually, without project-rendered slash commands. This is recorded in `.ai-rules.json` under `integrations.openspec.bundleSkipped` for transparency.
+Bundles are shipped for `cursor`, `claude-code`, `codex`, `opencode`, and `kilocode`. Codex bundle skills are remapped to `.agents/skills` during placement.
