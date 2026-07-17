@@ -5067,7 +5067,12 @@ function Invoke-Remove {
         # Clean up empty per-tool directories
         $cleanupDirs = @('.ai-rules')
         foreach ($t in $manifest.tools) {
-            else { $cleanupDirs += ".$t" }
+            if ($t -eq 'kilocode') {
+                $cleanupDirs += @('.kilo', '.kilocode')
+            }
+            else {
+                $cleanupDirs += ".$t"
+            }
         }
         foreach ($rel in $cleanupDirs) {
             $dir = Join-Path $Root $rel

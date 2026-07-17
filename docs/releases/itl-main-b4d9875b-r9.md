@@ -1,5 +1,9 @@
 # Release qualification: `itl-main-b4d9875b-r9`
 
+> Superseded by `itl-main-b4d9875b-r10`: the immutable r9 installer inherited
+> an upstream runtime failure in the full `remove` path. Do not use r9 for new
+> installations or migrations.
+
 - Fork repository: `https://github.com/xmentosx/itl_ai_rules_1c.git`
 - Upstream ref: `refs/heads/main`
 - Upstream commit: `b4d9875b15c6d93f493035aee51f077126e72a21`

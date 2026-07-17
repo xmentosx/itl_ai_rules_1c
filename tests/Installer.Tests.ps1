@@ -251,6 +251,35 @@ Describe "Delegated MCP ownership" -Tag "Fast" {
 }
 
 Describe "Kilo project instructions" -Tag "Fast" {
+    It "removes a Kilo installation while preserving the RTK-owned legacy rule" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $projectRoot = Join-Path $testRoot "kilo-remove"
+            New-Item -ItemType Directory -Force -Path $projectRoot | Out-Null
+            $installer = Join-Path $script:ForkRoot "install.ps1"
+            $init = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-Tools", "kilocode", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $init.ExitCode | Should -Be 0 -Because $init.Output
+
+            $rtkRule = Join-Path $projectRoot ".kilocode\rules\rtk-rules.md"
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $rtkRule) | Out-Null
+            [System.IO.File]::WriteAllText($rtkRule, "RTK-owned", [System.Text.UTF8Encoding]::new($false))
+
+            $remove = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "remove", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-NonInteractive", "-AssumeYes"
+            )
+            $remove.ExitCode | Should -Be 0 -Because $remove.Output
+            Test-Path -LiteralPath (Join-Path $projectRoot ".ai-rules.json") | Should -BeFalse
+            Test-Path -LiteralPath $rtkRule -PathType Leaf | Should -BeTrue
+            (Get-Content -LiteralPath $rtkRule -Raw -Encoding UTF8) | Should -Be "RTK-owned"
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It "adds USER-RULES once and preserves config keys and instruction order" {
         $testRoot = New-ForkTestRoot
         try {
