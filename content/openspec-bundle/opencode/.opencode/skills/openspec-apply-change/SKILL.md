@@ -9,6 +9,20 @@ metadata:
   generatedBy: "1.2.0"
 ---
 
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before repository exploration, proposal, or implementation:
+
+1. Read project-root `AGENTS.md` and `USER-RULES.md`; their project and ITL gates override generic rules.
+2. Activate every project skill required for the subject and current OpenSpec phase.
+3. Query mandatory product/documentation sources before broad repository traversal, then verify findings against code, tests, metadata, and available MCP evidence.
+4. Record material sources and conflicts in `## Context Sources`. If a required source is unavailable, label code-only conclusions as provisional and show the recovery action.
+<!-- itl:apply-test-authoring -->
+## 1C test authoring (ITL downstream)
+
+Read and follow `test-plan.md` together with the OpenSpec `contextFiles`; do not silently weaken an approved observable result. Execute test authoring and checks according to the effective ITL verification modes. Finish implementation with a fresh `/itl-check`; skipped components remain explicit partial evidence and never become a normal fresh pass.
+
 Implement tasks from an OpenSpec change.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
