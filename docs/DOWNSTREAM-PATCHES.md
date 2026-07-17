@@ -1,15 +1,17 @@
-# Downstream patch ledger — `b4d9875b` / r8
+# Downstream patch ledger — `b4d9875b` / r9
 
-This release is rebuilt directly from upstream commit
-`b4d9875b15c6d93f493035aee51f077126e72a21`. No previous downstream branch or
-commit chain is merged or rebased onto it. Each previous requirement is
-classified as `keep`, `drop`, or `rewrite` against this snapshot.
+The r8 baseline was rebuilt directly from upstream commit
+`b4d9875b15c6d93f493035aee51f077126e72a21`; r9 is a minimal immutable hotfix
+on that qualified baseline. No earlier downstream branch was merged or rebased
+onto the upstream intake. Each requirement remains classified as `keep`,
+`drop`, or `rewrite` against this snapshot.
 
-| ID | Decision | r8 treatment | Verification |
+| ID | Decision | r9 treatment | Verification |
 |---|---|---|---|
 | ITL-INFRA-001 | `keep` | Preserve fork policy, local Full gate, exact qualification record, and immutable publication tooling. | `ReleaseTooling.Tests.ps1`, Full gate |
 | ITL-INFRA-002 | `keep` | Require an immutable upstream ref/SHA and atomic release branch/tag publication. | publish `-WhatIf`, ancestry checks |
 | ITL-INSTALL-001 | `keep` | Preserve installer protocol `1.1`, complete pre-write plan, rollback-friendly ownership, and root-boundary checks. | installer/layout tests |
+| ITL-INSTALL-ENTRY-001 | `rewrite` | Retain clean adapter entry files such as `CLAUDE.md` while rebuilding the update manifest, preventing a pristine first update from being mislabeled `userModified`. | Claude init/update byte-idempotence regression |
 | ITL-MANIFEST-001 | `rewrite` | Manifest contains exactly one active client; `other` and additive multi-client install are unsupported. | five-client contract matrix |
 | ITL-LAYOUT-OLD-001 | `drop` | Do not replay the old shared Codex+Kilo layout or old `.kilocode` layout patches. Use each current native adapter. | real-path inventory tests |
 | ITL-CODEX-001 | `rewrite` | Codex commands and OpenSpec skills are project-local `.agents/skills`; never write `~/.codex/prompts`. | Codex inventory and user-scope guard |

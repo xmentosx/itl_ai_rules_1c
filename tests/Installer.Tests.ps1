@@ -33,6 +33,33 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
         @($errors) | Should -BeNullOrEmpty
     }
 
+    It "keeps a pristine Claude entry manifest byte-idempotent on the first update" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $projectRoot = Join-Path $testRoot "claude-idempotence"
+            New-Item -ItemType Directory -Force -Path $projectRoot | Out-Null
+            $installer = Join-Path $script:ForkRoot "install.ps1"
+            $init = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-Tools", "claude-code", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $init.ExitCode | Should -Be 0 -Because $init.Output
+            $manifestPath = Join-Path $projectRoot ".ai-rules.json"
+            $before = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash
+
+            $update = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                "update", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+            )
+            $update.ExitCode | Should -Be 0 -Because $update.Output
+            (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash | Should -Be $before
+            $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            @($manifest.files.'CLAUDE.md'.PSObject.Properties.Name) | Should -Not -Contain "userModified"
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It "keeps local gate artifacts out of git status" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot ".gitignore") -Raw -Encoding UTF8
         $text | Should -Match '(?m)^build/\r?$'

@@ -15,6 +15,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+# SupportsShouldProcess sets WhatIfPreference for the whole script. Preflight
+# must still perform real read-only hashes and qualification checks; restore
+# the caller preference only for the branch/tag mutation guarded below.
+$publishWhatIfPreference = $WhatIfPreference
+$WhatIfPreference = $false
 
 function Invoke-RepoGit {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
@@ -161,6 +166,7 @@ $annotation = "ITL ai_rules_1c release $forkTag; upstream=$upstreamRef@$resolved
 $createdBranch = $false
 $createdTag = $false
 try {
+    $WhatIfPreference = $publishWhatIfPreference
     if ($PSCmdlet.ShouldProcess($RepositoryRoot, "create $releaseBranch and immutable tag $forkTag")) {
         [void](Invoke-RepoGit -Arguments @("branch", $releaseBranch, $headCommit))
         $createdBranch = $true

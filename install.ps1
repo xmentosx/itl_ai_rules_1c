@@ -4724,7 +4724,9 @@ function Invoke-Update {
     $newFiles = [ordered]@{}
     foreach ($k in $manifest.files.Keys) {
         $entryOwners = @($manifest.files[$k].owners)
-        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName -or $entryOwners -contains 'legacy') {
+        $entrySource = [string]$manifest.files[$k].source
+        if ($manifest.files[$k].userModified -or $k -eq $script:AgentsMdFileName -or
+            $entrySource -like 'adapters/*.yaml#entry' -or $entryOwners -contains 'legacy') {
             $newFiles[$k] = $manifest.files[$k]
         }
     }

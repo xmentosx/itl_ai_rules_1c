@@ -78,6 +78,8 @@ Describe "Fork release tooling" -Tag "Fast" {
         $publish | Should -Match 'itl-\$normalizedSource-r\$Revision'
         $publish | Should -Match 'upgrade/\$normalizedSource-r\$Revision'
         $publish | Should -Match "Test-ReusableQualification"
+        $publish | Should -Match '\$publishWhatIfPreference = \$WhatIfPreference'
+        $publish | Should -Match '(?s)\$WhatIfPreference = \$false.*?Test-ReusableQualification.*?\$WhatIfPreference = \$publishWhatIfPreference.*?ShouldProcess'
         $publish | Should -Not -Match "SkipCheck"
     }
 
