@@ -127,7 +127,7 @@ $script:MemoryFileName = 'memory.md'
 $script:LlmRulesFileName = 'LLM-RULES.md'
 $script:DevEnvFileName = '.dev.env'
 $script:DevEnvExampleName = '.dev.env.example'
-$script:SupportedTools = @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode', 'kimi', 'other')
+$script:SupportedTools = @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode', 'kimi', 'qwen', 'command-code', 'cline', 'pi', 'other')
 $script:ManagedBlocks = @('core', 'user-defined', 'openspec')
 $script:LastChannel = 'powershell'
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding $false
@@ -955,6 +955,32 @@ function New-McpConfig-Other {
     return New-McpConfig-Cursor $Servers
 }
 
+function New-McpConfig-Qwen {
+    # Qwen Code project MCP lives in `.qwen/settings.json` under `mcpServers`
+    # (https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/).
+    # HTTP (streamable) servers MUST use `httpUrl`; `url` is SSE-only.
+    # Stdio servers use `command` / `args` / `env`. The installer deep-merges
+    # only the `mcpServers` key (see adapter `mcp.mergeKey`) so other
+    # settings survive `update`.
+    param([array]$Servers)
+    $dict = [ordered]@{}
+    foreach ($s in $Servers) {
+        $entry = [ordered]@{}
+        if ($s.url) {
+            $entry['httpUrl'] = $s.url
+            if ($s.headers) { $entry['headers'] = $s.headers }
+        }
+        elseif ($s.command) {
+            $entry['command'] = $s.command
+            if ($s.args) { $entry['args'] = $s.args }
+            if ($s.env) { $entry['env'] = $s.env }
+        }
+        $dict[$s.id] = $entry
+    }
+    $root = [ordered]@{ mcpServers = $dict }
+    return (ConvertTo-Json $root -Depth 10)
+}
+
 function ConvertTo-OpenCodeMcpKey {
     # OpenCode exposes MCP tools to the model as `<server-key>_<tool>`, taking
     # the key verbatim from the `mcp` object (it only replaces characters
@@ -1036,10 +1062,12 @@ function New-McpConfig {
     switch ($ToolId) {
         'cursor' { return (New-McpConfig-Cursor $Servers) }
         'claude-code' { return (New-McpConfig-ClaudeCode $Servers) }
+        'command-code' { return (New-McpConfig-ClaudeCode $Servers) }
         'codex' { return (New-McpConfig-Codex $Servers) }
         'opencode' { return (New-McpConfig-OpenCode $Servers) }
         'kilocode' { return (New-McpConfig-Kilocode $Servers) }
         'kimi' { return (New-McpConfig-Other $Servers) }
+        'qwen' { return (New-McpConfig-Qwen $Servers) }
         'other' { return (New-McpConfig-Other $Servers) }
         default { throw "Unknown tool id: $ToolId" }
     }
@@ -1123,14 +1151,18 @@ function ConvertTo-OrderedHashtable {
 function Get-ToolDetectionSignals {
     param([string]$Root)
     $signals = @{
-        'cursor'      = @((Test-Path (Join-Path $Root '.cursor')))
-        'claude-code' = @((Test-Path (Join-Path $Root '.claude')), (Test-Path (Join-Path $Root 'CLAUDE.md')))
-        'codex'       = @((Test-Path (Join-Path $Root '.codex')))
-        'opencode'    = @((Test-Path (Join-Path $Root '.opencode')), (Test-Path (Join-Path $Root 'opencode.json')))
-        'kilocode'    = @((Test-Path (Join-Path $Root '.kilo')), (Test-Path (Join-Path $Root '.kilocode')))
-        'kimi'        = @((Test-Path (Join-Path $Root '.kimi-code')), (Test-Path (Join-Path $Root '.kimi')))
+        'cursor'       = @((Test-Path (Join-Path $Root '.cursor')))
+        'claude-code'  = @((Test-Path (Join-Path $Root '.claude')), (Test-Path (Join-Path $Root 'CLAUDE.md')))
+        'codex'        = @((Test-Path (Join-Path $Root '.codex')))
+        'opencode'     = @((Test-Path (Join-Path $Root '.opencode')), (Test-Path (Join-Path $Root 'opencode.json')))
+        'kilocode'     = @((Test-Path (Join-Path $Root '.kilo')), (Test-Path (Join-Path $Root '.kilocode')))
+        'kimi'         = @((Test-Path (Join-Path $Root '.kimi-code')), (Test-Path (Join-Path $Root '.kimi')))
+        'qwen'         = @((Test-Path (Join-Path $Root '.qwen')), (Test-Path (Join-Path $Root 'QWEN.md')))
+        'command-code' = @((Test-Path (Join-Path $Root '.commandcode')))
+        'cline'        = @((Test-Path (Join-Path $Root '.cline')), (Test-Path (Join-Path $Root '.clinerules')))
+        'pi'           = @((Test-Path (Join-Path $Root '.pi')))
         # 'other' is a manual-only fallback — never auto-detected.
-        'other'       = @()
+        'other'        = @()
     }
     $detected = @()
     foreach ($t in $script:SupportedTools) {
@@ -2314,7 +2346,7 @@ function Invoke-PlacePhase {
 # `other` is intentionally last: when combined with any "real" tool the real
 # tool's rules dir wins; `.ai-agent/rules/` becomes canonical only when
 # `other` is the only active tool.
-$script:RulesDirPriority = @('cursor', 'claude-code', 'kilocode', 'kimi', 'opencode', 'codex', 'other')
+$script:RulesDirPriority = @('cursor', 'claude-code', 'kilocode', 'kimi', 'qwen', 'command-code', 'cline', 'opencode', 'codex', 'pi', 'other')
 
 function Resolve-CanonicalRulesLayout {
     # Returns @{ Dir = <path>; Ext = <ext-without-dot> } for the highest-priority
@@ -2557,9 +2589,11 @@ function Invoke-McpPhase {
 
         # `mcp.merge: true` (set in adapter yaml) — when the target file is
         # a SHARED tool config (e.g. `.kilo/kilo.json` carries not only MCP
-        # but also `instructions`, `skills.paths`, custom permissions),
-        # do not overwrite the whole file. Instead read existing JSON,
-        # replace the top-level `mcp` key with our rendered value, keep
+        # but also `instructions`, `skills.paths`, custom permissions; or
+        # `.qwen/settings.json` carries model / permissions beside
+        # `mcpServers`), do not overwrite the whole file. Instead read
+        # existing JSON, replace the top-level merge key (default `mcp`,
+        # overridable via `mcp.mergeKey`) with our rendered value, keep
         # every other key untouched. New file path → write whole rendered
         # JSON as before.
         $mergeRequested = $false
@@ -2569,6 +2603,13 @@ function Invoke-McpPhase {
         elseif ($adapter.mcp -is [System.Collections.IDictionary] -and $adapter.mcp.Contains('merge')) {
             $mergeRequested = [bool]$adapter.mcp['merge']
         }
+        $mergeKey = 'mcp'
+        if ($adapter.mcp.PSObject.Properties.Match('mergeKey').Count -gt 0 -and $adapter.mcp.mergeKey) {
+            $mergeKey = [string]$adapter.mcp.mergeKey
+        }
+        elseif ($adapter.mcp -is [System.Collections.IDictionary] -and $adapter.mcp.Contains('mergeKey') -and $adapter.mcp['mergeKey']) {
+            $mergeKey = [string]$adapter.mcp['mergeKey']
+        }
 
         $finalContent = $content
         if ($mergeRequested -and (Test-Path $absTarget)) {
@@ -2577,17 +2618,18 @@ function Invoke-McpPhase {
                 $existingObj = $existingRaw | ConvertFrom-Json -ErrorAction Stop
                 $renderedObj = $content | ConvertFrom-Json -ErrorAction Stop
                 $merged = [ordered]@{}
-                # Preserve user keys in their original order, replacing only `mcp`.
+                # Preserve user keys in their original order, replacing only $mergeKey.
                 foreach ($prop in $existingObj.PSObject.Properties) {
-                    if ($prop.Name -ne 'mcp') { $merged[$prop.Name] = $prop.Value }
+                    if ($prop.Name -ne $mergeKey) { $merged[$prop.Name] = $prop.Value }
                 }
-                if ($renderedObj.PSObject.Properties.Match('mcp').Count -gt 0) {
-                    $merged['mcp'] = $renderedObj.mcp
+                if ($renderedObj.PSObject.Properties.Match($mergeKey).Count -gt 0) {
+                    $merged[$mergeKey] = $renderedObj.$mergeKey
                 }
-                # Append any non-`mcp` keys from rendered that the existing file lacks
-                # (defensive: future-proofs adapters that emit more than `mcp`).
+                # Append any non-mergeKey keys from rendered that the existing
+                # file lacks (defensive: future-proofs adapters that emit more
+                # than the merge key).
                 foreach ($prop in $renderedObj.PSObject.Properties) {
-                    if ($prop.Name -eq 'mcp') { continue }
+                    if ($prop.Name -eq $mergeKey) { continue }
                     if (-not $merged.Contains($prop.Name)) { $merged[$prop.Name] = $prop.Value }
                 }
                 $finalContent = (ConvertTo-Json $merged -Depth 20)
@@ -2599,14 +2641,24 @@ function Invoke-McpPhase {
         }
 
         Write-TextFile -Path $absTarget -Content ($finalContent + "`n")
+        $previousMcpEntry = $null
+        if ($Manifest.files.Contains($target)) { $previousMcpEntry = $Manifest.files[$target] }
         $mcpEntry = [ordered]@{
             source        = 'content/mcp-servers.json'
             installedHash = (Get-FileSha256 $absTarget)
         }
-        # `merged` marks a SHARED config (opencode.json / .kilo/kilo.json) that
-        # carries user keys besides `mcp`. On `remove`, such a file must NOT be
-        # deleted — only its top-level `mcp` key is stripped (see Invoke-Remove).
-        if ($mergeRequested) { $mcpEntry['merged'] = $true }
+        # `merged` marks a SHARED config (opencode.json / .kilo/kilo.json /
+        # `.qwen/settings.json`) that carries user keys besides the MCP
+        # payload. On `remove`, such a file must NOT be deleted — only its
+        # merge key is stripped (see Invoke-Remove).
+        if ($mergeRequested) {
+            $mcpEntry['merged'] = $true
+            $mcpEntry['mergeKey'] = $mergeKey
+        }
+        # Track joint ownership when several tools share one MCP target
+        # (currently Claude Code + Command Code both write `.mcp.json`).
+        $mcpOwners = @(Merge-ManifestOwners -Entry $previousMcpEntry -OwnerTool $tool)
+        if ($mcpOwners.Count -gt 0) { $mcpEntry['owners'] = $mcpOwners }
         $Manifest.files[$target] = $mcpEntry
         Write-Info "  [$tool] MCP config: $target"
     }
@@ -4382,15 +4434,20 @@ function Invoke-Add {
     Write-RestartRecommendation -ActiveTools $activeTools -McpCount $manifest.mcpServers.Count
 }
 
-# Strip ONLY the top-level `mcp` key from a SHARED tool config that the
-# installer deep-merged into (opencode.json / .kilo/kilo.json). Deleting the
-# whole file on `remove` would destroy the user's own config (model, theme,
-# instructions, skills.paths, permissions…). If after removing `mcp` nothing
-# meaningful is left (empty, or only a `$schema` marker the installer added),
-# delete the now-pointless file.
+# Strip ONLY the top-level merge key from a SHARED tool config that the
+# installer deep-merged into (opencode.json / .kilo/kilo.json → `mcp`;
+# `.qwen/settings.json` → `mcpServers`). Deleting the whole file on `remove`
+# would destroy the user's own config (model, theme, instructions,
+# skills.paths, permissions…). If after removing the key nothing meaningful
+# is left (empty, or only a `$schema` marker the installer added), delete
+# the now-pointless file.
 function Remove-McpKeyFromConfig {
-    param([string]$Path)
+    param(
+        [string]$Path,
+        [string]$Key = 'mcp'
+    )
     if (-not (Test-Path $Path)) { return }
+    if (-not $Key) { $Key = 'mcp' }
     try {
         $raw = Get-Content -Path $Path -Raw -ErrorAction Stop
         $obj = $raw | ConvertFrom-Json -ErrorAction Stop
@@ -4401,7 +4458,7 @@ function Remove-McpKeyFromConfig {
     }
     $kept = [ordered]@{}
     foreach ($prop in $obj.PSObject.Properties) {
-        if ($prop.Name -eq 'mcp') { continue }
+        if ($prop.Name -eq $Key) { continue }
         $kept[$prop.Name] = $prop.Value
     }
     $meaningful = @($kept.Keys | Where-Object { $_ -ne '$schema' })
@@ -4410,6 +4467,14 @@ function Remove-McpKeyFromConfig {
         return
     }
     Write-TextFile -Path $Path -Content ((ConvertTo-Json $kept -Depth 20) + "`n")
+}
+
+function Get-MergedMcpKey {
+    param($Entry)
+    if ($Entry -is [System.Collections.IDictionary] -and $Entry.Contains('mergeKey') -and $Entry['mergeKey']) {
+        return [string]$Entry['mergeKey']
+    }
+    return 'mcp'
 }
 
 # True when a manifest file entry marks a shared, deep-merged MCP config
@@ -4433,13 +4498,17 @@ function Invoke-Remove {
         $toolPrefixes = @(".$ScopeTool/")
         # Claude uses `.claude/` but also generates `CLAUDE.md` entry; Codex uses `.codex/` + `AGENTS.md` edits; handle per-tool cleanup:
         switch ($ScopeTool) {
-            'claude-code' { $toolPrefixes = @('.claude/', 'CLAUDE.md', '.mcp.json') }
-            'codex'       { $toolPrefixes = @('.codex/') }
-            'opencode'    { $toolPrefixes = @('.opencode/', 'opencode.json') }
-            'kilocode'    { $toolPrefixes = @('.kilo/', '.kilocode/') }
-            'kimi'        { $toolPrefixes = @('.kimi-code/', '.kimi/') }
-            'cursor'      { $toolPrefixes = @('.cursor/') }
-            'other'       { $toolPrefixes = @('.ai-agent/') }
+            'claude-code'   { $toolPrefixes = @('.claude/', 'CLAUDE.md', '.mcp.json') }
+            'command-code'  { $toolPrefixes = @('.commandcode/', '.mcp.json') }
+            'codex'         { $toolPrefixes = @('.codex/') }
+            'opencode'      { $toolPrefixes = @('.opencode/', 'opencode.json') }
+            'kilocode'      { $toolPrefixes = @('.kilo/', '.kilocode/') }
+            'kimi'          { $toolPrefixes = @('.kimi-code/', '.kimi/') }
+            'qwen'          { $toolPrefixes = @('.qwen/', 'QWEN.md') }
+            'cline'         { $toolPrefixes = @('.cline/', '.clinerules/') }
+            'pi'            { $toolPrefixes = @('.pi/') }
+            'cursor'        { $toolPrefixes = @('.cursor/') }
+            'other'         { $toolPrefixes = @('.ai-agent/') }
         }
         $toRemove = @()
         foreach ($rel in @($manifest.files.Keys)) {
@@ -4475,9 +4544,10 @@ function Invoke-Remove {
             }
             $abs = Resolve-ManifestPath -Root $Root -Rel $rel
             if (Test-MergedMcpEntry $entry) {
-                # Shared config (opencode.json / .kilo/kilo.json): strip the
-                # `mcp` key only, never delete the user's whole config.
-                Remove-McpKeyFromConfig -Path $abs
+                # Shared config (opencode.json / .kilo/kilo.json /
+                # `.qwen/settings.json`): strip the merge key only, never
+                # delete the user's whole config.
+                Remove-McpKeyFromConfig -Path $abs -Key (Get-MergedMcpKey $entry)
             }
             elseif (Test-Path $abs) {
                 Remove-Item -Force $abs -ErrorAction SilentlyContinue
@@ -4515,9 +4585,10 @@ function Invoke-Remove {
             }
             $abs = Resolve-ManifestPath -Root $Root -Rel $rel
             if (Test-MergedMcpEntry $entry) {
-                # Shared config (opencode.json / .kilo/kilo.json): strip the
-                # `mcp` key only, never delete the user's whole config.
-                Remove-McpKeyFromConfig -Path $abs
+                # Shared config (opencode.json / .kilo/kilo.json /
+                # `.qwen/settings.json`): strip the merge key only, never
+                # delete the user's whole config.
+                Remove-McpKeyFromConfig -Path $abs -Key (Get-MergedMcpKey $entry)
             }
             elseif (Test-Path $abs) {
                 Remove-Item -Force $abs -ErrorAction SilentlyContinue
@@ -4527,11 +4598,22 @@ function Invoke-Remove {
             Write-Info ("Kept (user/project files): " + (($keptTemplates | Sort-Object) -join ', '))
         }
         Remove-Item -Force (Join-Path $Root $script:ManifestFileName) -ErrorAction SilentlyContinue
-        # Clean up empty per-tool directories
+        # Clean up empty per-tool directories. Tool id ≠ directory name for several
+        # adapters (kilocode→.kilo, kimi→.kimi-code, command-code→.commandcode,
+        # other→.ai-agent), so map explicitly instead of ".$t".
         $cleanupDirs = @('.ai-rules')
         foreach ($t in $manifest.tools) {
-            if ($t -eq 'other') { $cleanupDirs += '.ai-agent' }
-            else { $cleanupDirs += ".$t" }
+            switch ($t) {
+                'other'        { $cleanupDirs += '.ai-agent' }
+                'kilocode'     { $cleanupDirs += '.kilo'; $cleanupDirs += '.kilocode' }
+                'kimi'         { $cleanupDirs += '.kimi-code'; $cleanupDirs += '.kimi' }
+                'command-code' { $cleanupDirs += '.commandcode' }
+                'claude-code'  { $cleanupDirs += '.claude' }
+                'qwen'         { $cleanupDirs += '.qwen' }
+                'cline'        { $cleanupDirs += '.cline'; $cleanupDirs += '.clinerules' }
+                'pi'           { $cleanupDirs += '.pi' }
+                default        { $cleanupDirs += ".$t" }
+            }
         }
         foreach ($rel in $cleanupDirs) {
             $dir = Join-Path $Root $rel
