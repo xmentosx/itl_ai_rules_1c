@@ -35,7 +35,10 @@ rules:
     drop: [globs, category]
 
 agents:
-  copyTo: ".kimi-code/agents/{name}.md"
+  # Kimi documents built-in coder/explore/plan agents, not a project
+  # custom-agent directory. Install these as on-demand reference files.
+  copyTo: ".kimi-code/rules-1c/agents/{name}.md"
+  referenceOnly: true
   frontmatter:
     keep: [name, description, tools, modelHint, isSubagent]
     rename:

@@ -47,6 +47,7 @@ agents:
 
 commands:
   copyTo: ".qwen/commands/{name}.md"
+  include: [caveman, deploy-and-test, doctor, economymode, evolve, getconfigfiles, litemode, loadfrom1cbase, update1cbase]
   frontmatter:
     keep: [description]
     drop: [argumentHint, allowedTools]

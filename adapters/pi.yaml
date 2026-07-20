@@ -34,8 +34,20 @@ rules:
     keep: [description, alwaysApply]
     drop: [globs, category]
 
+agents:
+  # Pi has no native project custom-agent directory. These remain explicit
+  # on-demand references so AGENTS.md never points at a missing file.
+  copyTo: ".pi/rules-1c/agents/{name}.md"
+  referenceOnly: true
+  frontmatter:
+    keep: [name, description, modelHint]
+    rename:
+      modelHint: model
+    drop: [tools, allowParallel, reasoningEffort, isSubagent]
+
 commands:
   copyTo: ".pi/prompts/{name}.md"
+  include: [caveman, deploy-and-test, doctor, economymode, evolve, getconfigfiles, litemode, loadfrom1cbase, update1cbase]
   frontmatter:
     keep: [description]
     drop: [argumentHint, allowedTools]
@@ -43,3 +55,14 @@ commands:
 skills:
   copyTo: ".pi/skills/{name}/"
   mode: verbatim
+
+mcp:
+  source: "content/mcp-servers.json"
+  target: ".pi/mcp.json"
+  schema: pi-mcp-extension
+  format: json
+  package:
+    target: ".pi/settings.json"
+    mergeKey: packages
+    source: "npm:pi-mcp-extension@1.5.0"
+    integrity: "sha512-tfsgi8qSr3UUKMp4vS9/FwKv+Pn2U4T/rTlAwrZkEIvz616mFrU/Ryp3b69ZDfFdkQVVXriaQmZUj4vlZDV2Uw=="
