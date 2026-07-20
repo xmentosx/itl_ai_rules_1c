@@ -43,7 +43,10 @@ rules:
     drop: [globs, category]
 
 agents:
-  copyTo: ".cline/agents/{name}.md"
+  # Current Cline docs disagree between agents/ and agents.yaml. Keep the
+  # source agent prompts as references until that native contract stabilizes.
+  copyTo: ".cline/rules-1c/agents/{name}.md"
+  referenceOnly: true
   frontmatter:
     keep: [name, description, modelHint]
     rename:
@@ -53,3 +56,9 @@ agents:
 skills:
   copyTo: ".cline/skills/{name}/"
   mode: verbatim
+
+mcp:
+  source: "content/mcp-servers.json"
+  target: ".cline/mcp.json"
+  schema: cline-mcp
+  format: json

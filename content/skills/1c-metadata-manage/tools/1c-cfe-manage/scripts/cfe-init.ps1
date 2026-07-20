@@ -18,6 +18,11 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+	Write-Error "CFE_CONFIG_PATH_REQUIRED: -ConfigPath must point to a base configuration dump."
+	exit 1
+}
+
 # --- Default NamePrefix ---
 if (-not $NamePrefix) {
 	$NamePrefix = "${Name}_"
@@ -36,18 +41,32 @@ if (Test-Path $cfgFile) {
 }
 
 # --- Resolve ConfigPath ---
-$baseLangUuid = "00000000-0000-0000-0000-000000000000"
-if ($ConfigPath) {
+$baseLangUuid = $null
+try {
 	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
 		$ConfigPath = Join-Path (Get-Location).Path $ConfigPath
 	}
 	if (Test-Path $ConfigPath -PathType Container) {
 		$candidate = Join-Path $ConfigPath "Configuration.xml"
 		if (Test-Path $candidate) { $ConfigPath = $candidate }
-		else { Write-Error "No Configuration.xml in config directory: $ConfigPath"; exit 1 }
+		else { throw "No Configuration.xml in config directory: $ConfigPath" }
 	}
-	if (-not (Test-Path $ConfigPath)) { Write-Error "Config file not found: $ConfigPath"; exit 1 }
+	if (-not (Test-Path $ConfigPath -PathType Leaf)) { throw "Config file not found: $ConfigPath" }
 	$cfgDir = Split-Path (Resolve-Path $ConfigPath).Path -Parent
+
+	$baseCfgDoc = New-Object System.Xml.XmlDocument
+	$baseCfgDoc.PreserveWhitespace = $false
+	$baseCfgDoc.Load((Resolve-Path $ConfigPath).Path)
+	$baseCfgNs = New-Object System.Xml.XmlNamespaceManager($baseCfgDoc.NameTable)
+	$baseCfgNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$baseConfiguration = $baseCfgDoc.SelectSingleNode("/md:MetaDataObject/md:Configuration", $baseCfgNs)
+	if (-not $baseConfiguration) { throw "Configuration.xml does not contain MetaDataObject/Configuration" }
+	$baseConfigurationUuid = $baseConfiguration.GetAttribute("uuid")
+	$baseConfigurationName = $baseCfgDoc.SelectSingleNode("/md:MetaDataObject/md:Configuration/md:Properties/md:Name", $baseCfgNs)
+	$parsedConfigurationUuid = [guid]::Empty
+	if (-not [guid]::TryParse($baseConfigurationUuid, [ref]$parsedConfigurationUuid) -or -not $baseConfigurationName -or [string]::IsNullOrWhiteSpace($baseConfigurationName.InnerText)) {
+		throw "Configuration identity is missing or invalid"
+	}
 
 	# 3a. Read Language UUID from base config
 	$baseLangFile = Join-Path (Join-Path $cfgDir "Languages") "Русский.xml"
@@ -61,20 +80,17 @@ if ($ConfigPath) {
 		}
 		if ($langEl) {
 			$baseLangUuid = $langEl.GetAttribute("uuid")
+			$parsedLanguageUuid = [guid]::Empty
+			if (-not [guid]::TryParse($baseLangUuid, [ref]$parsedLanguageUuid)) { throw "Base language UUID is invalid: $baseLangUuid" }
 			Write-Host "[INFO] Base config Language UUID: $baseLangUuid"
 		} else {
-			Write-Host "[WARN] No <Language> element in $baseLangFile"
+			throw "No <Language> element in $baseLangFile"
 		}
 	} else {
-		Write-Host "[WARN] Base config language not found: $baseLangFile"
+		throw "Base config language not found: $baseLangFile"
 	}
 
 	# 3b. Read CompatibilityMode and InterfaceCompatibilityMode from base config
-	$baseCfgDoc = New-Object System.Xml.XmlDocument
-	$baseCfgDoc.PreserveWhitespace = $false
-	$baseCfgDoc.Load((Resolve-Path $ConfigPath).Path)
-	$baseCfgNs = New-Object System.Xml.XmlNamespaceManager($baseCfgDoc.NameTable)
-	$baseCfgNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
 	$compatNode = $baseCfgDoc.SelectSingleNode("//md:Configuration/md:Properties/md:CompatibilityMode", $baseCfgNs)
 	if ($compatNode -and $compatNode.InnerText) {
 		$CompatibilityMode = $compatNode.InnerText.Trim()
@@ -90,10 +106,12 @@ if ($ConfigPath) {
 		$InterfaceCompatibilityMode = "TaxiEnableVersion8_2"
 		Write-Host "[WARN] InterfaceCompatibilityMode not found in base config, using default: $InterfaceCompatibilityMode"
 	}
-} else {
-	$InterfaceCompatibilityMode = "TaxiEnableVersion8_2"
-	Write-Host "[WARN] Language ExtendedConfigurationObject set to zeros. Use -ConfigPath to auto-resolve from base config, or fix manually before loading."
+} catch {
+	Write-Error "CFE_BASE_CONFIG_INVALID: $($_.Exception.Message)"
+	exit 1
 }
+
+Write-Host "[INFO] Base configuration: $($baseConfigurationName.InnerText) ($baseConfigurationUuid)"
 
 # --- Generate UUIDs ---
 $uuidCfg  = [guid]::NewGuid().ToString()

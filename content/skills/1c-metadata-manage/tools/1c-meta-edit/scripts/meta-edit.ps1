@@ -10,7 +10,7 @@ param(
 	# Inline mode (alternative to DefinitionFile)
 	[ValidateSet(
 		"add-attribute", "add-ts", "add-dimension", "add-resource",
-		"add-enumValue", "add-column", "add-form", "add-template", "add-command",
+		"add-enumValue", "add-column", "add-command",
 		"add-owner", "add-registerRecord", "add-basedOn", "add-inputByString",
 		"remove-attribute", "remove-ts", "remove-dimension", "remove-resource",
 		"remove-enumValue", "remove-column", "remove-form", "remove-template", "remove-command",
@@ -1626,6 +1626,13 @@ function Process-Add($addDef) {
 		if (-not $childType) {
 			Warn "Unknown add child type: $rawKey"
 			return
+		}
+
+		if ($childType -eq "forms") {
+			throw "META_EDIT_SPECIALIZED_TOOL_REQUIRED: add-form is owned by 1c-form-scaffold/form-add.ps1"
+		}
+		if ($childType -eq "templates") {
+			throw "META_EDIT_SPECIALIZED_TOOL_REQUIRED: add-template is owned by 1c-template-manage/add-template.ps1"
 		}
 
 		# Validate allowed
