@@ -16,11 +16,10 @@
 #   - Slash-style reusable prompts are Pi "prompt templates" under
 #     `.pi/prompts/{name}.md` (invoked as `/name`). Source `content/commands/`
 #     are mapped here — there is no separate commands directory.
-#   - Pi has no first-class project subagent directory and no built-in MCP
-#     support ("No MCP" in Pi docs). This adapter therefore omits `agents`
-#     and `mcp`. Subagent role descriptions remain reachable through
-#     `AGENTS.md` → on-demand rules → `subagents.md` when needed; MCP must
-#     be supplied by a Pi extension if the user wants it.
+#   - Pi has no first-class project subagent directory. Agent prompts remain
+#     references. MCP is mandatory through project `.pi/mcp.json` and the
+#     pinned project package `npm:pi-mcp-extension@1.5.0`; project trust is
+#     required before Pi loads either surface.
 
 tool: pi
 schemaVersion: 1

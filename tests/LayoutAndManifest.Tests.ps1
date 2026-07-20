@@ -54,6 +54,30 @@ Describe "Single-client adapter contract" -Tag "Fast" {
         }
     }
 
+    It "records native bundles for the original five and natural mode for the new five" {
+        $native = @("codex", "kilocode", "claude-code", "cursor", "opencode")
+        $natural = @("kimi", "qwen", "command-code", "cline", "pi")
+        foreach ($tool in @($native + $natural)) {
+            $project = Join-Path $script:LayoutRoot $tool
+            $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".ai-rules.json") | ConvertFrom-Json
+            Test-Path (Join-Path $project "openspec/README.md") | Should -BeTrue
+            Test-Path (Join-Path $project "openspec/specs/README.md") | Should -BeTrue
+            Test-Path (Join-Path $project "openspec/changes/README.md") | Should -BeTrue
+            $bundleSources = @($manifest.files.PSObject.Properties.Value | Where-Object {
+                [string]$_.source -like "content/openspec-bundle/$tool/*"
+            })
+            $skippedProperty = $manifest.integrations.openspec.PSObject.Properties['bundleSkipped']
+            $skipped = if ($null -eq $skippedProperty) { @() } else { @($skippedProperty.Value) }
+            if ($tool -in $native) {
+                $bundleSources.Count | Should -BeGreaterThan 0 -Because "$tool has an upstream native bundle"
+                $skipped | Should -Not -Contain $tool
+            } else {
+                $bundleSources | Should -BeNullOrEmpty
+                $skipped | Should -Contain $tool
+            }
+        }
+    }
+
     It "publishes the allowlist and suppresses generic update and MCP commands" {
         foreach ($tool in @("kilocode", "claude-code", "cursor", "opencode", "qwen", "command-code", "pi")) {
             $project = Join-Path $script:LayoutRoot $tool

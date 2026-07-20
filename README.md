@@ -13,35 +13,23 @@
 - **OpenAI Codex** (`.codex/rules/`, `.codex/agents/`, `.agents/skills/`, `.codex/config.toml`; команды представлены project-local skills/естественными запросами)
 - **OpenCode** (`.opencode/rules/`, `.opencode/agent/`, `.opencode/command/`, skills в `.claude/skills/`, MCP в корневом `opencode.json`)
 - **Kilo Code** (`.kilo/rules-1c/` for on-demand rules referenced by `AGENTS.md`, `.kilo/commands/`, `.kilo/agents/`, `.kilo/skills/`)
+- **Kimi Code** (`.kimi-code/rules-1c/`, `.kimi-code/skills/`, MCP в `.kimi-code/mcp.json`; routines вызываются как Skills)
+- **Qwen Code** (`.qwen/rules-1c/`, `.qwen/agents/`, `.qwen/commands/`, `.qwen/skills/`, MCP в `.qwen/settings.json`)
+- **Command Code** (`.commandcode/rules-1c/`, `.commandcode/agents/`, `.commandcode/commands/`, `.commandcode/skills/`, MCP в корневом `.mcp.json`)
+- **Cline** (`.cline/rules-1c/`, reference agents и Skills, project MCP в `.cline/mcp.json`)
+- **Pi** (`.pi/rules-1c/`, `.pi/prompts/`, `.pi/skills/`, project MCP в `.pi/mcp.json` через закреплённое расширение)
 
 В одном проекте активен ровно один клиент. При инициализации его выбор обязателен; смена клиента выполняется транзакционно хостовым ITL workflow, а не добавлением второго набора файлов.
 
-## Как попросить агента поставить правила
+## Установка через ITL workflow
 
-Установка спроектирована как протокол, который выполняет сам ИИ-агент. Откройте проект в любимом ИИ-агенте (Cursor / Claude Code / Codex / OpenCode / Kilo Code) и отправьте сообщение:
+Этот controlled fork — immutable-зависимость [`1c-agent-workflow`](https://github.com/xmentosx/1c-agent-workflow), а не самостоятельный moving-channel дистрибутив. Откройте каталог будущего проекта в поддерживаемом клиенте и попросите:
 
-> Установи правила из `https://github.com/comol/ai_rules_1c` по `AGENT-INSTALL.md`.
+> Инициализируй 1С-проект по файлу https://raw.githubusercontent.com/xmentosx/1c-agent-workflow/master/AGENT-INSTALL.md
 
-Всё. Остальное — клонирование репозитория, определение активных инструментов, миграция существующих `AGENTS.md` / `CLAUDE.md`, запросы перед разрушительными действиями — описано в [`AGENT-INSTALL.md`](AGENT-INSTALL.md), который агент прочитает сам.
+Workflow сам выбирает точный immutable `itl-*` tag и передаёт локальный checkout установщику. Не устанавливайте правила из moving `comol/ai_rules_1c/main` поверх ITL-проекта.
 
-### Fallback: PowerShell-установщик
-
-Если агент не справляется (ограниченная среда, нет FS-доступа, нужен детерминированный CI-запуск) — тот же протокол реализован как PowerShell-скрипт `install.ps1`:
-
-```powershell
-git clone https://github.com/comol/ai_rules_1c.git $env:TEMP\1c-rules
-& $env:TEMP\1c-rules\install.ps1 init -Source $env:TEMP\1c-rules
-```
-
-Имя локальной папки произвольное: в примерах используется `1c-rules`, но установленный или рабочий каталог может называться иначе.
-
-Параметр `-Source` также принимает URL напрямую — в этом случае установщик сам делает shallow-clone в кэш под `$env:TEMP` (ключ кэша — хэш URL) и переиспользует его при повторных запусках; требует `git` в `PATH`:
-
-```powershell
-.\install.ps1 init -Source https://github.com/comol/ai_rules_1c
-```
-
-Команды: `init` / `update` / `remove [<tool>]` / `doctor` / `eject`. `add` намеренно отклоняется single-client контрактом; сменой клиента управляет хостовый workflow.
+`install.ps1` остаётся детерминированным внутренним/recovery-механизмом. Публичный bootstrap не вызывает его из moving URL; `add` намеренно отклоняется single-client контрактом, а сменой клиента управляет workflow.
 
 ### Совместимость с мультипроектной установкой MCP (INSTALL.md, режим 3)
 
@@ -74,7 +62,7 @@ git clone https://github.com/comol/ai_rules_1c.git $env:TEMP\1c-rules
 │   ├── agents/              # описания 13 специализированных субагентов
 │   ├── commands/            # слэш-команды (doctor, deploy-and-test, economymode, litemode, caveman, evolve, getconfigfiles, loadfrom1cbase, update1cbase, checkmcp, installmcp, updatemcp, updaterules)
 │   ├── skills/              # SKILL-пакеты (1c-metadata-manage, mermaid-diagrams и др.)
-│   ├── openspec-bundle/     # снапшот вывода `openspec init` для каждого инструмента
+│   ├── openspec-bundle/     # upstream-снапшот native OpenSpec для клиентов, где он поддерживается
 │   └── mcp-servers.json     # каталог MCP-серверов экосистемы 1С
 ├── openspec/                # OpenSpec-воркспейс (specs/, changes/, project.md)
 └── tools/                   # вспомогательные скрипты (refresh-openspec-bundle.ps1)
@@ -234,7 +222,7 @@ git clone https://github.com/comol/ai_rules_1c.git $env:TEMP\1c-rules
 
 ## OpenSpec
 
-Установщик разворачивает OpenSpec-воркспейс и bundle выбранного клиента. Для Codex OpenSpec представлен project-local skills в `.agents/skills/`; остальные клиенты получают native commands и skills. Explore/propose/apply surfaces содержат короткий ITL preflight.
+Установщик всегда разворачивает общий OpenSpec-воркспейс. Upstream snapshot `1.2.0` содержит native commands/skills только для Cursor, Claude Code, Codex, OpenCode и Kilo Code. Kimi, Qwen, Command Code, Cline и Pi работают с тем же `openspec/specs/` и `openspec/changes/` обычными запросами агенту; отсутствие native bundle для них штатно. ITL preflight, `test-plan.md` и fresh `/itl-check` обязательны в обоих режимах. Установщик не ставит `@fission-ai/openspec` и не запускает `openspec update`.
 
 ## Ссылки
 

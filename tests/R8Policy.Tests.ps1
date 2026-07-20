@@ -29,6 +29,9 @@ Describe "r8 policy overlays" -Tag "Fast" {
         $text | Should -Match 'OK`, `WARN`, `FAIL`, and `SKIP'
         $text | Should -Match 'pinned `update-ai-rules`'
         $text | Should -Match 'Never recommend hidden `/updaterules`'
+        $text | Should -Match 'native.*natural'
+        $text | Should -Match 'Expected `bundleSkipped` is `OK`'
+        $text | Should -Match 'missing file from a previously managed native bundle is `FAIL`'
     }
 
     It "guards evolve precedence and per-entry approval" {

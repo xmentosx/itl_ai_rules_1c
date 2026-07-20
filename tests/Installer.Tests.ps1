@@ -92,6 +92,33 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
             Should -Match 'apply-openspec-downstream-overlay\.ps1'
     }
 
+    It "keeps the upstream OpenSpec snapshot and only its five native bundles" {
+        $bundle = Join-Path $script:ForkRoot "content\openspec-bundle"
+        @((Get-ChildItem -LiteralPath $bundle -Directory).Name | Sort-Object) |
+            Should -Be @("claude-code", "codex", "cursor", "kilocode", "opencode")
+        (Get-Content -LiteralPath (Join-Path $bundle "version.txt") -Raw -Encoding UTF8).Trim() |
+            Should -Be "1.2.0"
+        foreach ($tool in @("kimi", "qwen", "command-code", "cline", "pi")) {
+            Test-Path -LiteralPath (Join-Path $bundle $tool) | Should -BeFalse
+        }
+    }
+
+    It "documents native and natural OpenSpec without hidden package mutation" {
+        $documents = @("README.md", "AGENT-INSTALL.md", "openspec/README.md", "content/rules/sdd-integrations.md")
+        $combined = ($documents | ForEach-Object {
+            Get-Content -LiteralPath (Join-Path $script:ForkRoot $_) -Raw -Encoding UTF8
+        }) -join "`n"
+        foreach ($tool in @("Kimi", "Qwen", "Command Code", "Cline", "Pi")) {
+            $combined | Should -Match ([regex]::Escape($tool))
+        }
+        $combined | Should -Match '(?i)native'
+        $combined | Should -Match '(?i)natural'
+        $combined | Should -Match 'bundleSkipped'
+        $combined | Should -Match 'never installs `@fission-ai/openspec`|не ставит `@fission-ai/openspec`'
+        $combined | Should -Match '(?s)Do not.*run `openspec update`'
+        $combined | Should -Match '/opsx\*.*not a universal'
+    }
+
     It "applies the OpenSpec downstream overlay idempotently" {
         $testRoot = New-ForkTestRoot
         try {

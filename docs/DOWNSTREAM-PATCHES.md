@@ -1,15 +1,15 @@
-# Downstream patch ledger — `72665287` / r12
+# Downstream patch ledger — `72665287` / r13
 
-The r12 baseline was rebuilt directly from upstream commit
+The r13 baseline is rebuilt directly from upstream commit
 `72665287e77361aea3aaf866fef163d98f0fabcd`. It rebases the controlled fork
 directly on the audited upstream client-adapter intake while preserving the
 single-client ITL contract. The previous qualified baseline was
-`itl-main-b4d9875b-r11`; downstream revisions remain globally monotonic.
+`itl-main-72665287-r12`; downstream revisions remain globally monotonic.
 No earlier downstream branch was merged or rebased onto the upstream intake.
 Each requirement remains classified as `keep`, `drop`, or `rewrite` against
 this snapshot.
 
-| ID | Decision | r12 treatment | Verification |
+| ID | Decision | r13 treatment | Verification |
 |---|---|---|---|
 | ITL-INFRA-001 | `keep` | Preserve fork policy, local Full gate, exact qualification record, and immutable publication tooling. | `ReleaseTooling.Tests.ps1`, Full gate |
 | ITL-INFRA-002 | `keep` | Require an immutable upstream ref/SHA and atomic release branch/tag publication. | publish `-WhatIf`, ancestry checks |
@@ -21,10 +21,10 @@ this snapshot.
 | ITL-LAYOUT-OLD-001 | `drop` | Do not replay the old shared Codex+Kilo layout or old `.kilocode` layout patches. Use each current native adapter. | real-path inventory tests |
 | ITL-CODEX-001 | `rewrite` | Codex commands and OpenSpec skills are project-local `.agents/skills`; never write `~/.codex/prompts`. | Codex inventory and user-scope guard |
 | ITL-KILO-001 | `rewrite` | Use `.kilo` native paths, inject `USER-RULES.md` through `.kilo/kilo.json`, and block adjacent `.kilo/kilo.jsonc`. | Kilo config tests |
-| ITL-ADAPTER-001 | `rewrite` | Support exactly one of Codex, Kilo, Claude Code, Cursor, or OpenCode; preserve OpenCode singular `agent/command`. | adapter matrix |
+| ITL-ADAPTER-001 | `rewrite` | Support exactly one of the ten registered clients; preserve each native layout and OpenCode singular `agent/command`. | ten-client adapter matrix |
 | ITL-CONTEXT-001 | `keep` | Preserve the compact router and on-demand detail. | context/link tests |
 | ITL-MCP-002 | `keep` | Preserve delegated MCP ownership and required/optional server handling. | delegated MCP tests |
-| ITL-OPENSPEC-001 | `rewrite` | Add a short mechanical project-skill/source/test-plan/fresh-check preflight to explore/propose/apply for all clients. | 27-surface overlay tests |
+| ITL-OPENSPEC-001 | `rewrite` | Preserve upstream snapshot `1.2.0`; apply the project-skill/source/test-plan/fresh-check preflight to native surfaces and the host natural fallback without generating downstream bundles. | native overlay and natural-contract tests |
 | ITL-QUICKFIX-001 | `rewrite` | Keep `QUICKFIX_MAX_LINES=40`; quick-fix classification is mechanical and final evidence follows effective ITL modes. | policy tests and workflow matrix |
 | ITL-COMMANDS-001 | `rewrite` | Publish the explicit allowlist, suppress four generic MCP/update commands, and route the four legacy 1C commands through ITL state reconciliation. | command-surface tests |
 | ITL-VERIFY-001 | `rewrite` | Upstream owns `VERIFICATION_DEPTH`/`UI_TESTING`; host ITL owns independent Vanessa/event-log modes and partial-evidence semantics. | fork policy tests and workflow mode matrix |

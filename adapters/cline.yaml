@@ -13,18 +13,16 @@
 #     every conversation and would explode the context window.
 #   - On-demand rules: `.cline/rules-1c/` (explicit load via `AGENTS.md`),
 #     same `rules-1c` pattern as Kilo / Kimi / Qwen.
-#   - Project skills / agents: `.cline/skills/`, `.cline/agents/` (see
-#     docs.cline.bot/getting-started/config).
+#   - Project skills live in `.cline/skills/`. Source agent prompts stay under
+#     `.cline/rules-1c/agents/` as references until a stable native format is
+#     confirmed.
 #   - Project slash-commands / workflows are not a stable project-local
 #     contract in current Cline (workflows resolve from the global
 #     `~/.cline/data/workflows/` tree). This adapter intentionally does
 #     not invent a commands path — invoke workflows through skills /
 #     `AGENTS.md` references instead.
-#   - MCP is global-only for Cline (`~/.cline/mcp.json` or
-#     `~/.cline/data/settings/cline_mcp_settings.json`). There is no
-#     project-scoped MCP file the installer may write, so this adapter
-#     omits `mcp`. Users configure 1C MCP servers once in the Cline MCP
-#     settings UI / `cline config mcp`; `/installmcp` documents the shape.
+#   - Project MCP lives in `.cline/mcp.json`; the installer merges only the
+#     managed `mcpServers` entries and never writes user-global settings.
 #   - Detection accepts both `.cline/` (current) and `.clinerules/`
 #     (legacy eager-rules directory) so existing Cline projects are found
 #     without re-installing.

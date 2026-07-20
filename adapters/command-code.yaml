@@ -18,9 +18,9 @@
 #   - Project MCP scope is root `.mcp.json` with the `mcpServers` dictionary
 #     (same path Claude Code uses). Command Code accepts `type` as an alias
 #     for `transport`, so the Claude Code HTTP shape
-#     `{ "type": "http", "url": "..." }` is used. When both `claude-code`
-#     and `command-code` are active they share one `.mcp.json` and the
-#     installer tracks joint ownership in the manifest.
+#     `{ "type": "http", "url": "..." }` is used. The single-client
+#     contract means only the selected client's managed entries are owned;
+#     unrelated user keys in the shared file are preserved.
 
 tool: command-code
 schemaVersion: 1

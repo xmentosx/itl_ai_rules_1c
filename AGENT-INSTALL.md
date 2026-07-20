@@ -2,6 +2,8 @@
 
 This document describes the installation, update and migration mechanics of the `1c-rules` toolkit and the layout of files it manages.
 
+> **ITL controlled-fork contract:** this checkout is consumed from an immutable `itl-*` tag selected by `1c-agent-workflow`. User-facing installation starts from the workflow bootstrap. Direct installation from moving upstream is not an ITL distribution channel.
+
 ## Installation channels
 
 `1c-rules` ships with two equivalent channels. They produce the **same** on-disk layout and the **same** `.ai-rules.json` manifest:
@@ -31,7 +33,7 @@ The same rule applies to the PowerShell fallback: `install.ps1` requires being r
 ### Defaults — no questions when the answer is obvious
 
 - **Channel** — agent-driven by default. Do not ask the user to choose between the agent and PowerShell channels. If you cannot perform filesystem operations, fall back to PowerShell silently.
-- **Source** — local clone of `1c-rules` if the user pointed at one; otherwise `https://github.com/comol/ai_rules_1c` (default).
+- **Source** — the local immutable checkout supplied by the host workflow. Do not replace it with a moving upstream URL.
 - **Active client** — auto-detect from the project. A client matches when its `detection:` block in `adapters/<tool>.yaml` matches.
   - **Exactly one tool detected** — proceed silently with that tool. Do not ask.
   - **Zero tools detected** — ask once for exactly one of `cursor`, `claude-code`, `codex`, `opencode`, `kilocode`, `kimi`, `qwen`, `command-code`, `cline`, or `pi`.
@@ -44,7 +46,7 @@ The agent SHOULD NOT read the body of every rule/agent/command/skill file before
 
 Use this lean sequence:
 
-1. **Resolve the source.** If only a URL was given, clone it locally (`git clone https://github.com/comol/ai_rules_1c.git <cache-dir>/1c-rules`) or reuse an existing clone.
+1. **Resolve the source.** Use the local immutable checkout supplied by the host workflow. A URL source is a non-standard recovery input and must already identify the reviewed source explicitly.
 
 2. **Read adapters only.** For each active tool open `adapters/<tool>.yaml` from the clone. These files are small and define, in a closed schema:
    - `detection` — how to confirm the tool is active.
@@ -113,7 +115,7 @@ mode: subagent
 
 ### Recommend a restart after MCP changes
 
-After the MCP config is written (init / update / add), **recommend that the user restart their AI client** (CLI or IDE). Most clients — OpenCode in particular — read the MCP configuration and agent definitions only at startup, so newly added MCP servers and subagents will not appear in an already-running session until the client is restarted. This recommendation applies to all tools; the PowerShell installer prints it automatically at the end of `init` / `update` / `add` whenever at least one MCP server was configured.
+After the MCP config is written (init / update), **recommend that the user restart their AI client** (CLI or IDE). Most clients — OpenCode in particular — read the MCP configuration and agent definitions only at startup, so newly added MCP servers and subagents will not appear in an already-running session until the client is restarted. This recommendation applies to all tools; the PowerShell installer prints it automatically at the end of `init` / `update` whenever at least one MCP server was configured.
 
 ### Announce the /economymode command
 
@@ -218,16 +220,15 @@ If a target file already exists with user modifications (different from any prio
 
 ## PowerShell fallback (`install.ps1`)
 
-If the agent cannot do the placement (no FS access, restricted environment, CI run), use the PowerShell channel:
+The host workflow and controlled recovery automation may use the PowerShell channel against an already checked-out immutable release:
 
 ```powershell
-git clone https://github.com/comol/ai_rules_1c.git $env:TEMP\1c-rules
-& $env:TEMP\1c-rules\install.ps1 init -Source $env:TEMP\1c-rules
+& <immutable-release-checkout>\install.ps1 init -Source <immutable-release-checkout>
 ```
 
 The script implements the protocol above. Notes:
 
-- `-Source` accepts a local path or a Git source URL (`https://...`, `git@...`, or a value ending with `.git`). URL sources are cloned into the installer's cache before placement.
+- `-Source` normally receives the local immutable checkout selected by the host workflow. URL support is recovery-only and must not silently resolve moving upstream for an ITL project.
 - Run from the **project root**; the script writes there.
 - Commands: `init` / `update` / `remove [<tool>]` / `doctor` (read-only diagnostic) / `eject` (delete the manifest, leave files in place). `add` fails by design; the host workflow performs transactional client replacement.
 - Flags: `-Tools <one-client>` (exactly one required when detection is ambiguous), `-NonInteractive`, `-AssumeYes`, `-Force`, `-ForcePaths <path>[,<path>…]`, `-McpMode auto|managed|external`.
@@ -242,13 +243,7 @@ iex (irm https://raw.githubusercontent.com/comol/ai_rules_1c/main/install.ps1)
 iex "$(irm https://raw.githubusercontent.com/comol/ai_rules_1c/main/install.ps1) init"
 ```
 
-Always run the script as a local file. If a no-`git` environment forces a one-liner, use a script block — it preserves `param(...)` semantics — but the script still needs a resolvable `-Source` value:
-
-```powershell
-$tmp = Join-Path $env:TEMP '1c-rules'
-git clone https://github.com/comol/ai_rules_1c.git $tmp
-& ([scriptblock]::Create((Get-Content "$tmp\install.ps1" -Raw))) init -Source $tmp
-```
+Always run the script as a local file from the immutable checkout. Do not replace the pinned source with a downloaded moving script.
 
 Do not execute raw script text from GitHub with `Invoke-Expression`; download or clone the repository first so `install.ps1` can read `content/` and `adapters/`.
 
@@ -290,6 +285,6 @@ Earlier versions of `1c-rules` created a shared `.ai-rules/rules/` mirror at the
 
 The project ships an [OpenSpec](https://github.com/Fission-AI/OpenSpec) workspace at the repository root. The `1c-rules` installer scaffolds it unconditionally on first install (skip-if-exists; existing files are never overwritten) and records the result in `.ai-rules.json` under `integrations.openspec`.
 
-OpenSpec slash commands (`/opsx:propose`, `/opsx:apply`, `/opsx:archive`, `/opsx:explore`) and the matching SKILLs are placed automatically by the `1c-rules` installer for every active tool from a bundled snapshot of `openspec init` output (see `content/openspec-bundle/`); no `npm` and no OpenSpec CLI are required at install time. The snapshot's CLI version is recorded in `.ai-rules.json` under `integrations.openspec.artifactsBundleVersion` and is refreshed whenever `1c-rules` is updated.
+The upstream snapshot `1.2.0` ships native OpenSpec commands/SKILLs only for Cursor, Claude Code, Codex, OpenCode, and Kilo Code. Their managed files are recorded in `.ai-rules.json`. Kimi, Qwen, Command Code, Cline, and Pi intentionally have no bundle and use the same workspace through natural-language explore/propose/apply/archive requests. `bundleSkipped` for those clients is expected, not an incomplete installation.
 
-OpenSpec bundles are shipped only for clients with a maintained native bundle. Clients without one still receive the common rules, skills, routines, and MCP contract.
+Both modes follow the installed ITL preflight: record `Context Sources`, create and approve `test-plan.md` during propose, follow the artifacts during apply, and finish with fresh `/itl-check`. The installer never installs `@fission-ai/openspec` and never runs `openspec update`; absence of that executable does not block the natural flow.

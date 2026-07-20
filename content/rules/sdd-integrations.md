@@ -20,6 +20,21 @@ Layout, spec format, delta format, and the full workflow are described in the wo
 
 Read those files before writing or editing OpenSpec artifacts.
 
+## Invocation modes
+
+The artifact contract is independent of the client UI. A project may expose a
+managed native OpenSpec command/SKILL, or it may expose only the common
+workspace and these rules. In the latter case, run explore, propose, apply, and
+archive from an ordinary natural-language request. Do not invent a slash
+command, install `@fission-ai/openspec`, or run `openspec update`.
+
+Both modes require the same preflight and completion evidence: record `Context
+Sources`, create and agree `test-plan.md` with the proposal artifacts, implement
+only the agreed artifacts, and finish apply with a fresh `/itl-check`. A missing
+native bundle is not a defect when the installed manifest records that it was
+intentionally skipped; a missing file from a managed native bundle is an
+ownership/integrity failure and must not be masked by natural fallback.
+
 ## MCP discipline for OpenSpec authoring
 
 OpenSpec artifacts (`proposal.md`, `design.md`, `tasks.md`, delta and current specs) are Markdown, but they make **factual claims about the 1C system** — metadata names, attributes, tabular sections, public API signatures, БСП subsystems, platform-version behaviour, project conventions. Every such claim must be grounded in MCP evidence, not memory or guessing. This is the **spec-authoring path** from `AGENTS.md → Development Procedure → Triage`.

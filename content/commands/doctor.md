@@ -18,7 +18,7 @@ Check:
    - Cursor: `.cursor/rules`, `.cursor/agents`, `.cursor/commands`, `.cursor/skills`;
    - OpenCode: `.opencode/rules`, `.opencode/agent`, `.opencode/command`, `.claude/skills`, root `opencode.json`.
 3. Manifest protocol, controlled-fork provenance, managed-file hashes, root `AGENTS.md`, `USER-RULES.md`, preserved `LLM-RULES.md`, upstream rules/skills, and all five ITL lifecycle skills are present without duplicate managed copies.
-4. OpenSpec workspace and the active client's OpenSpec propose/explore/apply surfaces are installed and include the ITL preflight.
+4. OpenSpec workspace and rules are installed. Report `native` when managed propose/explore/apply artifacts exist and are intact; report `natural` when the pinned adapter intentionally has no bundle. Expected `bundleSkipped` is `OK`, while a missing file from a previously managed native bundle is `FAIL`. The ITL preflight applies in both modes.
 5. Read `.dev.env` without changing it. Validate upstream mode keys plus `ITL_VANESSA_TESTING` and `ITL_CHECK_EVENT_LOG`; invalid ITL values are `WARN` and have effective safe default `auto`.
 6. Ask the host workflow helper for read-only MCP and branch state. On `master`, branch-only checks are `SKIP`. On managed `itldev/*`, verify the branch infobase only; never probe or suggest using the source infobase.
 
