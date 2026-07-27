@@ -14,7 +14,7 @@ Do not duplicate that sequence here.
 
 ## Rules specific to creating / modifying a form
 
-- **Prefer the `1c-metadata-manage` skill** (form-manage section) over hand-edited XML for non-trivial form changes. Hand-editing is acceptable only for small tweaks fully covered by the XSD; for anything else, the skill drives the toolchain (BOM, encoding, UID generation, ordering of `ChildObjects`).
+- **Use the `1c-metadata-manage` skill** (form-manage section) for structural form changes. Adding, removing, moving, nesting, or changing the type of form elements must use `1c-form-edit` when that operation is supported; line count and apparent simplicity do not make structural XML insertion a manual one-line fix. Hand-editing is acceptable only for literal-value corrections fully covered by the XSD or for unsupported repairs after stating why the form tool does not apply.
 - **XSD validation is mandatory** after any XML edit — `verify_xml` against the schema returned by `get_xsd_schema(object_type="Форма")`. A form that parses in your editor is not a form that loads in Designer.
 - **Form-element naming.** Elements added to a typical form must carry the `{PREFIX}` prefix from `.dev.env`. Elements inside a newly created form (object already prefixed) do **not** repeat the prefix on every element — see `dev-standards-change-markers.md → "Metadata Naming"`.
 - **Common pitfalls** are catalogued in `metadata-xml-workarounds.md` — read it before hand-editing the XML.

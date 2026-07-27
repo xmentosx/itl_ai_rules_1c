@@ -35,6 +35,26 @@ powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-cfe-manage/sc
 
 **Preparation**: Before creating, get the base configuration version: `1c-cf-manage info <ConfigPath>`.
 
+### Initializing an ITL development-branch extension
+
+If the project contains `.agents/skills/1c-workflow`, do not assemble the
+infobase lifecycle manually. After creating an ITL extension branch, run the
+workflow action `init-dev-branch-extension` with `ExtensionInitMode=Empty` or
+`Cfe`. That action owns the snapshot, load/update, normalized dump, rollback,
+and branch state. `cfe-init.ps1` is the source scaffold used by the Empty mode;
+it does not by itself create an extension in an infobase.
+
+For non-ITL recovery, Designer can create an absent extension while loading:
+
+```text
+/LoadConfigFromFiles <source-directory> -Extension <name> -Format Hierarchical /UpdateDBCfg
+/LoadCfg <file.cfe> -Extension <name> /UpdateDBCfg
+```
+
+Use the hyphenated `-Extension` option. `/Extension` is not the supported
+Designer syntax. Do not unpack a CFE into the source tree and do not require
+Designer Agent or `AgentMode` for either load path.
+
 ---
 
 ## 2. Borrow — Borrow Objects from Configuration
@@ -144,6 +164,9 @@ Exit code: 0 = OK, 1 = errors.
 1c-cfe-manage diff -Mode A          — review changes overview
 1c-cfe-manage diff -Mode B          — check transfer status
 ```
+
+In an initialized ITL branch, use `/update1cbase` for subsequent source-to-base
+iterations; reserve direct DB scripts for recovery and non-ITL projects.
 
 ## Recent Additions (upstream `w-2026-05-17`)
 

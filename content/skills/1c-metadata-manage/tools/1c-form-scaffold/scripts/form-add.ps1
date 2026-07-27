@@ -25,7 +25,8 @@ function Detect-FormatVersion([string]$dir) {
 	while ($d) {
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
-			$head = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8).Substring(0, [Math]::Min(2000, (Get-Item $cfgPath).Length))
+			$sourceText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $sourceText.Substring(0, [Math]::Min(2000, $sourceText.Length))
 			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
 		}
 		$parent = Split-Path $d -Parent
@@ -154,23 +155,98 @@ switch ($Purpose) {
 $objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.Path, $null).TrimEnd('.')
 $formsDir = Join-Path $objectDir "Forms"
 $formMetaPath = Join-Path $formsDir "$FormName.xml"
-
-if (Test-Path $formMetaPath) {
-	Write-Error "Форма уже существует: $formMetaPath"
-	exit 1
-}
-
 $formDir = Join-Path $formsDir $FormName
 $formExtDir = Join-Path $formDir "Ext"
 $formModuleDir = Join-Path $formExtDir "Form"
+$synonymWasSpecified = $PSBoundParameters.ContainsKey("Synonym")
 
-New-Item -ItemType Directory -Path $formModuleDir -Force | Out-Null
+$childObjects = $xmlDoc.SelectSingleNode("//md:${objectType}/md:ChildObjects", $nsMgr)
+if (-not $childObjects) {
+	Write-Error "Не найден элемент ChildObjects в $ObjectPath"
+	exit 1
+}
+$registeredForms = @()
+foreach ($candidateForm in $childObjects.SelectNodes("md:Form", $nsMgr)) {
+	$elementChild = @($candidateForm.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })
+	$nameNode = $candidateForm.SelectSingleNode("md:Properties/md:Name", $nsMgr)
+	$candidateName = if ($nameNode -and $nameNode.InnerText) { $nameNode.InnerText.Trim() } else { $candidateForm.InnerText.Trim() }
+	if ($candidateName -eq $FormName) {
+		if ($elementChild.Count -gt 0) {
+			Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: Form.$FormName uses an unsupported structured reference"
+			exit 1
+		}
+		$registeredForms += $candidateForm
+	}
+}
+if ($registeredForms.Count -gt 1) {
+	Write-Error "CFE_CHILD_OBJECT_DUPLICATE: Form.$FormName registered $($registeredForms.Count) times"
+	exit 1
+}
+$formMetadataExists = Test-Path $formMetaPath -PathType Leaf
+$formTreeExists = Test-Path $formDir -PathType Container
+$formUuid = $null
+if (Test-Path $formMetaPath -PathType Leaf) {
+	$formDoc = New-Object System.Xml.XmlDocument
+	$formDoc.PreserveWhitespace = $true
+	try { $formDoc.Load($formMetaPath) } catch { Write-Error "FORM_METADATA_INVALID: $($_.Exception.Message)"; exit 1 }
+	$formNs = New-Object System.Xml.XmlNamespaceManager($formDoc.NameTable)
+	$formNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$formNs.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+	$formRoot = $formDoc.SelectSingleNode("/md:MetaDataObject/md:Form", $formNs)
+	if (-not $formRoot -or -not $formRoot.GetAttribute("uuid")) { Write-Error "FORM_METADATA_INVALID: Form.$FormName UUID is missing"; exit 1 }
+	$formUuid = $formRoot.GetAttribute("uuid")
+	$metadataName = $formDoc.SelectSingleNode("/md:MetaDataObject/md:Form/md:Properties/md:Name", $formNs)
+	if (-not $metadataName -or $metadataName.InnerText -ne $FormName) {
+		Write-Error "FORM_METADATA_INVALID: Form metadata Name does not match '$FormName'"
+		exit 1
+	}
+	if ($registeredForms.Count -eq 1 -and $registeredForms[0].GetAttribute("uuid") -and $registeredForms[0].GetAttribute("uuid") -ne $formUuid) {
+		Write-Error "CFE_CHILD_OBJECT_UUID_MISMATCH: Form.$FormName parent UUID does not match metadata UUID"
+		exit 1
+	}
+}
+
+if (-not $formMetadataExists -and $formTreeExists -and $registeredForms.Count -eq 0) {
+	Write-Error "FORM_EXISTING_CONTENT_CONFLICT: Form.$FormName has content without trusted metadata or registration"
+	exit 1
+}
+
+if (-not $formMetadataExists -and $registeredForms.Count -eq 1 -and $registeredForms[0].GetAttribute("uuid")) {
+	Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: Form.$FormName has a legacy UUID but no metadata target to prove it"
+	exit 1
+}
+
+if (-not $formUuid) { $formUuid = [guid]::NewGuid().ToString() }
+
+foreach ($otherForm in $childObjects.SelectNodes("md:Form", $nsMgr)) {
+	$otherUuid = $otherForm.GetAttribute("uuid")
+	if (-not $otherUuid -or $otherUuid -ne $formUuid) { continue }
+	$otherNameNode = $otherForm.SelectSingleNode("md:Properties/md:Name", $nsMgr)
+	$otherName = if ($otherNameNode -and $otherNameNode.InnerText) { $otherNameNode.InnerText.Trim() } else { $otherForm.InnerText.Trim() }
+	if ($otherName -ne $FormName) {
+		Write-Error "CFE_CHILD_OBJECT_REFERENCE_AMBIGUOUS: UUID '$formUuid' is also used by Form.$otherName"
+		exit 1
+	}
+}
+
+$transactionRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("form-add-" + [guid]::NewGuid().ToString("N"))
+$stagedFormsDir = Join-Path $transactionRoot "Forms"
+$stagedFormMetaPath = Join-Path $stagedFormsDir "$FormName.xml"
+$stagedFormDir = Join-Path $stagedFormsDir $FormName
+$stagedFormExtDir = Join-Path $stagedFormDir "Ext"
+$stagedFormModuleDir = Join-Path $stagedFormExtDir "Form"
+New-Item -ItemType Directory -Path $stagedFormsDir -Force | Out-Null
+if ($formTreeExists) {
+	Copy-Item -LiteralPath $formDir -Destination $stagedFormsDir -Recurse -Force
+}
+New-Item -ItemType Directory -Path $stagedFormModuleDir -Force | Out-Null
+if ($formMetadataExists) {
+	Copy-Item -LiteralPath $formMetaPath -Destination $stagedFormMetaPath -Force
+}
 
 $encBom = New-Object System.Text.UTF8Encoding($true)
 
 # --- 3a. Метаданные формы ---
-
-$formUuid = [guid]::NewGuid().ToString()
 
 # ExtendedPresentation — only for DataProcessor, Report, ExternalDataProcessor, ExternalReport forms
 $extPresentationLine = ""
@@ -202,11 +278,28 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+if (-not $formMetadataExists) {
+	[System.IO.File]::WriteAllText($stagedFormMetaPath, $formMetaXml, $encBom)
+} elseif ($synonymWasSpecified) {
+	$stagedMetaDoc = New-Object System.Xml.XmlDocument
+	$stagedMetaDoc.PreserveWhitespace = $true
+	$stagedMetaDoc.Load($stagedFormMetaPath)
+	$stagedMetaNs = New-Object System.Xml.XmlNamespaceManager($stagedMetaDoc.NameTable)
+	$stagedMetaNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$stagedMetaNs.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+	$synonymContent = $stagedMetaDoc.SelectSingleNode("/md:MetaDataObject/md:Form/md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", $stagedMetaNs)
+	if (-not $synonymContent) {
+		Write-Error "FORM_METADATA_INVALID: Form.$FormName has no Russian synonym slot"
+		exit 1
+	}
+	$synonymContent.InnerText = $Synonym
+	$stagedMetaDoc.Save($stagedFormMetaPath)
+}
 
 # --- 3b. Form.xml ---
 
 $formXmlPath = Join-Path $formExtDir "Form.xml"
+$stagedFormXmlPath = Join-Path $stagedFormExtDir "Form.xml"
 
 $formNsDecl = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 
@@ -306,15 +399,14 @@ if ($Purpose -eq "List" -or $Purpose -eq "Choice") {
 "@
 }
 
-if (Test-Path $formXmlPath) {
-	Write-Host "[SKIP] Form.xml already exists: $formXmlPath — not overwriting"
-} else {
-	[System.IO.File]::WriteAllText($formXmlPath, $formXml, $encBom)
+if (-not (Test-Path $stagedFormXmlPath -PathType Leaf)) {
+	[System.IO.File]::WriteAllText($stagedFormXmlPath, $formXml, $encBom)
 }
 
 # --- 3c. Module.bsl ---
 
 $modulePath = Join-Path $formModuleDir "Module.bsl"
+$stagedModulePath = Join-Path $stagedFormModuleDir "Module.bsl"
 
 $moduleBsl = @"
 #Область ОбработчикиСобытийФормы
@@ -338,59 +430,28 @@ $moduleBsl = @"
 #КонецОбласти
 "@
 
-if (Test-Path $modulePath) {
-	Write-Host "[SKIP] Module.bsl already exists: $modulePath — not overwriting"
-} else {
-	[System.IO.File]::WriteAllText($modulePath, $moduleBsl, $encBom)
+if (-not (Test-Path $stagedModulePath -PathType Leaf)) {
+	[System.IO.File]::WriteAllText($stagedModulePath, $moduleBsl, $encBom)
 }
 
 # --- Фаза 4: Регистрация в родительском объекте ---
 
-$childObjects = $xmlDoc.SelectSingleNode("//md:${objectType}/md:ChildObjects", $nsMgr)
-if (-not $childObjects) {
-	Write-Error "Не найден элемент ChildObjects в $ObjectPath"
-	exit 1
-}
-
-# Добавить <Form>$FormName</Form>
-$formElem = $xmlDoc.CreateElement("Form", "http://v8.1c.ru/8.3/MDClasses")
-$formElem.InnerText = $FormName
-
-# Ищем первый <Template> для вставки перед ним
-$firstTemplate = $childObjects.SelectSingleNode("md:Template", $nsMgr)
-# Ищем первую <TabularSection> для вставки перед ней (если нет Template)
-$firstTabular = $childObjects.SelectSingleNode("md:TabularSection", $nsMgr)
-
-# Определяем точку вставки: перед Template, перед TabularSection, или в конец
-$insertBefore = $null
-if ($firstTemplate) {
-	$insertBefore = $firstTemplate
-} elseif ($firstTabular) {
-	$insertBefore = $firstTabular
-}
-
-if ($insertBefore) {
-	# Вставить перед найденным элементом, с переносом строки
-	$whitespace = $xmlDoc.CreateWhitespace("`n`t`t`t")
-	$childObjects.InsertBefore($formElem, $insertBefore) | Out-Null
-	$childObjects.InsertBefore($whitespace, $formElem) | Out-Null
-	# Переставляем: whitespace перед formElem — неправильный порядок
-	# Правильно: formElem, затем whitespace перед insertBefore
-	# InsertBefore возвращает вставленный узел, порядок: ... formElem whitespace insertBefore ...
-	# На самом деле нам нужно: ... \n\t\t\tformElem \n\t\t\tinsertBefore
-	# Удалим и вставим правильно
-	$childObjects.RemoveChild($whitespace) | Out-Null
-	$childObjects.RemoveChild($formElem) | Out-Null
-
-	$childObjects.InsertBefore($formElem, $insertBefore) | Out-Null
-	# Whitespace нужен ДО formElem (перенос строки + отступ)
-	# Но перед insertBefore уже должен быть whitespace от предыдущего элемента
-	# Нам нужно добавить whitespace ПОСЛЕ formElem (перед insertBefore)
-	$ws = $xmlDoc.CreateWhitespace("`n`t`t`t")
-	$childObjects.InsertBefore($ws, $insertBefore) | Out-Null
+if ($registeredForms.Count -eq 1) {
+	# Normalize a matching legacy UUID-bearing reference to the canonical short form.
+	$formElem = $registeredForms[0]
+	$formElem.RemoveAll()
+	$formElem.InnerText = $FormName
 } else {
-	# Добавить в конец ChildObjects
-	if ($childObjects.ChildNodes.Count -eq 0) {
+	# Add the only canonical registration: <Form>Name</Form>.
+	$formElem = $xmlDoc.CreateElement("Form", "http://v8.1c.ru/8.3/MDClasses")
+	$formElem.InnerText = $FormName
+	$firstTemplate = $childObjects.SelectSingleNode("md:Template", $nsMgr)
+	$firstTabular = $childObjects.SelectSingleNode("md:TabularSection", $nsMgr)
+	$insertBefore = if ($firstTemplate) { $firstTemplate } elseif ($firstTabular) { $firstTabular } else { $null }
+	if ($insertBefore) {
+		$childObjects.InsertBefore($formElem, $insertBefore) | Out-Null
+		$childObjects.InsertBefore($xmlDoc.CreateWhitespace("`n`t`t`t"), $insertBefore) | Out-Null
+	} elseif ($childObjects.ChildNodes.Count -eq 0) {
 		$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t`t")) | Out-Null
 		$childObjects.AppendChild($formElem) | Out-Null
 		$childObjects.AppendChild($xmlDoc.CreateWhitespace("`n`t`t")) | Out-Null
@@ -409,8 +470,6 @@ if ($insertBefore) {
 
 # --- SetDefault ---
 
-$existingForms = $childObjects.SelectNodes("md:Form", $nsMgr)
-$isFirstFormForPurpose = $false
 $defaultPropName = $null
 $defaultValue = "$objectType.$objectName.Form.$FormName"
 
@@ -428,30 +487,81 @@ switch ($Purpose) {
 	"Record" { $defaultPropName = "DefaultRecordForm" }
 }
 
-# Проверяем, установлено ли уже значение
 $defaultNode = $xmlDoc.SelectSingleNode("//md:${objectType}/md:Properties/md:$defaultPropName", $nsMgr)
-if ($defaultNode) {
-	$isFirstFormForPurpose = [string]::IsNullOrWhiteSpace($defaultNode.InnerText)
-}
-
 $defaultUpdated = $false
-if ($SetDefault -or $isFirstFormForPurpose) {
-	if ($defaultNode) {
+if ($SetDefault) {
+	if (-not $defaultNode) {
+		Write-Host "FORM_PURPOSE_CONFLICT"
+		Write-Error "FORM_PURPOSE_CONFLICT: $defaultPropName is not available on $objectType.$objectName"
+		exit 1
+	}
+	if (-not [string]::IsNullOrWhiteSpace($defaultNode.InnerText) -and $defaultNode.InnerText -ne $defaultValue) {
+		Write-Host "FORM_PURPOSE_CONFLICT"
+		Write-Error "FORM_PURPOSE_CONFLICT: $defaultPropName already points to '$($defaultNode.InnerText)'"
+		exit 1
+	}
+	if ($defaultNode.InnerText -ne $defaultValue) {
 		$defaultNode.InnerText = $defaultValue
 		$defaultUpdated = $true
 	}
 }
 
-# Сохранить с BOM
+# Save the parent into the transaction tree before changing any target file.
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = $encBom
 $settings.Indent = $false
-
-$stream = New-Object System.IO.FileStream($objectXmlFull.Path, [System.IO.FileMode]::Create)
+$stagedObjectPath = Join-Path $transactionRoot "Object.xml"
+$stream = New-Object System.IO.FileStream($stagedObjectPath, [System.IO.FileMode]::Create)
 $writer = [System.Xml.XmlWriter]::Create($stream, $settings)
 $xmlDoc.Save($writer)
 $writer.Close()
 $stream.Close()
+
+$backupRoot = Join-Path $transactionRoot "backup"
+$backupFormMetaPath = Join-Path $backupRoot "$FormName.xml"
+$backupFormDir = Join-Path $backupRoot $FormName
+$backupObjectPath = Join-Path $backupRoot "Object.xml"
+New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+Copy-Item -LiteralPath $objectXmlFull.Path -Destination $backupObjectPath -Force
+if ($formMetadataExists) { Copy-Item -LiteralPath $formMetaPath -Destination $backupFormMetaPath -Force }
+if ($formTreeExists) { Copy-Item -LiteralPath $formDir -Destination $backupRoot -Recurse -Force }
+
+$metaReplaced = $false
+$treeRemoved = $false
+$treeInstalled = $false
+$parentReplaced = $false
+try {
+	New-Item -ItemType Directory -Path $formsDir -Force | Out-Null
+	Copy-Item -LiteralPath $stagedFormMetaPath -Destination $formMetaPath -Force
+	$metaReplaced = $true
+	if (Test-Path $formDir -PathType Container) {
+		Remove-Item -LiteralPath $formDir -Recurse -Force
+		$treeRemoved = $true
+	}
+	Copy-Item -LiteralPath $stagedFormDir -Destination $formsDir -Recurse -Force
+	$treeInstalled = $true
+	Copy-Item -LiteralPath $stagedObjectPath -Destination $objectXmlFull.Path -Force
+	$parentReplaced = $true
+} catch {
+	$transactionError = $_.Exception.Message
+	try {
+		if ($parentReplaced) { Copy-Item -LiteralPath $backupObjectPath -Destination $objectXmlFull.Path -Force }
+		if ($treeInstalled -or $treeRemoved) {
+			if (Test-Path $formDir) { Remove-Item -LiteralPath $formDir -Recurse -Force }
+			if ($formTreeExists) { Copy-Item -LiteralPath $backupFormDir -Destination $formsDir -Recurse -Force }
+		}
+		if ($metaReplaced) {
+			if ($formMetadataExists) { Copy-Item -LiteralPath $backupFormMetaPath -Destination $formMetaPath -Force }
+			elseif (Test-Path $formMetaPath) { Remove-Item -LiteralPath $formMetaPath -Force }
+		}
+	} catch {
+		Write-Warning "FORM_ADD_ROLLBACK_FAILED: $($_.Exception.Message)"
+	}
+	Write-Error "FORM_ADD_TRANSACTION_FAILED: $transactionError"
+	exit 1
+} finally {
+	if (Test-Path $transactionRoot) { Remove-Item -LiteralPath $transactionRoot -Recurse -Force }
+}
 
 # --- Фаза 5: Вывод ---
 
