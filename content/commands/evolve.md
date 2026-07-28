@@ -9,7 +9,7 @@ Turn friction observed during work (user corrections of agent behavior, demonstr
 
 This command is the **only** legitimate writer of `LLM-RULES.md`. During regular tasks agents never edit it, `AGENTS.md`, or the installed rule files inline — they capture friction signals and, when signals accumulate, recommend running this command. The capture discipline and the recommendation trigger are canon in `AGENTS.md → Rules self-improvement`; this file owns everything from aggregation onward.
 
-Precedence reminder: `LLM-RULES.md` overrides `AGENTS.md` and the on-demand rules; `USER-RULES.md` and `memory.md` override `LLM-RULES.md`.
+Precedence reminder: `USER-RULES.md` and host ITL lifecycle/safety rules override `LLM-RULES.md`. In particular, branch safety, OpenSpec/quick-fix classification, verification modes, `verificationPolicy`, approved `test-plan.md`, partial-evidence labeling, and fresh-check semantics cannot be weakened or bypassed by `/evolve`. For generic upstream behavior outside those protected areas, `LLM-RULES.md` may refine `AGENTS.md` and on-demand rules.
 
 Parse the argument: empty — full pass (collect → cluster → propose → approve → write); `note <text>` — record one friction signal and stop; `show` — report the current state, no writes.
 
@@ -49,7 +49,7 @@ The model is a poor judge of the usefulness of gates that constrain the model �
 
 Present every surviving proposal as a numbered list; per proposal: the rule text, scope, evidence episodes (one line), what base rule or `AGENTS.md` section it refines or overrides, and the `[safety-relevant]` flag where applicable. Then one consolidated question round with per-entry approve / reject / edit. Safety-relevant entries require their own explicit confirmation.
 
-No approval — no write. For rejected proposals, record one `remember` note (`rule-friction: rejected — <behavior>`) so the same proposal is not re-raised from the same episodes.
+No approval — no write. Require a separate explicit approval for every entry; never accept a blanket approval for multiple changes. Safety-related entries are shown separately and require their own confirmation. For rejected proposals, record one `remember` note (`rule-friction: rejected — <behavior>`) so the same proposal is not re-raised from the same episodes.
 
 ### 5. Write to `LLM-RULES.md`
 
@@ -75,7 +75,7 @@ Entry format (English, imperative, original 1C identifiers as-is, no secrets / P
 
 - Delete `memory.md → ## Captured during work` items now represented by written entries (migration, per `AGENTS.md → Project memory`).
 - Closing summary in Russian: entries written, merged, superseded; proposals rejected; pending signals below the threshold.
-- **Upstream hint:** if an approved rule is not project-specific (it would improve the base ruleset for every project), say so — the fix belongs in the `1c-rules` source repo (`AGENTS.md` / `content/rules/**`) through its normal change process; `LLM-RULES.md` stays the project-local layer either way.
+- **Controlled-fork hint:** if an approved rule is not project-specific, propose it for the controlled fork's next immutable release. Do not patch installed managed rule copies in place.
 
 ## note <text>
 
@@ -87,6 +87,7 @@ Read-only report: active `LLM-RULES.md` entries (ids + titles), `Last /evolve ru
 
 ## Constraints (always)
 
-- The command writes **only** `LLM-RULES.md` (plus the `memory.md` migration and `remember` notes described above) — never `AGENTS.md`, `USER-RULES.md`, `content/rules/**`, installed rule copies, or `.dev.env`.
+- The host workflow must include `LLM-RULES.md` in the migration snapshot and rollback set. Ordinary rule/workflow updates preserve it byte-for-byte.
+- The command writes **only** `LLM-RULES.md` (plus the `memory.md` migration and `remember` notes described above) — never `AGENTS.md`, `USER-RULES.md`, ITL lifecycle files, `content/rules/**`, installed rule copies, or `.dev.env`.
 - Every written entry has explicit per-entry user approval from this run; editing or removing an existing entry also goes through the approval round.
 - The command never runs unasked. Recommending it during regular work is one line at the end of an answer, at most once per session (canon — `AGENTS.md → Rules self-improvement`).
