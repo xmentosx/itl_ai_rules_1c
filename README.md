@@ -222,7 +222,7 @@ Workflow сам выбирает точный immutable `itl-*` tag и пере�
 
 ## OpenSpec
 
-Установщик всегда разворачивает общий OpenSpec-воркспейс. Upstream snapshot `1.2.0` содержит native commands/skills только для Cursor, Claude Code, Codex, OpenCode и Kilo Code. Kimi, Qwen, Command Code, Cline и Pi работают с тем же `openspec/specs/` и `openspec/changes/` обычными запросами агенту; отсутствие native bundle для них штатно. ITL preflight, `test-plan.md` и fresh `/itl-check` обязательны в обоих режимах. Установщик не ставит `@fission-ai/openspec` и не запускает `openspec update`.
+Установщик всегда разворачивает общий OpenSpec-воркспейс. Upstream snapshot `1.2.0` содержит native commands/skills только для Cursor, Claude Code, Codex, OpenCode и Kilo Code. В Codex канонические implicit skills `openspec-*` дополнены явными совместимыми вызовами `$opsx-explore`, `$opsx-propose`, `$opsx-apply` и `$opsx-archive`; aliases не участвуют в implicit routing. Kimi, Qwen, Command Code, Cline и Pi работают с тем же `openspec/specs/` и `openspec/changes/` обычными запросами агенту; отсутствие native bundle для них штатно. ITL preflight, `test-plan.md` и fresh `/itl-check` обязательны в обоих режимах. Установщик не ставит `@fission-ai/openspec` и не запускает `openspec update`.
 
 ## Ссылки
 

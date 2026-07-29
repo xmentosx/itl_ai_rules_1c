@@ -1,15 +1,15 @@
-# Downstream patch ledger — `72665287` / r16
+# Downstream patch ledger — `72665287` / r17
 
-The r16 baseline is rebuilt directly from upstream commit
+The r17 baseline is rebuilt directly from upstream commit
 `72665287e77361aea3aaf866fef163d98f0fabcd`. It rebases the controlled fork
 directly on the audited upstream client-adapter intake while preserving the
 single-client ITL contract. The previous qualified baseline was
-`itl-main-72665287-r15`; downstream revisions remain globally monotonic.
+`itl-main-72665287-r16`; downstream revisions remain globally monotonic.
 No earlier downstream branch was merged or rebased onto the upstream intake.
 Each requirement remains classified as `keep`, `drop`, or `rewrite` against
 this snapshot.
 
-| ID | Decision | r16 treatment | Verification |
+| ID | Decision | r17 treatment | Verification |
 |---|---|---|---|
 | ITL-INFRA-001 | `keep` | Preserve fork policy, local Full gate, exact qualification record, and immutable publication tooling. | `ReleaseTooling.Tests.ps1`, Full gate |
 | ITL-INFRA-002 | `keep` | Require an immutable upstream ref/SHA and atomic release branch/tag publication. | publish `-WhatIf`, ancestry checks |
@@ -20,6 +20,7 @@ this snapshot.
 | ITL-ADAPTER-002 | `rewrite` | Kimi, Qwen, Command Code, Cline, and Pi use current project-local surfaces; Cline project MCP and pinned Pi MCP extension override stale upstream assumptions. | adapter layout, merge, and runtime tests |
 | ITL-LAYOUT-OLD-001 | `drop` | Do not replay the old shared Codex+Kilo layout or old `.kilocode` layout patches. Use each current native adapter. | real-path inventory tests |
 | ITL-CODEX-001 | `rewrite` | Codex commands and OpenSpec skills are project-local `.agents/skills`; never write `~/.codex/prompts`. | Codex inventory and user-scope guard |
+| ITL-CODEX-OPSX-001 | `rewrite` | Keep the upstream `openspec-*` skills canonical and implicitly invokable; add four compact `$opsx-*` compatibility aliases with explicit-only invocation and deterministic overlay reconstruction. | Codex alias install, policy, delegation, and overlay idempotence tests |
 | ITL-KILO-001 | `rewrite` | Use `.kilo` native paths, inject `USER-RULES.md` through `.kilo/kilo.json`, and block adjacent `.kilo/kilo.jsonc`. | Kilo config tests |
 | ITL-ADAPTER-001 | `rewrite` | Support exactly one of the ten registered clients; preserve each native layout and OpenCode singular `agent/command`. | ten-client adapter matrix |
 | ITL-CONTEXT-001 | `keep` | Preserve the compact router and on-demand detail. | context/link tests |

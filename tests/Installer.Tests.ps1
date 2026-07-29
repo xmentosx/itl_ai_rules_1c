@@ -72,7 +72,7 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
         $text | Should -Match '`keep`'
         $text | Should -Match '`drop`'
         $text | Should -Match '`rewrite`'
-        foreach ($id in @("ITL-MCP-002", "ITL-OPENSPEC-001", "ITL-METADATA-001")) {
+        foreach ($id in @("ITL-MCP-002", "ITL-OPENSPEC-001", "ITL-CODEX-OPSX-001", "ITL-METADATA-001")) {
             $text | Should -Match $id
         }
     }
@@ -100,6 +100,45 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
             Should -Be "1.2.0"
         foreach ($tool in @("kimi", "qwen", "command-code", "cline", "pi")) {
             Test-Path -LiteralPath (Join-Path $bundle $tool) | Should -BeFalse
+        }
+    }
+
+    It "recreates explicit-only Codex opsx aliases without duplicating canonical skills" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $sourceRoot = Join-Path $script:ForkRoot "content\openspec-bundle\codex\.codex\skills"
+            $targetRoot = Join-Path $testRoot "codex\.codex\skills"
+            foreach ($canonical in @("openspec-explore", "openspec-propose", "openspec-apply-change", "openspec-archive-change")) {
+                New-Item -ItemType Directory -Force -Path (Join-Path $targetRoot $canonical) | Out-Null
+                Copy-Item -LiteralPath (Join-Path $sourceRoot "$canonical\SKILL.md") -Destination (Join-Path $targetRoot "$canonical\SKILL.md")
+            }
+
+            $transformer = Join-Path $script:ForkRoot "tools\apply-openspec-downstream-overlay.ps1"
+            $first = Invoke-WindowsPowerShellFile -FilePath $transformer -Arguments @("-Root", $testRoot)
+            $first.ExitCode | Should -Be 0 -Because $first.Output
+            $first.Output | Should -Match 'ITL Codex opsx aliases: updated=8 already-present=0'
+
+            $mapping = [ordered]@{
+                "opsx-explore" = "openspec-explore"
+                "opsx-propose" = "openspec-propose"
+                "opsx-apply" = "openspec-apply-change"
+                "opsx-archive" = "openspec-archive-change"
+            }
+            foreach ($alias in $mapping.Keys) {
+                $skillPath = Join-Path $targetRoot "$alias\SKILL.md"
+                $policyPath = Join-Path $targetRoot "$alias\agents\openai.yaml"
+                (Get-Content -LiteralPath $skillPath -Raw -Encoding UTF8) | Should -Match ([regex]::Escape("../$($mapping[$alias])/SKILL.md"))
+                (Get-Content -LiteralPath $policyPath -Raw -Encoding UTF8) | Should -Match 'allow_implicit_invocation:\s*false'
+            }
+
+            $before = @(Get-ChildItem -LiteralPath $testRoot -Recurse -File | Sort-Object FullName | ForEach-Object { (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash })
+            $second = Invoke-WindowsPowerShellFile -FilePath $transformer -Arguments @("-Root", $testRoot)
+            $second.ExitCode | Should -Be 0 -Because $second.Output
+            $second.Output | Should -Match 'ITL Codex opsx aliases: updated=0 already-present=8'
+            $after = @(Get-ChildItem -LiteralPath $testRoot -Recurse -File | Sort-Object FullName | ForEach-Object { (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash })
+            $after | Should -Be $before
+        } finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }
     }
 

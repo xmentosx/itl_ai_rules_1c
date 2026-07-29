@@ -75,13 +75,14 @@ After installation you should already see, depending on which tools are active:
 
 - Cursor — `.cursor/commands/opsx-{apply,archive,explore,propose}.md`
 - Claude Code — `.claude/commands/opsx/{apply,archive,explore,propose}.md`
-- Codex — only SKILLs under `.codex/skills/openspec-*/SKILL.md` (Codex has no project slash commands)
+- Codex — canonical implicit SKILLs under `.agents/skills/openspec-*/SKILL.md` plus explicit-only `$opsx-{explore,propose,apply,archive}` aliases under `.agents/skills/opsx-*/`
 - OpenCode — `.opencode/command/opsx-{apply,archive,explore,propose}.md`
 - Kilo Code — `.kilocode/workflows/opsx-{apply,archive,explore,propose}.md` (legacy path shipped by the upstream OpenSpec bundle; current Kilo Code auto-migrates `.kilocode/workflows/` to `.kilo/commands/` on startup — see `adapters/kilocode.yaml`)
 
 …plus matching `openspec-{propose,apply-change,archive-change,explore}/SKILL.md`
-folders under each bundled tool's skills directory. Restart the client for
-native surfaces to take effect.
+folders under each bundled tool's skills directory. Codex aliases are compact
+wrappers that read those canonical skills rather than duplicating their
+instructions. Restart the client for native surfaces to take effect.
 
 For a client without a native bundle, ask the agent to explore, prepare a
 proposal, apply an approved change, or archive it in ordinary language. The

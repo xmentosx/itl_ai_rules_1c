@@ -57,6 +57,73 @@ function Get-OpenSpecPhase {
     return 'common'
 }
 
+function Sync-CodexOpsxAliases {
+    $codexSkillRoot = Join-Path $resolvedRoot 'codex\.codex\skills'
+    if (-not (Test-Path -LiteralPath $codexSkillRoot -PathType Container)) {
+        return [pscustomobject]@{ Updated = 0; Unchanged = 0 }
+    }
+
+    $definitions = [ordered]@{
+        'opsx-explore' = [ordered]@{
+            canonical = 'openspec-explore'
+            description = 'Explicit alias for the canonical OpenSpec explore workflow. Invoke only as $opsx-explore.'
+        }
+        'opsx-propose' = [ordered]@{
+            canonical = 'openspec-propose'
+            description = 'Explicit alias for the canonical OpenSpec proposal workflow. Invoke only as $opsx-propose.'
+        }
+        'opsx-apply' = [ordered]@{
+            canonical = 'openspec-apply-change'
+            description = 'Explicit alias for the canonical OpenSpec apply workflow. Invoke only as $opsx-apply.'
+        }
+        'opsx-archive' = [ordered]@{
+            canonical = 'openspec-archive-change'
+            description = 'Explicit alias for the canonical OpenSpec archive workflow. Invoke only as $opsx-archive.'
+        }
+    }
+    $skillTemplate = @'
+---
+name: <alias>
+description: <description>
+---
+
+This is an explicit compatibility alias for `<canonical>`.
+
+Read `../<canonical>/SKILL.md` completely, then follow it exactly as if that canonical skill had been selected. Treat any text following `$<alias>` as input to the canonical skill. Do not duplicate, weaken, or reinterpret the canonical workflow here.
+'@
+    $policyText = @'
+policy:
+  allow_implicit_invocation: false
+'@
+    $updated = 0
+    $unchanged = 0
+    foreach ($alias in $definitions.Keys) {
+        $definition = $definitions[$alias]
+        $canonicalPath = Join-Path $codexSkillRoot "$($definition.canonical)\SKILL.md"
+        if (-not (Test-Path -LiteralPath $canonicalPath -PathType Leaf)) {
+            throw "Canonical Codex OpenSpec skill is missing for ${alias}: $canonicalPath"
+        }
+
+        $aliasRoot = Join-Path $codexSkillRoot $alias
+        $targets = [ordered]@{
+            (Join-Path $aliasRoot 'SKILL.md') = $skillTemplate.Replace('<alias>', $alias).Replace('<description>', [string]$definition.description).Replace('<canonical>', [string]$definition.canonical)
+            (Join-Path $aliasRoot 'agents\openai.yaml') = $policyText
+        }
+        foreach ($target in $targets.Keys) {
+            $expected = [string]$targets[$target]
+            $current = if (Test-Path -LiteralPath $target -PathType Leaf) { [System.IO.File]::ReadAllText($target) } else { $null }
+            if ($current -ceq $expected) {
+                $unchanged++
+                continue
+            }
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
+            [System.IO.File]::WriteAllText($target, $expected, $utf8NoBom)
+            $updated++
+        }
+    }
+    return [pscustomobject]@{ Updated = $updated; Unchanged = $unchanged }
+}
+
 foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Filter '*.md') {
     if (-not (Test-TargetOpenSpecFile -File $file)) { continue }
     $text = [System.IO.File]::ReadAllText($file.FullName)
@@ -81,4 +148,6 @@ foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File -Filte
     $updated++
 }
 
+$aliasStats = Sync-CodexOpsxAliases
 Write-Host "ITL OpenSpec preflight overlay: updated=$updated already-present=$skipped root=$resolvedRoot"
+Write-Host "ITL Codex opsx aliases: updated=$($aliasStats.Updated) already-present=$($aliasStats.Unchanged)"
