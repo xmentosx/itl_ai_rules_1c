@@ -33,7 +33,7 @@ Describe "Single-client adapter contract" -Tag "Fast" {
         $cases = @(
             @{ Tool="codex"; Paths=@(".codex/rules", ".codex/agents", ".agents/skills", ".agents/skills/openspec-propose/SKILL.md", ".agents/skills/opsx-propose/SKILL.md", ".agents/skills/opsx-propose/agents/openai.yaml"); SkillPath=".agents/skills/1c-metadata-manage/SKILL.md" },
             @{ Tool="kilocode"; Paths=@(".kilo/rules-1c", ".kilo/agents", ".kilo/commands", ".kilo/skills", ".kilo/kilo.json"); SkillPath=".kilo/skills/1c-metadata-manage/SKILL.md" },
-            @{ Tool="claude-code"; Paths=@(".claude/rules", ".claude/agents", ".claude/commands", ".claude/skills"); SkillPath=".claude/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="claude-code"; Paths=@(".claude/rules-1c", ".claude/agents", ".claude/commands", ".claude/skills"); SkillPath=".claude/skills/1c-metadata-manage/SKILL.md" },
             @{ Tool="cursor"; Paths=@(".cursor/rules", ".cursor/agents", ".cursor/commands", ".cursor/skills"); SkillPath=".cursor/skills/1c-metadata-manage/SKILL.md" },
             @{ Tool="opencode"; Paths=@(".opencode/rules", ".opencode/agent", ".opencode/command", ".claude/skills"); SkillPath=".claude/skills/1c-metadata-manage/SKILL.md" },
             @{ Tool="kimi"; Paths=@(".kimi-code/rules-1c", ".kimi-code/rules-1c/agents", ".kimi-code/skills"); SkillPath=".kimi-code/skills/1c-metadata-manage/SKILL.md" },
@@ -110,7 +110,7 @@ Describe "Single-client adapter contract" -Tag "Fast" {
         foreach ($alias in $opsxAliases.Keys) {
             $aliasRoot = Join-Path $codex ".agents/skills/$alias"
             $aliasText = Get-Content -LiteralPath (Join-Path $aliasRoot "SKILL.md") -Raw -Encoding UTF8
-            $aliasText | Should -Match "(?m)^name:\s*$([regex]::Escape($alias))$"
+            $aliasText | Should -Match "(?m)^name:\s*$([regex]::Escape($alias))\r?$"
             $aliasText | Should -Match ([regex]::Escape("../$($opsxAliases[$alias])/SKILL.md"))
             (Get-Content -LiteralPath (Join-Path $aliasRoot "agents/openai.yaml") -Raw -Encoding UTF8) | Should -Match 'allow_implicit_invocation:\s*false'
             Test-Path (Join-Path $codex ".agents/skills/$($opsxAliases[$alias])/agents/openai.yaml") | Should -BeFalse -Because "canonical OpenSpec skills keep the default implicit policy"

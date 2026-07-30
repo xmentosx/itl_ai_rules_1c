@@ -60,6 +60,63 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
         }
     }
 
+    It "migrates clean Claude legacy rules and preserves modified ones through the shared legacy ledger" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $installer = Join-Path $script:ForkRoot "install.ps1"
+            foreach ($case in @(
+                @{ Name = "clean"; Modified = $false },
+                @{ Name = "modified"; Modified = $true }
+            )) {
+                $projectRoot = Join-Path $testRoot $case.Name
+                New-Item -ItemType Directory -Force -Path $projectRoot | Out-Null
+                $init = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                    "init", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                    "-Tools", "claude-code", "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+                )
+                $init.ExitCode | Should -Be 0 -Because $init.Output
+
+                $manifestPath = Join-Path $projectRoot ".ai-rules.json"
+                $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                $newKey = @($manifest.files.PSObject.Properties.Name | Where-Object { $_ -like ".claude/rules-1c/*.md" } | Select-Object -First 1)[0]
+                $newKey | Should -Not -BeNullOrEmpty
+                $legacyKey = $newKey.Replace(".claude/rules-1c/", ".claude/rules/")
+                $entry = $manifest.files.PSObject.Properties[$newKey].Value
+                $newPath = Join-Path $projectRoot $newKey
+                $legacyPath = Join-Path $projectRoot $legacyKey
+                New-Item -ItemType Directory -Force -Path (Split-Path -Parent $legacyPath) | Out-Null
+                Move-Item -LiteralPath $newPath -Destination $legacyPath
+                $manifest.files.PSObject.Properties.Remove($newKey)
+                $manifest.files | Add-Member -NotePropertyName $legacyKey -NotePropertyValue $entry
+                [IO.File]::WriteAllText($manifestPath, (($manifest | ConvertTo-Json -Depth 20) + "`n"), (New-Object Text.UTF8Encoding $false))
+                if ($case.Modified) {
+                    Add-Content -LiteralPath $legacyPath -Encoding UTF8 -Value "`nuser change"
+                }
+
+                $update = Invoke-WindowsPowerShellFile -FilePath $installer -Arguments @(
+                    "update", "-ProjectRoot", $projectRoot, "-Source", $script:ForkRoot,
+                    "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+                )
+                $update.ExitCode | Should -Be 0 -Because $update.Output
+                Test-Path -LiteralPath (Join-Path $projectRoot $newKey) -PathType Leaf | Should -BeTrue
+                $updatedManifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($case.Modified) {
+                    Test-Path -LiteralPath $legacyPath -PathType Leaf | Should -BeTrue
+                    @($updatedManifest.legacyArtifacts.preservedProject | Where-Object path -eq $legacyKey).Count | Should -Be 1
+                    $updatedManifest.files.PSObject.Properties.Name | Should -Contain $legacyKey
+                    $updatedManifest.files.PSObject.Properties[$legacyKey].Value.userModified | Should -BeTrue
+                }
+                else {
+                    Test-Path -LiteralPath $legacyPath | Should -BeFalse
+                    $updatedManifest.files.PSObject.Properties.Name | Should -Not -Contain $legacyKey
+                }
+            }
+        }
+        finally {
+            Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
     It "keeps local gate artifacts out of git status" {
         $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot ".gitignore") -Raw -Encoding UTF8
         $text | Should -Match '(?m)^build/\r?$'

@@ -3,6 +3,20 @@ BeforeAll {
 }
 
 Describe "r8 policy overlays" -Tag "Fast" {
+    It "keeps upstream cross-reference anchors in the compact root contract" {
+        $agents = Get-Content -LiteralPath (Join-Path $script:ForkRoot "AGENTS.md") -Raw -Encoding UTF8
+        foreach ($anchor in @(
+            "## Skills and Subagents",
+            "### A.7 Platform capability discovery",
+            "### A.8 Query formulation for templatesearch",
+            "### A.9 Reuse a matching template"
+        )) {
+            $agents | Should -Match ([regex]::Escape($anchor))
+        }
+        (Get-Content -LiteralPath (Join-Path $script:ForkRoot "content/commands/update1cbase.md") -Raw -Encoding UTF8) |
+            Should -Match ([regex]::Escape("## Update retry loop"))
+    }
+
     It "pins upstream mode defaults without adding CAVEMAN categories" {
         $envText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot ".dev.env.example")
         foreach ($line in @(
