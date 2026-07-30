@@ -19,8 +19,10 @@ Creates or removes a template (layout) of specified type and registers/unregiste
 ### Command (EPF)
 
 ```powershell
-powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/add-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" -TemplateType "<TemplateType>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"]
+pwsh -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/add-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" -TemplateType "<TemplateType>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"]
 ```
+
+`add-template.ps1` is the exclusive template-creation route. Repeating it for a complete existing template is a no-op; partial or duplicate registrations fail before writes. Do not use `meta-edit add-template`.
 
 ### Type Mapping
 
@@ -63,7 +65,7 @@ If user provides a name without prefix but context is a print form, **add the `P
 ## Removing a Template
 
 ```
-1c-template-manage remove <ObjectName> <TemplateName> [-DryRun | -Force]
+1c-template-manage remove <ObjectName> <TemplateName>
 ```
 
 | Parameter | Required | Default | Description |
@@ -71,17 +73,12 @@ If user provides a name without prefix but context is a print form, **add the `P
 | ObjectName | yes | — | Object name |
 | TemplateName | yes | — | Template name to remove |
 | SrcDir | no | `src` | Source directory |
-| DryRun | no | off | Print the parent XML and files that would change; do not mutate anything |
-| Force | required to delete | off | Confirm the reviewed removal plan and perform it |
 
-### Commands (preview first, then execute)
+### Command (EPF)
 
 ```powershell
-powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/remove-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" [-SrcDir "<SrcDir>"] -DryRun
-powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/remove-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" [-SrcDir "<SrcDir>"] -Force
+pwsh -NoProfile -File skills/1c-metadata-manage/tools/1c-template-manage/scripts/remove-template.ps1 -ProcessorName "<ObjectName>" -TemplateName "<TemplateName>" [-SrcDir "<SrcDir>"]
 ```
-
-The script refuses a real deletion without `-Force`. It parses and serializes the parent XML before mutating the source tree, then removes the registration before deleting template files. Run the relevant metadata / MXL / DCS validator after execution.
 
 ### What Gets Removed
 
