@@ -10,6 +10,13 @@ Manages the `.v8-project.json` file — the project's infobase registry. Stores 
 
 > **Relationship with `.dev.env`.** Across the rest of the 1c-rules toolkit (slash commands `/loadfrom1cbase`, `/update1cbase`, `/getconfigfiles`, `/deploy-and-test`, the `1c-tester` subagent and all on-demand rules), the **single source of truth** for project parameters — including the current dev infobase — is `.dev.env` at the project root (created by the 1c-rules installer). `.v8-project.json` is an **optional advanced multi-base registry** for the `1c-metadata-manage` skill scripts when you need to juggle several infobases bound to Git branches/aliases. When both files are present, keep them in sync: the `default` entry in `.v8-project.json` should mirror `INFOBASE_PATH`, `IB_USER`, `IB_PASSWORD`, `EXTENSION_NAME`, `PLATFORM_PATH` (`v8path`) from `.dev.env`. For single-base projects `.v8-project.json` is not required at all — the skill scripts accept the same parameters via command-line flags driven by `.dev.env` values.
 
+> **Managed ITL projects.** When `.agent-1c/project.json` is present, the host
+> workflow owns every project-infobase create/run/load/dump/update and web
+> publication operation. Use the matching `/itl*` bridge or lifecycle helper;
+> direct `1c-db-ops` and mutating `1c-web-ops` scripts fail before side effects
+> with `ITL_LIFECYCLE_HELPER_REQUIRED`. The commands below retain their normal
+> upstream behavior only outside managed ITL projects.
+
 ### Usage
 
 ```
@@ -365,7 +372,7 @@ After loading: offer to run `db-update`.
 
 ### Update retry discipline — mandatory for load / update operations
 
-`db-load-cf` / `db-load-xml` / `db-load-git` / `db-update` failures are handled **iteratively**, mirroring `content/commands/update1cbase.md → Update retry loop`:
+Outside managed ITL projects, `db-load-cf` / `db-load-xml` / `db-load-git` / `db-update` failures are handled **iteratively**, mirroring `content/commands/update1cbase.md → Update retry loop`. Inside a managed ITL project the host lifecycle helper owns this loop and its state evidence:
 
 1. **Log after every attempt, success or not.** Exit code 0 does not prove success — the platform writes errors like `Неверное свойство объекта метаданных`, `Неизвестное имя типа`, `Ошибка при обновлении конфигурации базы данных` to the log while formally exiting clean (`db-load-xml` already parses for these; still read the log output the script shows). Any `Ошибка` / `Error` line = failed attempt.
 2. **Terminate a hung / failed Configurator before retrying.** A dead-but-alive Designer process holds the configuration lock, and every next attempt fails with `База данных заблокирована`. Kill only the process this run started (by PID with a timeout); never blanket-kill all `1cv8` processes — the user's own Designer / client sessions may be among them. A lock that survives your process's death is foreign — report it, do not kill further.
