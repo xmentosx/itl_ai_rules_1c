@@ -88,6 +88,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'db-dump-cf.ps1'
+
 function Protect-Secrets {
     # Redact literal secret values from a display string (String.Replace is literal, not regex).
     param([string]$Text, [string[]]$Secrets)
