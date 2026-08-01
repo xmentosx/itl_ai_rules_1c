@@ -10,6 +10,16 @@ Policy and fallback order — `content/rules/ui-testing-tools.md`. Shell on Wind
 
 This command does **not** install 1C MCP servers (use `/installmcp`) and does **not** enable UI testing by itself (`UI_TESTING` / `INFOBASE_PUBLISH_URL` stay as in `.dev.env`).
 
+## ITL managed-project delegation
+
+If `.agent-1c/project.json` exists and the ITL helper is present, delegate the whole operation and stop after it finishes:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\.agents\skills\1c-workflow\scripts\agent-1c.ps1 -Action install-agent-browser
+```
+
+The helper owns the pinned version, per-user installation, client-safe MCP merge, and status output. Do not also perform the generic global steps below. Outside an ITL-managed project, keep the upstream procedure unchanged.
+
 ## Steps
 
 ### 1. Prerequisites
