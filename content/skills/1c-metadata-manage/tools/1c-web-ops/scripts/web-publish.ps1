@@ -86,6 +86,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'web-publish.ps1'
+
 # --- Resolve V8Path ---
 function Find-ProjectV8Path {
     # 1c-rules: .dev.env is this project's single source of truth — it wins over
