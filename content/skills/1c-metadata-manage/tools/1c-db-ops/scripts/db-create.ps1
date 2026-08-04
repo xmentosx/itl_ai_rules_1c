@@ -79,6 +79,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'db-create.ps1'
+
 # --- Additional platform arguments ---
 $script:V8OwnedKeys = @(
     'DESIGNER', 'ENTERPRISE', 'CREATEINFOBASE', 'CONFIG',
