@@ -315,10 +315,7 @@ $objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.Path, $null).TrimE
 $formsDir = Join-Path $objectDir "Forms"
 $formMetaPath = Join-Path $formsDir "$FormName.xml"
 
-if (Test-Path $formMetaPath) {
-	Write-Error "Форма уже существует: $formMetaPath"
-	exit 1
-}
+$formMetaExists = Test-Path $formMetaPath
 
 $formDir = Join-Path $formsDir $FormName
 $formExtDir = Join-Path $formDir "Ext"
@@ -362,7 +359,28 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+if ($formMetaExists) {
+	$formMetaDoc = New-Object System.Xml.XmlDocument
+	$formMetaDoc.PreserveWhitespace = $true
+	$formMetaDoc.Load($formMetaPath)
+	$formMetaNs = New-Object System.Xml.XmlNamespaceManager($formMetaDoc.NameTable)
+	$formMetaNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+	$formMetaNs.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+	$existingName = $formMetaDoc.SelectSingleNode("//md:Form/md:Properties/md:Name", $formMetaNs)
+	$existingSynonym = $formMetaDoc.SelectSingleNode("//md:Form/md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", $formMetaNs)
+	if (-not $existingName -or $existingName.InnerText -cne $FormName -or -not $existingSynonym) {
+		Write-Error "Существующие метаданные формы несовместимы с запросом: $formMetaPath"
+		exit 1
+	}
+	$existingSynonym.InnerText = $Synonym
+	$formMetaSettings = New-Object System.Xml.XmlWriterSettings
+	$formMetaSettings.Encoding = $encBom
+	$formMetaSettings.Indent = $false
+	$formMetaWriter = [System.Xml.XmlWriter]::Create($formMetaPath, $formMetaSettings)
+	try { $formMetaDoc.Save($formMetaWriter) } finally { $formMetaWriter.Close() }
+} else {
+	[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+}
 
 # --- 3b. Form.xml ---
 
@@ -630,7 +648,11 @@ $objFileName = [System.IO.Path]::GetFileName($ObjectPath)
 $objDirName = Split-Path $ObjectPath -Parent
 $objBaseName = [System.IO.Path]::GetFileNameWithoutExtension($ObjectPath)
 
-Write-Host "Created:"
+if ($formMetaExists) {
+	Write-Host "Updated:"
+} else {
+	Write-Host "Created:"
+}
 Write-Host "  Metadata: $objDirName\$objBaseName\Forms\$FormName.xml"
 Write-Host "  Form:     $objDirName\$objBaseName\Forms\$FormName\Ext\Form.xml"
 Write-Host "  Module:   $objDirName\$objBaseName\Forms\$FormName\Ext\Form\Module.bsl"

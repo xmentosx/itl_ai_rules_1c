@@ -11,7 +11,7 @@ Use this skill when the task involves **1C metadata structure** (creating, editi
 
 Any **mutation** of metadata XML — `Configuration.xml`, object XML, `Form.xml`, MXL / SKD layouts, `Role.xml`, subsystems, command interfaces — is executed **through this skill** (dispatch below → domain doc → PowerShell tools) or through the `1c-metadata-manager` subagent. The tools under `tools/` handle BOM, encodings, UUID regeneration, `ChildObjects` ordering and cross-references that are easy to break manually. Hand-editing these files while the skill is available is a **defect** (`AGENTS.md → Skills and Subagents`), not a slower-but-acceptable alternative.
 
-The same gate covers **infobase operations** (create / run, load / dump configuration, `/UpdateDBCfg`, web publication): use the `db-ops` / `web-ops` tools of this skill ([db-manage.md](docs/db-manage.md), [web-manage.md](docs/web-manage.md)) or the matching slash command (`/update1cbase`, `/loadfrom1cbase`, `/getconfigfiles`, `/deploy-and-test`) — never an ad-hoc `1cv8.exe` / `ibcmd` command line composed from memory. DB updates follow the iterative retry discipline (`db-manage.md → Update retry discipline`).
+The same gate covers **infobase operations** (create / run, load / dump configuration, `/UpdateDBCfg`, web publication): outside a managed ITL project, use the `db-ops` / `web-ops` tools of this skill ([db-manage.md](docs/db-manage.md), [web-manage.md](docs/web-manage.md)) or the matching slash command. In a managed ITL project (identified by `.agent-1c/project.json`), never invoke those lifecycle scripts directly: use the matching `/itl*` bridge or host lifecycle helper, which owns the proven branch infobase, rollback state, publication, and fresh verification. Guarded scripts fail with `ITL_LIFECYCLE_HELPER_REQUIRED`.
 
 The only exceptions:
 
@@ -27,11 +27,13 @@ The default answer when a typical object needs a change is an **extension** (`cf
 
 In every case the post-edit validation (`verify_xml` / skill validation scripts) still applies. When reporting a task that mutated metadata / forms / layouts, name the path used in one line (`Metadata tooling: <tool / subagent>` or `hand-edit — <exception>`) per `AGENTS.md → Skills and Subagents`.
 
+> **Mandatory managed-form routing.** Adding, removing, moving, nesting, or changing the type of elements in an existing `Form.xml` is never an unambiguous one-line fix. When `1c-form-edit` supports the operation, use it instead of hand-editing XML. Direct form XML edits remain limited to literal-value corrections or unsupported repairs; before editing, state which form tool was considered and why it does not apply.
+
 ## Path conventions
 
 PowerShell examples in this skill (`SKILL.md` and every `docs/*.md`) use the prefix `skills/1c-metadata-manage/tools/...`. That prefix is **relative to the active tool's skills directory**, not to the repository root:
 
-- After installation: the script lives under `<tool>/skills/1c-metadata-manage/tools/...` (e.g. `.cursor/skills/1c-metadata-manage/tools/...`, `.claude/skills/1c-metadata-manage/tools/...`, `.kilo/skills/1c-metadata-manage/tools/...`, `.ai-agent/skills/1c-metadata-manage/tools/...`). Active tools that load this skill resolve the prefix automatically.
+- After installation: the script lives under the adapter skill root (for example `.cursor/skills/1c-metadata-manage/tools/...`, `.claude/skills/1c-metadata-manage/tools/...`, `.agents/skills/1c-metadata-manage/tools/...` for Codex/Kilo, or `.ai-agent/skills/1c-metadata-manage/tools/...`). Active tools that load this skill resolve the prefix automatically.
 - In the `1c-rules` source repository (when editing the skill itself): the same script lives under `content/skills/1c-metadata-manage/tools/...`. Prepend `content/` when running the example outside of an installed project.
 
 The same convention applies to `docs/*.md` references like `skills/1c-metadata-manage/tools/1c-skd-info/modes-reference.md`.
@@ -62,7 +64,7 @@ The subagent already knows how to read the skill docs, execute PowerShell script
 | Metadata objects — create, edit, analyze, remove, validate | catalog, document, register, enum, constant, module, attribute, tabular section | [meta-manage.md](docs/meta-manage.md) |
 | UUID integrity — duplicate identities in an XML dump | UUID, duplicate uuid, TypeId, ValueId, identity collision, load failure after generation | [uuid-check.md](docs/uuid-check.md) |
 | Managed forms — design, create, edit, analyze, validate | form, Form.xml, UI, elements, commands, events | [form-manage.md](docs/form-manage.md) |
-| Managed-form layout patterns — archetypes, naming conventions, advanced patterns | form patterns, archetype, layout, naming, ERP form, list form, document form, wizard | [form-patterns.md](docs/form-patterns.md) → canonical `content/rules/form-patterns.md` |
+| Managed-form layout patterns — archetypes, naming conventions, advanced patterns | form patterns, archetype, layout, naming, ERP form, list form, document form, wizard | [form-patterns.md](docs/form-patterns.md) |
 | Form-compile DSL reference — full JSON DSL spec for `1c-form-compile`, `--from-object` mode, presets | form DSL, form-compile, autoCmdBar, columnGroup, RadioButtonField, --from-object, form preset | [form-compile-dsl.md](docs/form-compile-dsl.md) |
 | Data Composition Schema (DCS/SKD) — create, edit, analyze, decompile, validate | report, DCS, SKD, data composition, data set, query, decompile | [skd-manage.md](docs/skd-manage.md) |
 | Spreadsheet documents (MXL) — create, decompile, analyze, validate | MXL, spreadsheet, template, print form, layout | [mxl-manage.md](docs/mxl-manage.md) |
@@ -82,6 +84,8 @@ The subagent already knows how to read the skill docs, execute PowerShell script
 | Query writing — compose new queries from scratch | write query, build query, query template, ВЫБРАТЬ, ИЗ, СОЕДИНЕНИЕ, virtual tables, batch queries | [query-writing.md](docs/query-writing.md) |
 | Query optimization | query, temporary table, join, DCS optimization | [query-optimization.md](docs/query-optimization.md) |
 | Web publishing — publish, unpublish, status, smoke test | web, publish, Apache, IIS, web client, webdav, default.vrd | [web-manage.md](docs/web-manage.md) |
-| Unpack / rebuild CF, CFE, EPF binaries without 1C platform | v8unpack, binary unpack, headless extract, no platform | [v8unpack-cf.md](docs/v8unpack-cf.md) → standalone skill `v8unpack-cf` |
+| Unpack / rebuild CF, CFE, EPF binaries without 1C platform | v8unpack, binary unpack, headless extract, no platform | [v8unpack-cf.md](docs/v8unpack-cf.md) |
 
 **If the task spans multiple domains**, the subagent will read all relevant docs automatically (or read each one directly for simple tasks).
+
+Form and template creation have exclusive routes: use `1c-form-scaffold/scripts/form-add.ps1` for forms and `1c-template-manage/scripts/add-template.ps1` for templates. Never use `meta-edit add-form` or `meta-edit add-template`; `meta-edit` owns only inline child/property edits that do not create the corresponding file tree.

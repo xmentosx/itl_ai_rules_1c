@@ -136,6 +136,7 @@ Consumed by the triage and debugging rules at task time. Both are **Defaulted** 
 | `{DEBUG_FAST_PATH}` | Debugging fast-path mode (`systematic-debugging.md → Fast path`): `standard` \| `extended` \| `off`. Controls when a directly evidenced bug may skip the full 4-phase loop. | Defaulted | Empty / invalid = `standard` |
 | `{VERIFICATION_DEPTH}` | Static code-verification depth (`verification-policy.md → "Verification depth levels"`): `full` \| `standard` \| `lite`. Tunes the depth of Gates 1–3 for low-risk edits. Toggled by `/litemode`. | Defaulted | Empty / invalid = `standard` |
 | `{CAVEMAN}` | caveman communication-style auto-activation (`content/skills/caveman/SKILL.md`): `on` \| `auto` \| `off`. Controls whether the terse style turns on automatically and for which tasks. Does not affect the mandatory report structure or verification. | Defaulted | Empty / invalid = `on` |
+| `{CAVEMAN_LEVEL}` | Persistent caveman compression level: `lite` \| `full` \| `ultra`. A session `/caveman lite|full|ultra` switch has priority. | Defaulted | Empty / invalid = `full` |
 | `{AGENT_MODEL}` | Active-model behaviour profile of the parent agent (`model-adaptation.md`): `opus5` \| `sonnet5` \| `fable5` \| `gpt56`. Tunes verbosity, narration, planning depth, delegation eagerness and self-invented extra passes; never weakens a hard gate. Toggled by `/rulesmodel`. Full description — `#### AGENT_MODEL` above. | Defaulted | Empty / unrecognised = no profile; the base model-neutral ruleset applies |
 
 #### `VERIFICATION_DEPTH` — static code-verification depth
@@ -160,7 +161,9 @@ Controls **whether** the terse `caveman` communication style (`content/skills/ca
 | `auto` | The skill auto-classifies by task type: on for development (writing / editing / refactoring code, debugging, deploy, shell), off for analysis / review / documentation. |
 | `off` | Automatic activation is disabled — `caveman` never turns on by itself on any task. It can still be enabled by an explicit in-session force ("caveman please"), which holds until session end. |
 
-**Precedence:** an explicit session force always wins over `CAVEMAN`; otherwise the `CAVEMAN` value applies (`on` → all tasks, `auto` → by task type, `off` → no auto-on). The persistent value is edited by the `/caveman on|auto|off` command (`content/commands/caveman.md`); session-only force uses the phrases "caveman please" / "stop caveman" or a `/caveman lite|full|ultra` level switch.
+`CAVEMAN_LEVEL=lite|full|ultra` selects the persistent compression level; empty or invalid resolves to `full`. It does not activate a mode by itself.
+
+**Precedence:** explicit session force and level switch → persistent `CAVEMAN` and `CAVEMAN_LEVEL` → defaults `on/full`. Persistent values are edited by `/caveman on|auto|off` and `/caveman persist <level>`; session-only force uses the natural phrases or `/caveman lite|full|ultra`.
 
 Task number `{TASK}` is **only required when modification comment markers are produced** — i.e. when the change touches **typical (standard) configuration code** and the templates `{COMMENT_OPEN}` / `{COMMENT_CLOSE}` reference `{TASK}`. For new objects with `{PREFIX}` (no per-method markers), review / analysis / documentation tasks, and any task where `COMPANY` / `DEVELOPER` are empty (markers skipped) — `{TASK}` is **not required**. Do not block on it.
 
