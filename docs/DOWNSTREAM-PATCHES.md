@@ -30,7 +30,7 @@ path requires an explicit reviewed `resolved` decision.
 | ITL-KILO-001 | `rewrite` | Use `.kilo` native paths, inject `USER-RULES.md` through `.kilo/kilo.json`, and block adjacent `.kilo/kilo.jsonc`. | Kilo config tests |
 | ITL-ADAPTER-001 | `rewrite` | Support exactly one of the ten registered clients; preserve each native layout and OpenCode singular `agent/command`. | ten-client adapter matrix |
 | ITL-CONTEXT-001 | `keep` | Preserve the compact router and on-demand detail. | context/link tests |
-| ITL-MCP-002 | `keep` | Preserve delegated MCP ownership and required/optional server handling. | delegated MCP tests |
+| ITL-MCP-002 | `keep` | Preserve delegated MCP ownership and required/optional server handling; route branch-delta source to the worktree first while keeping untouched baseline search bounded MCP-first. | delegated MCP and search-routing tests |
 | ITL-OPENSPEC-001 | `rewrite` | Preserve upstream snapshot `1.2.0`; apply the project-skill/source/test-plan/fresh-check preflight and runtime Caveman response-style contract to all four native phases, including archive, without shortening artifacts, safety, checks, or reports. | native overlay, auto-phase matrix, and natural-contract tests |
 | ITL-QUICKFIX-001 | `rewrite` | Keep `QUICKFIX_MAX_LINES=40`; apply upstream quick-fix/full-cycle classification exactly; keep full-cycle direct by default and select OpenSpec only for explicit or value-adding formal agreement; keep final evidence governed by effective ITL modes. | `R8Policy.Tests.ps1` and workflow overlay/docs tests |
 | ITL-COMMANDS-001 | `rewrite` | Publish the explicit allowlist, suppress four generic MCP/update commands, and route the four legacy 1C commands through ITL state reconciliation. | command-surface tests |
