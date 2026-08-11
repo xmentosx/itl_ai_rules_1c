@@ -65,9 +65,9 @@ Canon — `AGENTS.md → Development Procedure → 1. Think Before Coding` (trig
 
 ### MCP-first search
 
-Canon — `content/rules/mcp-first-search.md` (chain: graph → code-metadata → `grep=true` retry → native tools; bounded priority, not a ban).
+Canon — `content/rules/mcp-first-search.md` (branch delta → worktree; untouched baseline → best-fitting MCP + at most one retry for the same intent → native fallback).
 
-**Subagent-specific:** the chain binds subagents exactly as it binds the parent; when you fall back to a native discovery tool, state in the report which MCP attempts were tried and why they missed.
+**Subagent-specific:** the parent passes the relevant known branch-delta files/objects in the brief; never paste the complete delta when only a subset matters. If the task requires project-source search and no usable delta context was supplied, the subagent builds or reuses it once. The subagent must not query a remote index to establish a branch-local target's existence/current contents; for untouched baseline fallback, report which bounded MCP attempt missed.
 
 ### Metadata mutations via the skill (mutating agents)
 
@@ -124,6 +124,7 @@ When delegating, the launch prompt must make the task **bounded and self-contain
 
 - **bounded responsibility** — one verifiable goal, not "help with the task";
 - **allowed and forbidden sources** — which MCP servers / files to use; the MCP-first search discipline (`mcp-first-search.md`) applies to subagents too;
+- **branch authority** — relevant changed files/objects from the parent's cached local-baseline delta, or an explicit statement that none are known;
 - **read/write scope** — explicitly read-only, or an explicit list of files the subagent may edit;
 - **expected output format** — what the report must contain;
 - a reminder that the subagent **is not alone in the codebase**: it must not revert or overwrite changes outside its scope and must not delete files without an explicit instruction.
@@ -134,7 +135,8 @@ Reusable templates (fill in `<...>`; they slot into the matching subagent from t
 
 ```text
 Read-only impact analysis. Find all references to <object / procedure / attribute>.
-Follow the project MCP fallback chain (graph metadata → code metadata → grep=true retry → Grep).
+Use the worktree first for supplied branch-delta targets; for untouched baseline follow the bounded
+best-fitting MCP → one changed retry for the same intent → native fallback route.
 Thoroughness: <quick | medium>. Do not edit files.
 Return: locations with file/line references and qualified 1C names, usage categories
 (call / query / RLS / form / subscription), risky dependencies, and gaps you could not verify.

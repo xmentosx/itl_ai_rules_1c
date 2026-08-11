@@ -27,7 +27,7 @@ If `docs/<server>.md` conflicts with the descriptor exposed by the current envir
 
 - Before writing code / a query / metadata XML — pick the MCP tool that best fits the task (template search, metadata check, syntax validation, code review).
 - Before implementing a specialized capability (cryptography, СЛАУ / numerical methods, data analysis, collaboration system / bots, integration bus / queues, full-text search, regular expressions, …) — run the platform-capability check: `docsearch` → `docinfo` on `1C-docs-mcp` (+ `ssl_search` where a БСП solution is plausible). Do not trust model memory about what the platform does or does not have. Canon — `AGENTS.md → MCP Tool Calling → A.7`; procedure and trigger domains — [`docs/1C-docs-mcp.md`](docs/1C-docs-mcp.md) → *Platform capability discovery*.
-- For impact analysis and code navigation — decide which server to use first (`graph` → `code-metadata` → `Grep` — see *Fallback chain* below).
+- For impact analysis and code navigation — route branch-delta targets to the worktree and unchanged baseline targets to the best-fitting project-index server before native fallback (see *Fallback chain* below).
 - For ITS standards (`its_help` → `fetch_its`) and platform documentation (`docinfo` / `docsearch`).
 - For code templates and project memory (`templatesearch`, `remember`, `recall`). Before **`templatesearch`**: load `docs/1c-templates-mcp.md → Query formulation (templatesearch only)` — that rule applies **only** to `templatesearch`, not to other MCP searches.
 
@@ -50,16 +50,15 @@ If `docs/<server>.md` conflicts with the descriptor exposed by the current envir
 
 Use only the applicable branch; stop as soon as the collected evidence is sufficient. Before each call, check that it closes a concrete context gap and is not a duplicate of an earlier call.
 
-### Project-source search before `Grep` / `Glob` / `rg`
+### Delta-aware project-source search
 
-Native discovery tools (`Grep` / `rg`, `Glob` / file search by pattern, directory listing, sequential `Read`-scanning) substitute only the project-indexing layer — locating files by mask (`**/*.bsl`, `**/*.xml`) or bulk-reading modules "to get oriented" is the same fallback as `Grep`, not a separate free action. Before falling back to any of them for 1C project-source search, exhaust:
+Before the first project-source search in a development branch, build or reuse one path-only delta against the local baseline branch (`master` in ITL-managed projects), including committed, staged, unstaged, and untracked source paths. Git path lists use `core.quotepath=false` plus NUL delimiters. Do not fetch, fingerprint, persist new state, or repeat the delta while branch state is unchanged.
 
-1. `1c-graph-metadata-mcp` — `search_code`, `search_metadata`, `search_metadata_by_description`, `get_object_dossier`, `trace_impact`, `trace_call_chain` as appropriate.
-2. `1c-code-metadata-mcp` — default indexed search / navigation (`codesearch`, `metadatasearch`, `search_function`, `search_forms`, `get_module_structure`, etc.).
-3. `1c-code-metadata-mcp` with `grep=true` — substring retry inside the MCP index **only after** indexed / semantic / exact search did not find enough and only for tools that expose the parameter: `codesearch`, `metadatasearch`, `search_function`, `helpsearch`, `search_forms`. Typical scenarios: exact identifier, fragment of a query, metadata path, event handler name, error text, or literal string where semantic search is likely to miss.
-4. Only then a native discovery tool (`Grep` / `rg` / `Glob` / `Read`-scanning) — with a mandatory short note in the response listing which project-index MCP attempts were tried and why they did not return what was needed.
+1. For a target in that delta, search and read the worktree first; do not call a remote project index to establish the target's existence, absence, path, or current contents.
+2. For untouched baseline source, call the single best-fitting exposed project-index tool: graph for structural/impact questions, code-metadata for code, form, and exact-name navigation.
+3. For the same search intent, allow at most one substantively changed retry (`grep=true` is one option where exposed), then fall back to targeted native discovery. A distinct MCP call is allowed only for a distinct evidence gap.
 
-The chain is a **bounded priority, not a prohibition**: when the project-index servers are not exposed, the chain collapses and native tools apply immediately (one-line note). When a tuned call plus the documented retry missed — fall back without spending further MCP calls on this rule. After fresh local edits the index may be stale — reading the disk state directly is legitimate. For understanding a single routine prefer fragment-level retrieval (`get_module_structure`, `search_code` `detail_level="L0"`, `search_function`) over a full-module `Read`; reading a direct edit target or an MCP-located file is normal work. Boundary cases — `content/rules/mcp-first-search.md`.
+If the applicable MCP tool is not exposed or its substantive call fails, use native discovery immediately; do not start discovery, health, restart, or reindex loops. For mixed questions, inspect branch-local code from disk and use MCP only for unchanged baseline structure/dependencies. Reading a direct edit target or an MCP-located file remains normal work. The mandatory details and response note are canonical in `content/rules/mcp-first-search.md`.
 
 ### External knowledge
 
