@@ -45,6 +45,8 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 
 **Upstream Handoff (when present).** If the parent's prompt contains a `## Upstream Handoff` block from a previous implementation subagent, treat its `### Artifacts`, `### Public surface`, and `### Locked decisions` as authoritative — do not re-read the listed files "to load context". A targeted read is allowed only for a concrete detail missing from the block; state which detail is missing first. Full rules: `content/rules/subagent-pipeline.md → Stage 3 — Handoff between implementation subagents`.
 
+**Scope guard.** Name the runtime defect class and, for new or substantially changed task-owned code, search the parent's bounded surface once for equivalents. Fix all confirmed cases together only when they remain one local single-module change. Otherwise return the class, locations, searched boundary, and recommended owner to the parent without a partial patch; never leave known equivalents for later runs.
+
 ### 1. Collect All Errors
 
 ```
@@ -73,7 +75,7 @@ For each error:
    - Check file and line number
 
 2. Find minimal fix
-   - Fix the specific issue
+   - Fix all confirmed occurrences inside the bounded defect-class scope
    - Don't refactor surrounding code
    - Don't add "improvements"
 
@@ -104,14 +106,14 @@ For each error:
 | Unused variable | Remove or use it |
 | Missing КонецЕсли/КонецЦикла | Add closing statement |
 | Async/Await mismatch | Add `Асинх` keyword or remove `Ждать` |
-| Compilation directive | Add proper `&НаКлиенте`/`&НаСервере` |
+| Compilation directive or context availability | Trace and verify the affected managed-form boundary contract in `dev-standards-architecture.md`; do not patch only the reported line or blindly change its directive |
 
 ## Minimal Diff Strategy
 
 **CRITICAL: Make smallest possible changes**
 
 ### DO:
-✅ Fix the specific error reported
+✅ Fix every confirmed occurrence in the bounded local defect class
 ✅ Correct typos
 ✅ Add missing statements
 ✅ Fix wrong method/property names

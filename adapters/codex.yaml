@@ -13,8 +13,8 @@
 #     AGENTS.md by file path. Codex itself does not auto-discover them — the
 #     directory is just a stable, predictable location that the agent reads
 #     when AGENTS.md tells it to. Rules are loaded on demand (alwaysApply: false).
-#   - Slash-commands map to ~/.codex/prompts/ (user-level scope). The installer
-#     should warn the user about the global scope when writing there.
+#   - Codex has no project-local custom slash prompts. Published command
+#     surfaces are installed as project-local Agent Skills in `.agents/skills/`.
 #   - MCP config uses TOML [mcp_servers.<id>] sections, requiring a manual
 #     TOML renderer (~50 lines in PowerShell).
 #   - Template placeholders:
@@ -48,15 +48,17 @@ agents:
     """
 
 commands:
-  copyTo: "~/.codex/prompts/{name}.md"
+  copyTo: ".agents/skills/{name}/SKILL.md"
+  include: [caveman, deploy-and-test, doctor, economymode, evolve, getconfigfiles, litemode, loadfrom1cbase, update1cbase]
+  skipWhenNativeSkillExists: true
   # Note: path starts with "~/" → installer treats this as user-level scope
   # and warns the user that commands are shared across projects.
   frontmatter:
-    keep: [description]
+    keep: [name, description]
     drop: [argumentHint, allowedTools]
 
 skills:
-  copyTo: ".codex/skills/{name}/"
+  copyTo: ".agents/skills/{name}/"
   mode: verbatim
 
 mcp:

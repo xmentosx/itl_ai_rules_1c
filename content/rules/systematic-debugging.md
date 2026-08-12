@@ -27,6 +27,12 @@ The full 4-phase loop earns its cost on non-obvious bugs. Forcing it onto a bug 
 - no promotion trigger from `verification-policy.md → Triage details` is touched (transactional paths, public contracts, wired metadata, RLS / subscriptions / jobs, adopted objects);
 - the failing scenario is known concretely enough to re-check after the fix (from the error message, the user's report, or the log entry).
 
+### Defect-class scope check
+
+Before a local runtime fix, name the defect class. In a new or substantially rewritten task-owned area, search once for the same semantic violation within that changed area and the directly involved scenario code; never audit the whole configuration.
+
+One isolated occurrence without a shared cause may stay local. A second confirmed occurrence, or a shared faulty pattern, ends per-symptom patching: re-run normal `quick-fix|full-cycle` triage for that scope, fix all confirmed occurrences together, and re-execute the scenario. Repetition alone selects neither OpenSpec nor a new abstraction.
+
 Fast-path procedure: state the evidence for the root cause in 1–2 lines → apply the minimal fix → re-check the original failing scenario → run the applicable validator gate (`verification-checklist.md`). No hypothesis list, no experiment protocol, no full Phase 1 passport. If the "obvious" fix does not eliminate the symptom on the first attempt — the cause was not obvious; stop patching and enter the full loop at Phase 1.
 
 **`DEBUG_FAST_PATH` (`.dev.env`, Defaulted — empty / missing / invalid = `standard`, never ask):**
@@ -130,6 +136,7 @@ If the fix requires architectural rework (signature changes in shared common mod
 
 - **"Probably this `Если` should be `Иначе`"** without a reproduction or experiment — a guess. The fast path is not a license for guesses: it requires stated direct evidence, not a hunch.
 - **Stretching the fast path** — declaring a cause "obvious" without naming the evidence, or staying on the fast path after the first fix attempt failed to eliminate the symptom.
+- **Per-symptom patching** — treating each later manifestation of one confirmed defect class as an unrelated local fix instead of correcting the bounded class once.
 - **Adding `Попытка / Исключение` to silence the error** without identifying the cause — hides the bug, does not fix it.
 - **Re-posting / re-recording / `Записать(РежимЗаписиДокумента.Запись)`** as a fix instead of investigating why the data is wrong.
 - **Restarting the user session** as a fix.
