@@ -16,14 +16,14 @@ The `VERIFICATION_DEPTH` parameter in `.dev.env` (`dev-standards-env.md → "Pro
 
 | Level | Gates 1–3 behaviour |
 |---|---|
-| `full` | Run `syntaxcheck → check_1c_code → review_1c_code`. One clean pass on the latest state is required; after a blocking fix, allow up to 3 calls total per validator (`AGENTS.md → MCP Tool Calling → B.1`). |
-| `standard` (default) | Run all three validators. Normally one clean pass each; after a blocking fix, allow exactly one mandatory confirmation (2 calls total), with no open-ended retry loop. |
-| `lite` | For a **low-risk** edit (quick-fix-eligible per Triage details below): Gate 1 (`syntaxcheck`) stays mandatory on every touched module; Gates 2–3 (`check_1c_code`, `review_1c_code`) are **skipped** unless the user explicitly asks for them. For any change that hits a **promotion trigger** (see Triage details) the full `full`-level chain runs regardless of the setting. |
+| `full` | Obtain clean syntax, logic/performance, and final style evidence on the closing coherent snapshot. Prefer one direct-mode `check_1c_code` call to satisfy syntax plus logic when its explicit syntax section is clean, then run one final `review_1c_code`. After a blocking fix, allow up to 3 calls total per validator (`AGENTS.md → MCP Tool Calling → B.1`). |
+| `standard` (default) | Obtain the same three kinds of evidence with the same combined-call preference. Normally one clean closing call per required AI validator; after a blocking fix, allow exactly one mandatory confirmation (2 calls total), with no open-ended retry loop. |
+| `lite` | For a **low-risk** edit (quick-fix-eligible per Triage details below): clean Gate 1 syntax evidence stays mandatory on every touched module; Gates 2–3 (`check_1c_code`, `review_1c_code`) are **skipped** unless the user explicitly asks for them. For any change that hits a **promotion trigger** (see Triage details) the full `full`-level evidence set runs regardless of the setting. |
 
 **Safety floor — never crossed by any level:**
 
-- Gate 1 (`syntaxcheck`) is mandatory on every touched BSL module at every level. It is never skipped.
-- Promotion-trigger changes (transactional code paths, public `Экспорт` contract changes, wired metadata, RLS conditions, event subscriptions / scheduled jobs — see Triage details) always run the full `syntaxcheck → check_1c_code → review_1c_code` chain with the retry budget, **regardless of `VERIFICATION_DEPTH`**. `lite` / `standard` lighten only the checks that were already being applied to low-risk, quick-fix-eligible edits — they do not weaken the control of dangerous paths.
+- Clean Gate 1 syntax evidence is mandatory for every touched BSL module at every level. It is never skipped. In direct mode, the explicit clean syntax section returned by `check_1c_code` is Gate 1 evidence; otherwise use `syntaxcheck` / `syntaxcheck_file`.
+- Promotion-trigger changes (transactional code paths, public `Экспорт` contract changes, wired metadata, RLS conditions, event subscriptions / scheduled jobs — see Triage details) always obtain the full syntax + logic/performance + final style evidence with the full retry budget, **regardless of `VERIFICATION_DEPTH`**. `lite` / `standard` lighten only the checks that were already being applied to low-risk, quick-fix-eligible edits — they do not weaken the control of dangerous paths.
 - Gate 4 (impact analysis) and Gate 5 (metadata XML) are gated by their own triggers and are unaffected by `VERIFICATION_DEPTH`.
 - The graceful-degradation and AI-non-determinism rules in `verification-gates.md` apply unchanged within whatever level is active.
 
@@ -56,7 +56,7 @@ When in doubt — full-cycle wins.
 
 Quick-fix reduces planning and delegation overhead, **not** verification depth — the depth of Gates 1–3 is instead an explicit, project-wide opt-in via `VERIFICATION_DEPTH` (see "Verification depth levels" above). At the default `standard`, quick-fix still runs **every** applicable gate from `verification-gates.md`; only the retry budget after a blocking defect is tighter (one mandatory confirmation instead of up to two):
 
-- BSL quick-fix — run Gates 1–3 in order (`syntaxcheck` → `check_1c_code` → `review_1c_code`).
+- BSL quick-fix — run Gates 1–3 on the closing coherent snapshot. Use the direct-mode combined Gate 1+2 call when available, then one final Gate 3 review; otherwise run the missing standalone syntax gate before Gate 2.
 - Pure metadata XML quick-fix — run Gate 5 (`verify_xml`).
 - Metadata XML that embeds or generates BSL — run Gates 1–3 for every touched module, then Gate 5.
 - Gate 4 is skipped only because the quick-fix definition excludes public-surface, transactional, wired-metadata, RLS, subscription, scheduled-job, and other impact-bearing changes. If impact analysis is relevant, the task was misclassified — promote it to full-cycle before editing.

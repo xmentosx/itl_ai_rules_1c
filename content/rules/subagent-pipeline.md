@@ -125,7 +125,7 @@ The implementation subagent is responsible for:
 
 - editing the BSL / XML;
 - running the ordered validator chain on every touched module:
-  `syntaxcheck` → `check_1c_code` → `review_1c_code`;
+  Gates 1–3 per `verification-gates.md` (combined direct syntax+logic when available; final review last);
 - recording per-artifact validator results and run counts after the final edit so Stage 5 can
   reuse them without duplicate calls;
 - preserving module headers, regions and the project's code style (`dev-standards-code-style.md`);

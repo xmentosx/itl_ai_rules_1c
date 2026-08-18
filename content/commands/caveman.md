@@ -1,6 +1,6 @@
 ---
-description: Toggle the caveman communication style — set CAVEMAN (on|auto|off) in .dev.env for the whole project; on|off|auto persist, lite|full|ultra switch the session level
-argumentHint: "[on|off|auto|status|lite|full|ultra]"
+description: Toggle the caveman communication style — persist CAVEMAN mode or CAVEMAN_LEVEL, or switch the current session
+argumentHint: "[on|off|auto|status|lite|full|ultra|persist <lite|full|ultra>]"
 ---
 
 # /caveman — communication style toggle
@@ -9,10 +9,10 @@ Control the terse `caveman` answer style. Canonical behaviour of the style and i
 
 Two scopes, do not mix them:
 
-- **Persistent (project-wide, edits `.dev.env`):** `on` / `off` / `auto` write the `CAVEMAN` key and take effect in every chat, including new ones.
+- **Persistent (project-wide, edits `.dev.env`):** `on` / `off` / `auto` write `CAVEMAN`; `persist lite|full|ultra` writes `CAVEMAN_LEVEL`. Both take effect in every chat, including new ones.
 - **Session-only (no file change):** `lite` / `full` / `ultra` switch the verbosity level for this chat; the natural-language phrases "caveman please" (force on) and "stop caveman" / "normal mode" / "обычный режим" (force off) force the state until session end. A forced session state always overrides the `.dev.env` value.
 
-Parse the argument: `on` (or empty) → set `on`; `off` → set `off`; `auto` → set `auto`; `status` → report without editing; `lite` / `full` / `ultra` → switch the session level only. The command edits **only** the `CAVEMAN` line in `.dev.env` — never other keys, never other files.
+Parse the argument: `on` (or empty) → set `on`; `off` → set `off`; `auto` → set `auto`; `status` → report without editing; `lite` / `full` / `ultra` → switch the session level only; `persist <lite|full|ultra>` → set the project level. Reject a missing or unknown `persist` level without editing. The command edits only the selected `CAVEMAN` or `CAVEMAN_LEVEL` line in `.dev.env` — never other keys, never other files.
 
 ## What the values mean (summary — canon in the skill)
 
@@ -36,11 +36,20 @@ Parse the argument: `on` (or empty) → set `on`; `off` → set `off`; `auto` �
 
 Switch the **session** verbosity level only (no `.dev.env` write): `lite` — drop filler / hedging; `full` (default) — classic caveman; `ultra` — telegraphic. Level holds until session end or another switch. Confirm the new level in one line.
 
+## persist lite / full / ultra
+
+1. Read `.dev.env`; do not create a partial file when it is absent.
+2. Set only `CAVEMAN_LEVEL=<level>`. Replace an existing key or append it with a one-line comment `# Уровень caveman: lite | full | ultra (переключается командой /caveman persist)`.
+3. Do not change `CAVEMAN`: persisting a level does not enable a project whose mode is `off`.
+4. Apply the level immediately when caveman is active in the current session and confirm the persistent value in 1–2 Russian lines.
+5. If `.dev.env` is absent, apply the level session-only and report the normal full-template recovery from the persistent-mode section.
+
 ## status
 
 Read `.dev.env` and report, without editing anything:
 
 - `CAVEMAN` (missing file / missing key / empty / invalid value = `on`) and what it means;
+- `CAVEMAN_LEVEL` (missing file / missing key / empty / invalid value = `full`);
 - the current session state if a force command or level switch was issued in this chat.
 
 ## Constraints (always)
