@@ -96,12 +96,63 @@ Describe "r8 policy overlays" -Tag "Fast" {
         $agentsText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "AGENTS.md")
         $skillText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content/skills/1c-metadata-manage/SKILL.md")
         $formRulesText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content/rules/forms-add.md")
+        $formManageText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content/skills/1c-metadata-manage/docs/form-manage.md")
+        $formDslText = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content/skills/1c-metadata-manage/docs/form-compile-dsl.md")
 
         $agentsText | Should -Match ([regex]::Escape('existing `Form.xml` must use `1c-form-edit`'))
         $skillText | Should -Match ([regex]::Escape('is never an unambiguous one-line fix'))
         $skillText | Should -Match ([regex]::Escape('state which form tool was considered and why it does not apply'))
         $formRulesText | Should -Match ([regex]::Escape('line count and apparent simplicity do not make structural XML insertion a manual one-line fix'))
         $formRulesText | Should -Match ([regex]::Escape('XSD validation is mandatory'))
+        $formRulesText | Should -Match ([regex]::Escape('set both `changeRowSet: false` and `changeRowOrder: false`'))
+        $formRulesText | Should -Match ([regex]::Escape('does not replace these properties'))
+        $formRulesText | Should -Match ([regex]::Escape('do not prohibit programmatic row changes in BSL'))
+        foreach ($text in @($formManageText, $formDslText)) {
+            $text | Should -Match ([regex]::Escape('`changeRowSet: boolean`'))
+            $text | Should -Match ([regex]::Escape('`changeRowOrder: boolean`'))
+            $text | Should -Match ([regex]::Escape('"changeRowSet": false, "changeRowOrder": false'))
+        }
+    }
+
+    It "preserves explicit table row-change booleans in 1c-form-edit" {
+        $testRoot = New-ForkTestRoot
+        try {
+            $formEdit = Join-Path $script:ForkRoot "content/skills/1c-metadata-manage/tools/1c-form-edit/scripts/form-edit.ps1"
+            $formTemplate = '<?xml version="1.0" encoding="UTF-8"?><Form xmlns="http://v8.1c.ru/8.3/xcf/logform" version="2.17"><ChildItems /></Form>'
+            $cases = @(
+                @{ Name = "FalseValues"; Definition = [ordered]@{ table = "FalseValues"; path = "FalseValues"; changeRowSet = $false; changeRowOrder = $false }; Expected = "false" },
+                @{ Name = "TrueValues"; Definition = [ordered]@{ table = "TrueValues"; path = "TrueValues"; changeRowSet = $true; changeRowOrder = $true }; Expected = "true" },
+                @{ Name = "AbsentValues"; Definition = [ordered]@{ table = "AbsentValues"; path = "AbsentValues" }; Expected = $null }
+            )
+
+            foreach ($case in $cases) {
+                $formPath = Join-Path $testRoot "$($case.Name)-Form.xml"
+                $jsonPath = Join-Path $testRoot "$($case.Name)-edit.json"
+                [System.IO.File]::WriteAllText($formPath, $formTemplate, (New-Object System.Text.UTF8Encoding($true)))
+                $definition = [ordered]@{ elements = @($case.Definition) } | ConvertTo-Json -Depth 5
+                [System.IO.File]::WriteAllText($jsonPath, $definition, (New-Object System.Text.UTF8Encoding($false)))
+
+                $result = Invoke-WindowsPowerShellFile -FilePath $formEdit -Arguments @("-FormPath", $formPath, "-JsonPath", $jsonPath)
+                $result.ExitCode | Should -Be 0 -Because $result.Output
+
+                [xml]$form = Get-Content -LiteralPath $formPath -Raw -Encoding UTF8
+                $ns = New-Object System.Xml.XmlNamespaceManager($form.NameTable)
+                $ns.AddNamespace("f", "http://v8.1c.ru/8.3/xcf/logform")
+                $table = $form.SelectSingleNode("/f:Form/f:ChildItems/f:Table[@name='$($case.Name)']", $ns)
+                $table | Should -Not -BeNullOrEmpty
+                $rowSet = $table.SelectSingleNode("f:ChangeRowSet", $ns)
+                $rowOrder = $table.SelectSingleNode("f:ChangeRowOrder", $ns)
+                if ($null -eq $case.Expected) {
+                    $rowSet | Should -BeNullOrEmpty
+                    $rowOrder | Should -BeNullOrEmpty
+                } else {
+                    $rowSet.InnerText | Should -Be $case.Expected
+                    $rowOrder.InnerText | Should -Be $case.Expected
+                }
+            }
+        } finally {
+            if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
+        }
     }
 
     It "does not promote eligible internal BSL fixes solely for correcting behavior" {

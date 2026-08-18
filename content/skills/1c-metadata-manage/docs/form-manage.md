@@ -326,13 +326,19 @@ Value of the key sets orientation: `"horizontal"`, `"vertical"`, `"alwaysHorizon
 |-----|-------------|
 | `path` | DataPath (binding to table attribute) |
 | `columns: [...]` | Columns — array of elements (usually `input`) |
-| `changeRowSet: true` | Allow adding/removing rows |
-| `changeRowOrder: true` | Allow row reordering |
+| `changeRowSet: boolean` | Allow or deny standard add/remove row actions |
+| `changeRowOrder: boolean` | Allow or deny standard row reordering |
 | `height` | Height in table rows |
 | `header: false` | Hide header |
 | `footer: true` | Show footer |
 | `commandBarLocation` | `"None"`, `"Top"`, `"Auto"` |
 | `searchStringLocation` | `"None"`, `"Top"`, `"Auto"` |
+
+Protected table or tree (row changes remain possible from BSL):
+
+```json
+{ "table": "ProtectedRows", "path": "ProtectedRows", "changeRowSet": false, "changeRowOrder": false }
+```
 
 #### Pages (pages + page)
 
