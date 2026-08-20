@@ -14,10 +14,10 @@ Use the smallest set that closes the real context gaps. Do not promote a task to
 
 | Task shape | Required before edit | Required after edit |
 |---|---|---|
-| **Quick-fix BSL** (one logical change in one module, no metadata / transaction / public-contract impact) | Read the target module / procedure and any directly referenced helper needed to understand the bug | `syntaxcheck` → `check_1c_code` → `review_1c_code` on the touched module; quick-fix reduces process overhead, not verification depth |
-| **Full-cycle BSL** | `templatesearch` when a reusable pattern may exist; `search_code` / `codesearch` for local patterns; `get_object_dossier` / `metadatasearch` when metadata shape affects the code; platform / БСП / ITS docs only when versioned API or standard behaviour matters; **platform-capability check** (`docsearch` → `docinfo`, + `ssl_search`) whenever the task enters a specialized domain — cryptography, СЛАУ / numerical methods, data analysis, collaboration system / bots, integration bus / queues, full-text search, regex (`AGENTS.md → MCP Tool Calling → A.7`) | `syntaxcheck` → `check_1c_code` → `review_1c_code`; impact analysis when public surface or metadata usage changed |
+| **Quick-fix BSL** (one logical change in one module, no metadata / transaction / public-contract impact) | Read the target module / procedure and any directly referenced helper needed to understand the bug | Gates 1–3 on the closing coherent snapshot: combined direct syntax+logic when available, then final review; quick-fix reduces process overhead, not verification depth |
+| **Full-cycle BSL** | `templatesearch` when a reusable pattern may exist; `search_code` / `codesearch` for local patterns; `get_object_dossier` / `metadatasearch` when metadata shape affects the code; platform / БСП / ITS docs only when versioned API or standard behaviour matters; **platform-capability check** (`docsearch` → `docinfo`, + `ssl_search`) whenever the task enters a specialized domain — cryptography, СЛАУ / numerical methods, data analysis, collaboration system / bots, integration bus / queues, full-text search, regex (`AGENTS.md → MCP Tool Calling → A.7`) | Gates 1–3 per `verification-gates.md`; impact analysis when public surface or metadata usage changed |
 | **Metadata XML / forms** | Similar object/form examples, metadata lookup, `get_xsd_schema`; **mutations go through the `1c-metadata-manage` skill** — hard gate, exceptions only per `SKILL.md → Hard rule` | `verify_xml`; metadata validation / form compilation where applicable |
-| **Integrations / platform APIs** | Existing integrations, templates, relevant БСП APIs, platform docs for exact API names / version availability, security requirements | `syntaxcheck` → `check_1c_code` → `review_1c_code`; ITS check when relying on an ITS standard |
+| **Integrations / platform APIs** | Existing integrations, templates, relevant БСП APIs, platform docs for exact API names / version availability, security requirements | Gates 1–3 per `verification-gates.md`; ITS check when relying on an ITS standard |
 | **Markdown / rules / docs** | Read affected docs and referenced files needed for consistency | Structural checks only: paths, links, anchors, duplicate / conflicting wording |
 
 ## Writing New Code
@@ -35,9 +35,9 @@ Load `content/rules/coding-standards.md` first; for forms use `forms.md`, for no
 8. **bsl_scope_members** — discover available methods/properties of a context.
 9. **docinfo** — verify built-in functions by exact name; **docsearch** — search by description.
 10. **ssl_search** — find reusable БСП functions.
-11. **syntaxcheck** — verify syntax after writing.
-12. **check_1c_code** — find logic and performance defects.
-13. **review_1c_code** — verify style and ITS standards compliance.
+11. **check_1c_code** — once on the closing coherent snapshot; in direct mode its clean syntax section satisfies Gate 1 while the same call finds logic/performance defects.
+12. **syntaxcheck** / **syntaxcheck_file** — only when standalone syntax evidence is still missing per `verification-gates.md`; never duplicate a clean embedded direct syntax result.
+13. **review_1c_code** — once after implementation and Gates 1–2 are complete; verify style and ITS standards compliance.
 14. **validatequery** (`1c-data-mcp`, if available) — when the change introduces a new / non-trivial query string (module code, DCS data set, dynamic list), parse-check it against the live IB before delivery. Especially important after non-deterministic AI generation (`rewrite_1c_code` / `modify_1c_code` / `ask_1c_ai`).
 
 ## Code Review
@@ -47,9 +47,9 @@ Load `content/rules/coding-standards.md` first; for forms use `forms.md`, for no
 3. **trace_call_chain** → **get_method_call_hierarchy** — routine-level BSL call chains, callers/callees.
 4. **metadatasearch** / **get_metadata_details** — correct metadata usage.
 5. **docinfo** — verify method/property existence; **docsearch** — search by description.
-6. **syntaxcheck** — reject syntax-broken input before AI review.
-7. **check_1c_code** — bugs and performance issues.
-8. **review_1c_code** — style and ITS compliance.
+6. **check_1c_code** — one closing-snapshot call for bugs/performance and, in direct mode, explicit syntax evidence.
+7. **syntaxcheck** / **syntaxcheck_file** — only when the combined result lacks clean syntax evidence.
+8. **review_1c_code** — one final style/ITS pass after Gates 1–2.
 9. **its_help** → **fetch_its** — cross-check against ITS standards.
 
 ## Architecture Design
@@ -91,7 +91,7 @@ Load `content/rules/coding-standards.md` first; for forms use `forms.md`, for no
 4. **metadatasearch** / **get_metadata_details** — verify indexes and metadata structure.
 5. **check_1c_code** — bottleneck analysis.
 6. **rewrite_1c_code** — AI optimization (`goal: optimize`); re-validate with
-   `syntaxcheck` → `check_1c_code` → `review_1c_code`.
+   Gates 1–3 on the closing snapshot per `verification-gates.md`.
 7. **templatesearch** — optimized templates.
 8. **its_help** → **fetch_its** — ITS performance standards.
 9. **validatequery** → **vcexecutequery** (`1c-data-mcp`, if available) — parse-check the rewritten query, then run it read-only against the live IB to compare row counts / spot Cartesian explosions / confirm a virtual-table state. Use only on a test or copy IB when production data volumes matter.
@@ -112,8 +112,8 @@ Load `content/rules/coding-standards.md` first; for forms use `forms.md`, for no
 4. **find_objects_using_object** / **find_usages_of_object** — every type reference before renaming/removing. For registers additionally **find_register_movement_docs** — every document that posts movements there.
 5. **search_code** → **codesearch** — every code pattern related to the object.
 6. **search_code** (`detail_level="L3"`, high `top_k`) → **codesearch** — post-refactor verification that no old references remain.
-7. Run the full closing gate from `verification-checklist.md` once. It applies
-   `syntaxcheck` → `check_1c_code` → `review_1c_code` in order and reuses fresh Stage 3
+7. Run the full closing gate from `verification-gates.md` once. It combines direct
+   syntax+logic evidence when available, runs final review last, and reuses fresh Stage 3
    evidence instead of repeating validators on unchanged code.
 
 If the refactor is large enough to enter the subagent pipeline — delegate per
@@ -153,7 +153,7 @@ Use this playbook when writing HTTP services / clients, REST integrations, file 
 6. **get_xsd_schema** + **verify_xml** — when the contract is XML with a known XSD.
 7. **its_help** → **fetch_its** — ITS articles on long-running operations, secure password storage, asynchronous external components.
 8. **search_function** + **get_module_structure** — locate or extend the integration common module (typically `*HTTPClient`, `*Integration`, `*Exchange`).
-9. After implementation: **syntaxcheck** → **check_1c_code** → **review_1c_code**.
+9. After implementation: Gates 1–3 per `verification-gates.md` (combined direct syntax+logic when available, then final review).
 
 ## Documentation
 

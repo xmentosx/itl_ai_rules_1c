@@ -138,7 +138,7 @@ Before removing ANYTHING:
 - [ ] Test affected functionality
 
 After each change:
-- [ ] Validator chain passes on every touched module — `syntaxcheck` → `check_1c_code` → `review_1c_code`; a blocking defect has a clean confirming run within the budget from `AGENTS.md → MCP Tool Calling → B.1`; if a validator is not exposed — graceful degradation per `content/rules/verification-checklist.md`, record the skip in the report
+- [ ] Gates 1–3 pass on every touched module at the closing snapshot, using combined direct syntax+logic evidence when available and one final review; a blocking defect has a clean confirming run within budget B.1; if a validator is not exposed — graceful degradation per `content/rules/verification-gates.md`, record the skip in the report
 - [ ] No new errors introduced
 - [ ] Related tests still work
 - [ ] Document the change
@@ -180,7 +180,7 @@ After each change:
 
 ## Testing
 
-- [ ] Validator chain passed (syntaxcheck → check_1c_code → review_1c_code)
+- [ ] Gates 1–3 passed on the closing snapshot (combined direct syntax+logic when available, then final review)
 - [ ] Functionality verified
 - [ ] Performance tested
 - [ ] No regressions found

@@ -13,9 +13,9 @@ The command edits **only** the `VERIFICATION_DEPTH` and (as described below) `UI
 
 ## What the levels mean (summary — canon in `verification-policy.md`)
 
-- `full` — all three validators (`syntaxcheck → check_1c_code → review_1c_code`); one clean pass on the latest state is required, with up to 3 calls total after blocking fixes (`AGENTS.md → MCP Tool Calling → B.1`). This is the strictest level and is applied to promotion-trigger paths regardless of the setting.
+- `full` — all three evidence kinds (syntax, logic/performance, final style), using one combined direct syntax+logic call when available; one clean pass on the latest state is required, with up to 3 calls total after blocking fixes (`verification-gates.md`). This is the strictest level and is applied to promotion-trigger paths regardless of the setting.
 - `standard` (default) — all three validators; normally one clean pass, with exactly one mandatory confirmation after a blocking fix (2 calls total, no open-ended retry loop).
-- `lite` — for **low-risk** edits `syntaxcheck` on every touched module stays mandatory; `check_1c_code` + `review_1c_code` run only for high-risk changes (transactions, public `Экспорт` contract, wired metadata, RLS, subscriptions / scheduled jobs) or on explicit request. Full-cycle promotion triggers always get the full chain. Gates 4/5 (impact / XML) are unchanged.
+- `lite` — for **low-risk** edits clean syntax evidence on every touched module stays mandatory; `check_1c_code` + `review_1c_code` run only for high-risk changes (transactions, public `Экспорт` contract, wired metadata, RLS, subscriptions / scheduled jobs) or on explicit request. Full-cycle promotion triggers always get all three evidence kinds. Gates 4/5 (impact / XML) are unchanged.
 
 ## on / lite (default)
 
@@ -27,7 +27,7 @@ The command edits **only** the `VERIFICATION_DEPTH` and (as described below) `UI
 6. Load the `verification-policy.md` rule and apply the lite semantics immediately — from this message on, in this session.
 7. Confirm to the user in 3–4 lines, in Russian:
    - режим облегчённых проверок включён и записан в `.dev.env` (`VERIFICATION_DEPTH=lite`) — действует для проекта, включая новые чаты;
-   - что именно облегчается: `syntaxcheck` остаётся обязательным на всех задетых модулях, `check_1c_code` / `review_1c_code` — только для высокорисковых правок; транзакции и публичные контракты по-прежнему проверяются полной цепочкой;
+   - что именно облегчается: чистое синтаксическое evidence остаётся обязательным на всех задетых модулях, `check_1c_code` / `review_1c_code` — только для высокорисковых правок; транзакции и публичные контракты по-прежнему получают все три вида evidence;
    - UI-тесты отключены (`UI_TESTING=off`);
    - выключение — `/litemode off`.
 
@@ -53,7 +53,7 @@ Read `.dev.env` and report, without editing anything:
 
 The mode never overrides stricter safety rules:
 
-- `syntaxcheck` (Gate 1) is **always** run on every touched BSL module, at every level — it is the cheapest gate and is never skipped.
-- Changes on **promotion-trigger** paths (`verification-policy.md → Triage details`: transactions, public `Экспорт` contracts, wired metadata, RLS, event subscriptions / scheduled jobs) always run the full `syntaxcheck → check_1c_code → review_1c_code` chain regardless of `VERIFICATION_DEPTH` — lite lightens only the checks that were already applied to low-risk, quick-fix-eligible edits.
+- Clean syntax evidence (Gate 1) is **always** obtained for every touched BSL module, at every level. In direct mode it may come from the explicit clean syntax section of `check_1c_code`; otherwise use standalone `syntaxcheck` / `syntaxcheck_file`.
+- Changes on **promotion-trigger** paths (`verification-policy.md → Triage details`: transactions, public `Экспорт` contracts, wired metadata, RLS, event subscriptions / scheduled jobs) always obtain syntax + logic/performance + final style evidence regardless of `VERIFICATION_DEPTH` — lite lightens only the checks that were already applied to low-risk, quick-fix-eligible edits.
 - Gate 4 (impact analysis) and Gate 5 (metadata XML) are risk-gated by their own triggers and are unaffected by `VERIFICATION_DEPTH`.
 - `UI_TESTING=off` set by lite behaves exactly like a manually set `off` (canon: `dev-standards-env.md → "UI_TESTING"`): on an explicit UI-test request the agent reports it is disabled and asks the user to switch to `manual` / `auto`.

@@ -21,6 +21,13 @@ Manages the `.v8-project.json` file — the project's infobase registry. Stores 
 >
 > Connection parameters (`INFOBASE_PATH`, `INFOBASE_KIND`, `IB_USER`, `IB_PASSWORD`, `EXPORT_PATH`, `EXTENSION_NAME`) are passed to the scripts as flags by the calling slash command (`/loadfrom1cbase`, `/update1cbase`, `/getconfigfiles`, `/deploy-and-test`) from the same `.dev.env`. **`.v8-project.json` is not required and not created by the installer** — describe it only if you deliberately want the upstream multi-base registry below (several infobases bound to Git branches / aliases). If you do create one, remember `.dev.env` still wins for the four values in the table.
 
+> **Managed ITL projects.** When `.agent-1c/project.json` is present, the host
+> workflow owns every project-infobase create/run/load/dump/update and web
+> publication operation. Use the matching `/itl*` bridge or lifecycle helper;
+> direct `1c-db-ops` and mutating `1c-web-ops` scripts fail before side effects
+> with `ITL_LIFECYCLE_HELPER_REQUIRED`. The commands below retain their normal
+> upstream behavior only outside managed ITL projects.
+
 ### Usage
 
 ```
@@ -424,7 +431,7 @@ If the base is busy (active sessions), the load fails: for a server base pass `-
 
 ### Update retry discipline — mandatory for load / update operations
 
-`db-load-cf` / `db-load-xml` / `db-load-git` / `db-update` failures are handled **iteratively**, mirroring `content/commands/update1cbase.md → Update retry loop`:
+Outside managed ITL projects, `db-load-cf` / `db-load-xml` / `db-load-git` / `db-update` failures are handled **iteratively**, mirroring `content/commands/update1cbase.md → Update retry loop`. Inside a managed ITL project the host lifecycle helper owns this loop and its state evidence:
 
 1. **Log after every attempt, success or not.** Exit code 0 does not prove success — the platform writes errors like `Неверное свойство объекта метаданных`, `Неизвестное имя типа`, `Ошибка при обновлении конфигурации базы данных` to the log while formally exiting clean (`db-load-xml` already parses for these; still read the log output the script shows). Any `Ошибка` / `Error` line = failed attempt.
 2. **Terminate a hung / failed Configurator before retrying.** A dead-but-alive Designer process holds the configuration lock, and every next attempt fails with `База данных заблокирована`. Kill only the process this run started (by PID with a timeout); never blanket-kill all `1cv8` processes — the user's own Designer / client sessions may be among them. A lock that survives your process's death is foreign — report it, do not kill further.
