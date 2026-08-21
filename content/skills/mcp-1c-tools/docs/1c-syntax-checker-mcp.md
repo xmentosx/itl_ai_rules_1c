@@ -34,6 +34,6 @@ BSL syntax and style validation via BSL Language Server.
 - **Default budget** — one clean call on the latest saved state.
 - A syntax `error` is blocking. After editing the module to fix it, a clean confirming run is mandatory: `full` allows 3 calls total; `standard` allows the initial call plus one confirmation (2 total). Promotion-trigger changes always use the `full` budget.
 - Syntax / style warnings alone do not justify another run. If the warning is fixed by editing BSL, the saved state changed and still needs final clean syntax evidence under the applicable budget.
-- The same policy applies to `check_1c_code` and `review_1c_code` from `1c-code-check-mcp`.
+- The same policy applies separately to `check_1c_logic` / `check_1c_code` and `review_1c_code` from `1c-code-check-mcp`.
 - If the limit is exhausted without a clean pass on the latest state, the syntax gate failed: report the module as unverified and do not declare the change done. Style warnings alone remain non-blocking.
 - It only makes sense to re-run `syntaxcheck` / `syntaxcheck_file` after an actual code edit — re-runs without changes are forbidden (see `AGENTS.md → MCP Tool Calling`).

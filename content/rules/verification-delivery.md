@@ -66,8 +66,9 @@ Do not include in the delivery summary:
 
 ## Anti-patterns
 
-- **Skipping Gate 1** "because the edit was tiny" — `syntaxcheck` is the cheapest gate; skipping it never saves time.
-- **Running gates in the wrong order** — running `check_1c_code` before `syntaxcheck` wastes the AI checker on syntax-broken code.
+- **Skipping Gate 1** "because the edit was tiny" — standalone `syntaxcheck` / `syntaxcheck_file` evidence is always required.
+- **Treating Code Checker output as Gate 1** — `check_1c_logic` does not inspect syntax, and the compatibility `check_1c_code` fallback does not replace the required standalone syntax evidence.
+- **Validating intermediate or overlapping snippets** — routine AI validation runs only on the latest coherent closing snapshot; `review_1c_code` is last and is never parallelized with `check_1c_code`.
 - **Looping on AI non-determinism** — if `check_1c_code` returns different items each run on the **same** code, take the strictest set and stop. Do not burn the 3-call budget on noise.
 - **Marking the task done** with un-removed `Debug.*` log entries or temporary `ПоказатьЗначение` calls — soft gate A failure.
 - **Auto-running `1c-code-reviewer`** when the user did not ask — soft gate C failure, and a direct violation of `subagents.md`.

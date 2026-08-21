@@ -136,19 +136,20 @@ Consumed by the triage and debugging rules at task time. Both are **Defaulted** 
 | `{DEBUG_FAST_PATH}` | Debugging fast-path mode (`systematic-debugging.md → Fast path`): `standard` \| `extended` \| `off`. Controls when a directly evidenced bug may skip the full 4-phase loop. | Defaulted | Empty / invalid = `standard` |
 | `{VERIFICATION_DEPTH}` | Static code-verification depth (`verification-policy.md → "Verification depth levels"`): `full` \| `standard` \| `lite`. Tunes the depth of Gates 1–3 for low-risk edits. Toggled by `/litemode`. | Defaulted | Empty / invalid = `standard` |
 | `{CAVEMAN}` | caveman communication-style auto-activation (`content/skills/caveman/SKILL.md`): `on` \| `auto` \| `off`. Controls whether the terse style turns on automatically and for which tasks. Does not affect the mandatory report structure or verification. | Defaulted | Empty / invalid = `on` |
+| `{CAVEMAN_LEVEL}` | Persistent caveman compression level: `lite` \| `full` \| `ultra`. A session `/caveman lite|full|ultra` switch has priority. | Defaulted | Empty / invalid = `full` |
 | `{AGENT_MODEL}` | Active-model behaviour profile of the parent agent (`model-adaptation.md`): `opus5` \| `sonnet5` \| `fable5` \| `gpt56`. Tunes verbosity, narration, planning depth, delegation eagerness and self-invented extra passes; never weakens a hard gate. Toggled by `/rulesmodel`. Full description — `#### AGENT_MODEL` above. | Defaulted | Empty / unrecognised = no profile; the base model-neutral ruleset applies |
 
 #### `VERIFICATION_DEPTH` — static code-verification depth
 
-Tunes **how deep** the validator chain (`syntaxcheck → check_1c_code → review_1c_code`) runs for **low-risk** edits. It is **Defaulted** — empty / invalid resolves to `standard`, and the agent **must not** ask for the value. The canonical editor is the `/litemode` slash command (which also sets `UI_TESTING=off` at level `lite`); manual edits are allowed but not required. Canonical semantics — `verification-policy.md → "Verification depth levels"`.
+Tunes **how deep** the standalone syntax, logic/performance, and final style validators run for **low-risk** edits; canonical ordering and fallback live in `verification-gates.md`. The parameter is **Defaulted** — empty / invalid resolves to `standard`, and the agent **must not** ask for the value. The canonical editor is the `/litemode` slash command (which also sets `UI_TESTING=off` at level `lite`); manual edits are allowed but not required. Canonical semantics — `verification-policy.md → "Verification depth levels"`.
 
 | Value | Meaning |
 |---|---|
 | `full` | All three validators; one clean pass on the latest state is required, with up to 3 calls total after blocking fixes (`AGENTS.md → MCP Tool Calling → B.1`). Always applied to promotion-trigger paths regardless of this setting. |
 | `standard` (default / empty) | All three validators; normally one clean pass, with exactly one mandatory confirmation after a blocking fix (2 calls total, no open-ended retry loop). |
-| `lite` | Low-risk edits: `syntaxcheck` stays mandatory, `check_1c_code` / `review_1c_code` run only for high-risk changes (promotion triggers) or on explicit request. |
+| `lite` | Low-risk edits: standalone syntax evidence stays mandatory, Gate 2 (`check_1c_logic` / `check_1c_code` fallback) and `review_1c_code` run only for high-risk changes (promotion triggers) or on explicit request. |
 
-**Safety floor:** `syntaxcheck` is always run at every level, and any change on a promotion-trigger path (transactions, public `Экспорт` contracts, wired metadata, RLS, subscriptions / scheduled jobs — `verification-policy.md → Triage details`) always runs the full chain regardless of the level. `lite` / `standard` lighten only the checks already applied to low-risk edits; they do not weaken the control of dangerous paths. Gates 4 (impact) / 5 (XML) are unaffected.
+**Safety floor:** clean syntax evidence is always obtained at every level, and any change on a promotion-trigger path (transactions, public `Экспорт` contracts, wired metadata, RLS, subscriptions / scheduled jobs — `verification-policy.md → Triage details`) always obtains the full three evidence kinds regardless of the level. `lite` / `standard` lighten only the checks already applied to low-risk edits; they do not weaken the control of dangerous paths. Gates 4 (impact) / 5 (XML) are unaffected.
 
 #### `CAVEMAN` — caveman auto-activation
 
@@ -160,7 +161,9 @@ Controls **whether** the terse `caveman` communication style (`content/skills/ca
 | `auto` | The skill auto-classifies by task type: on for development (writing / editing / refactoring code, debugging, deploy, shell), off for analysis / review / documentation. |
 | `off` | Automatic activation is disabled — `caveman` never turns on by itself on any task. It can still be enabled by an explicit in-session force ("caveman please"), which holds until session end. |
 
-**Precedence:** an explicit session force always wins over `CAVEMAN`; otherwise the `CAVEMAN` value applies (`on` → all tasks, `auto` → by task type, `off` → no auto-on). The persistent value is edited by the `/caveman on|auto|off` command (`content/commands/caveman.md`); session-only force uses the phrases "caveman please" / "stop caveman" or a `/caveman lite|full|ultra` level switch.
+`CAVEMAN_LEVEL=lite|full|ultra` selects the persistent compression level; empty or invalid resolves to `full`. It does not activate a mode by itself.
+
+**Precedence:** explicit session force and level switch → persistent `CAVEMAN` and `CAVEMAN_LEVEL` → defaults `on/full`. Persistent values are edited by `/caveman on|auto|off` and `/caveman persist <level>`; session-only force uses the natural phrases or `/caveman lite|full|ultra`.
 
 Task number `{TASK}` is **only required when modification comment markers are produced** — i.e. when the change touches **typical (standard) configuration code** and the templates `{COMMENT_OPEN}` / `{COMMENT_CLOSE}` reference `{TASK}`. For new objects with `{PREFIX}` (no per-method markers), review / analysis / documentation tasks, and any task where `COMPANY` / `DEVELOPER` are empty (markers skipped) — `{TASK}` is **not required**. Do not block on it.
 

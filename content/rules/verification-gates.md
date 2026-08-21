@@ -22,29 +22,38 @@ It runs only missing or stale gates and MUST NOT repeat a validator against unch
 evidence; the final editor becomes the new owner. The same rule applies to `verify_xml` and
 impact-analysis evidence.
 
+Routine validation is a closing-snapshot operation, not an implementation heartbeat. The editor
+MUST NOT call `check_1c_logic`, `check_1c_code`, or `review_1c_code` after intermediate edits, on overlapping snippets,
+or merely to report progress. Build one latest coherent validation unit per touched module: use the
+whole module when it fits, otherwise combine the non-overlapping changed routines plus only the
+directly required context. One call covers one unit. Do not split the same change into speculative
+micro-fragments, and do not send multiple calls to the same Code Checker server via `Promise.all`;
+run required calls in gate order so timing, cancellation and failure ownership stay observable.
+
 
 ## Hard gates — run on every full-cycle change
 
 You MUST run all five gates in order. Each gate has an explicit pass / fail criterion and an explicit retry budget. When a required validator is not exposed in the current session, follow the graceful-degradation subsections (after Gate 3 and inside Gate 4) instead of silently skipping. **Gate 3a is conditional** — it runs only when its own trigger fires and its server is exposed; it never replaces Gates 1–3.
 
-The gate descriptions below state the `full` behaviour — the strictest level, and the one a promotion-trigger path always gets. The project default is `standard`: same three validators, one mandatory confirmation after a blocking fix instead of an open-ended retry budget. When `VERIFICATION_DEPTH` is `standard` or `lite`, Gates 1–3 are modulated per `verification-policy.md → "Verification depth levels"` — but a full-cycle change on any promotion-trigger path always runs the complete chain regardless of the level (the safety floor).
+The gate descriptions below state the `full` behaviour — the strictest level, and the one a promotion-trigger path always gets. The project default is `standard`: the same three validators, with one mandatory confirmation after a blocking fix instead of an open-ended retry budget. When `VERIFICATION_DEPTH` is `standard` or `lite`, Gates 1–3 are modulated per `verification-policy.md → "Verification depth levels"` — but a full-cycle change on any promotion-trigger path always runs the complete chain regardless of the level (the safety floor).
 
-### Gate 1 — Syntax (`syntaxcheck`)
+### Gate 1 — Syntax (`syntaxcheck` / `syntaxcheck_file`)
 
-- Run `syntaxcheck` on every touched `.bsl` module. No exceptions.
-- Pass criterion: zero `error` items. `warning` items are reviewed in Gate 3.
-- Retry budget: canon — `AGENTS.md → MCP Tool Calling → B.1`. An `error` is blocking: after fixing it, obtain a clean confirming run on the changed module. Under `full`, allow 3 calls total; under `standard`, 2. If the limit is exhausted without a clean pass on the latest state, Gate 1 fails. Gates 2 and 3 use the same policy with their own blocking severities.
+- Run standalone `syntaxcheck` / `syntaxcheck_file` on every touched `.bsl` module. No exceptions. Prefer `syntaxcheck_file` when it is exposed and the saved module is mounted.
+- Pass criterion: zero syntax `error` items. Syntax `warning` items are reviewed in Gate 3.
+- Retry budget: canon — `AGENTS.md → MCP Tool Calling → B.1`. A blocking result must be fixed, then confirmed against the changed closing snapshot. Under `full`, allow 3 calls total; under `standard`, 2. If the limit is exhausted without clean current evidence, Gate 1 fails.
 
-### Gate 2 — Logic & performance (`check_1c_code`)
+### Gate 2 — Logic & performance (`check_1c_logic` / `check_1c_code` fallback)
 
-- Run on every touched module. Always after Gate 1 passes — never before, otherwise the AI checker drowns in syntax noise.
+- Run only after Gate 1 passes on the same unchanged closing snapshot. Prefer `check_1c_logic` when it is exposed; it deliberately checks only logic and performance and does not require or accept syntax evidence as an argument. When it is not exposed, use the upstream-compatible `check_1c_code` fallback.
 - Pass criterion: no `critical` or `error` severity items.
+- Retry budget: canon — `AGENTS.md → MCP Tool Calling → B.1`. A blocking result must be fixed, then confirmed against the changed closing snapshot. Under `full`, allow 3 calls total per validator; under `standard`, 2. If the limit is exhausted without clean current evidence, Gate 2 fails.
 - `warning` items: triage. Inside-scope warnings (introduced by your change) — fix. Pre-existing warnings outside your scope — leave alone (Surgical Changes).
-- AI non-determinism rule: if `check_1c_code` returns inconsistent results across runs on the **same** code, do not loop on it. Take the strictest result, fix what is fixable, document the rest.
+- AI non-determinism rule: if the active Gate 2 validator returns inconsistent results across runs on the **same** code, do not loop on it. Take the strictest result, fix what is fixable, document the rest.
 
 ### Gate 3 — Style & ITS compliance (`review_1c_code`)
 
-- Run on every touched module after Gate 2 passes.
+- Run once per closing coherent validation unit, only after implementation is complete and Gates 1–2 pass. Do not run it during editing or in parallel with `check_1c_logic` / `check_1c_code`.
 - Pass criterion: no `error` severity items.
 - `warning` items: same triage rule as Gate 2.
 - For specific warnings that are intentional and justified: add a `//BSLLS:<rule>` suppression with a 1-line explanation, per `dev-standards-code-style.md → "Formatting"`. Blanket suppressions without justification are forbidden.

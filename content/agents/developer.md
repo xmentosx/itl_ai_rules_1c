@@ -65,7 +65,7 @@ Key rules to always remember:
 8. Use `bsl_scope_members` to discover available methods/properties for the context
 9. Use `docsearch` and `ssl_search` as needed; for specialized capabilities the platform-capability check is mandatory **before** custom design — `AGENTS.md → A.7`; **when a mechanism is found — use it**, do not invent a parallel one (`1C-docs-mcp.md → Using a found platform mechanism`)
 10. Write code strictly following the rules
-11. Check code via `syntaxcheck`, `check_1c_code` and `review_1c_code` — within the verification budget from `AGENTS.md → MCP Tool Calling → B.1`
+11. On the closing coherent snapshot, obtain Gates 1–3 per `verification-gates.md`: standalone syntax first, `check_1c_logic` when exposed (`check_1c_code` fallback), then one final `review_1c_code`, within budget B.1.
 12. Before refactoring, use `graph_dependencies` and `get_method_call_hierarchy` to understand impact
 13. Perform internal code review
 14. Improve code if necessary
@@ -77,7 +77,7 @@ Before reporting, verify all of the following. For non-trivial changes also appl
 
 - [ ] Every assigned task / plan item is implemented; nothing was silently skipped or replaced
 - [ ] No file outside the assigned scope was edited; no "while we're here" changes
-- [ ] `syntaxcheck` passes on every touched module; `check_1c_code` / `review_1c_code` were run within the budget and substantive findings are fixed
+- [ ] Clean standalone syntax, logic/performance, and final style evidence exists for every touched module in Gate 1–3 order; substantive findings are fixed
 - [ ] Imports, variables, and procedures that **your** changes made unused are removed (pre-existing dead code untouched)
 - [ ] Module regions, headers, and project code style (`dev-standards-code-style.md`) are preserved
 - [ ] Impact on callers / metadata / forms was considered when the change is more than a local edit (`trace_call_chain` for routine callers; `trace_impact` / `graph_dependencies` for object dependencies)
@@ -99,8 +99,8 @@ If a criterion cannot be met, say so explicitly in the report — do not present
 
 ## Validators
 
-| Artifact | syntaxcheck | check_1c_code | review_1c_code |
-|----------|-------------|---------------|----------------|
+| Artifact | syntaxcheck | check_1c_logic / check_1c_code fallback | review_1c_code |
+|----------|-------------|------------------------------------------|----------------|
 | `path/Module.bsl` | [result, N runs] | [result, N runs] | [result, N runs] |
 
 All rows describe validator runs after the final edit; any later edit makes that row stale.
