@@ -9,6 +9,25 @@ metadata:
   generatedBy: "1.2.0"
 ---
 
+<!-- itl:caveman-response-style -->
+## Response style (ITL downstream)
+
+Resolve an explicit session Caveman force/level first. Otherwise read `CAVEMAN=on|auto|off` and `CAVEMAN_LEVEL=lite|full|ultra` during the existing first project-context read; missing or invalid values mean `on/full`. Under `auto`, this `apply` phase is **active**. Do not add a separate narrated configuration preflight. Apply the effective style only to working commentary: keep required OpenSpec artifacts, exact technical text, safety warnings, and mandatory reports complete and unchanged.
+
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before repository exploration, proposal, or implementation:
+
+1. Read project-root `AGENTS.md` and `USER-RULES.md`; their project and ITL gates override generic rules.
+2. Activate every project skill required for the subject and current OpenSpec phase.
+3. Query mandatory product/documentation sources before broad repository traversal, then verify findings against code, tests, metadata, and available MCP evidence.
+4. Record material sources and conflicts in `## Context Sources`. If a required source is unavailable, label code-only conclusions as provisional and show the recovery action.
+<!-- itl:apply-test-authoring -->
+## 1C test authoring (ITL downstream)
+
+Read and follow `test-plan.md` together with the OpenSpec `contextFiles`; do not silently weaken an approved observable result. Execute test authoring and checks according to the effective ITL verification modes. Finish implementation with a fresh `/itl-check`; skipped components remain explicit partial evidence and never become a normal fresh pass.
+
 Implement tasks from an OpenSpec change.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.
@@ -30,7 +49,7 @@ Apply phase has a **single consolidated preflight round** at the start, then nea
    - Auto-select if only one active change exists
    - If ambiguous, run `openspec list --json` to get available changes and use the **AskUserQuestion tool** to let the user select
 
-   Always announce: "Using change: <name>" and how to override (e.g., `/opsx:apply <other>`).
+   Always announce: "Using change: <name>" and how to override (e.g., `$opsx-apply <other>`).
 
 2. **Check status to understand the schema**
    ```bash
@@ -99,17 +118,23 @@ Apply phase has a **single consolidated preflight round** at the start, then nea
 
    e. **If `## Genuine blockers` is non-empty** — submit the consolidated `AskUserQuestion` round (one call, all questions in it). On the user's response, apply the answers to the artifacts: write resolved Open Questions into `design.md → ## Architecture decisions` and strike them from `## Open Questions`; persist `.dev.env` values. Then enter the implementation loop. **The preflight round is the only apply-time question surface** — no further `AskUserQuestion` calls during step 6 except for the narrow critical exceptions below.
 
-6. **Run the 1C pipeline and implement tasks (loop until done or blocked)**
+6. **Choose the execution route and implement tasks (loop until done or blocked)**
 
-   Before the first edit, load `content/rules/subagent-pipeline.md` and
-   `content/rules/verification-checklist.md`, then classify the current session plan using
-   `AGENTS.md → Triage`. Quick-fix / docs-fix / spec-authoring work follows its dedicated
-   route. Full-cycle work runs either the standard path (direct execution by the parent per
-   `AGENTS.md → Development Procedure`) or the pipeline when delegation is chosen per
-   `content/rules/subagents.md` (the default under `ORCHESTRATION=economy`). Either way the
-   approved OpenSpec artifacts are the approved plan — do not ask for duplicate approval —
-   and the spec-compliance review (pipeline Stage 4a) plus the closing verification gate
-   (`verification-checklist.md`) still run.
+   <!-- itl:conditional-apply-routing -->
+   Before the first edit, load `content/rules/verification-checklist.md` and classify the
+   current session plan using `AGENTS.md -> Triage`. Quick-fix / docs-fix / spec-authoring
+   work follows its dedicated route. For full-cycle work, choose the actual implementation
+   route now from `AGENTS.md -> Skills and Subagents`, `content/rules/subagents.md`, and the
+   current `ORCHESTRATION` setting. Delegation during explore or propose does not select the
+   apply route, and the absence of an earlier delegation request does not select direct
+   execution.
+
+   If delegation is chosen, load `content/rules/subagent-pipeline.md` and follow it. Otherwise
+   the parent executes directly and does not load the pipeline. Apply the common routing and
+   completion contract from `content/rules/sdd-integrations.md -> Apply execution route and
+   spec compliance`. Either way the approved OpenSpec artifacts are the approved plan -- do
+   not ask for duplicate approval -- and spec compliance plus the closing verification gate
+   still run.
 
    For each pending task:
    - Show which task is being worked on
@@ -134,7 +159,10 @@ Apply phase has a **single consolidated preflight round** at the start, then nea
 7. **Run spec-compliance and closing verification**
 
    Before marking any implemented task complete:
-   - Run Stage 4a from `content/rules/subagent-pipeline.md` against the implemented task set.
+   - If implementation was delegated, run Stage 4a from `content/rules/subagent-pipeline.md`.
+   - If implementation was direct, run the compact structural comparison from
+     `content/rules/sdd-integrations.md -> Apply execution route and spec compliance` without
+     loading the pipeline.
    - Run Stage 4b only when the user explicitly requested a code review.
    - Run Stage 5 via `content/rules/verification-checklist.md`, including every applicable hard
      and soft gate.
@@ -142,7 +170,7 @@ Apply phase has a **single consolidated preflight round** at the start, then nea
      gates; never repeat a validator against unchanged content.
    - If a gate finds a defect, fix it and rerun only the affected stale gate within its budget.
      If verification is blocked, keep the affected tasks unchecked and report the blocker.
-   - Only after Stage 4a and the closing gate pass, update each verified task:
+   - Only after the applicable spec-compliance check and the closing gate pass, update each verified task:
      `- [ ]` → `- [x]`.
 
 8. **On completion or pause, show status**
@@ -175,7 +203,7 @@ Implementation complete; closing verification pending
 **Change:** <change-name>
 **Schema:** <schema-name>
 **Progress:** 7/7 tasks complete ✓
-**Verification:** Stage 4a and all applicable closing gates passed
+**Verification:** Applicable spec compliance and all closing gates passed
 
 ### Completed This Session
 - [x] Task 1
@@ -211,7 +239,7 @@ What would you like to do?
 - **Bundle every legitimate question into the single preflight round at step 5b — no mid-loop questions except for the narrow critical exceptions in step 6.** "If task is ambiguous, pause and ask" is **not** the apply rule for this project — the rule is in `content/rules/sdd-integrations.md → Apply-phase clarification discipline`. Routine ambiguity is a propose-phase defect; make a reasonable, codebase-consistent choice and record it via `remember` or `memory.md` Captured-during-work.
 - If a live-state fact conflicts with a locked artifact decision, raise a `CONFUSION` block and pause; this is the only routine mid-loop pause.
 - Keep code changes minimal and scoped to each task
-- Load `subagent-pipeline.md` and `verification-checklist.md` before the first edit
+- Load `verification-checklist.md` before the first edit; load `subagent-pipeline.md` only after implementation delegation is chosen
 - Update task checkboxes only after step 7 passes; implementation alone is not completion
 - Pause on hard errors / blockers (failing validator with a substantive defect, missing metadata, deadlock), never on routine style warnings or naming choices
 - Use contextFiles from CLI output, don't assume specific file names

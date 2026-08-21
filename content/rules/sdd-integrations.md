@@ -20,6 +20,21 @@ Layout, spec format, delta format, and the full workflow are described in the wo
 
 Read those files before writing or editing OpenSpec artifacts.
 
+## Invocation modes
+
+The artifact contract is independent of the client UI. A project may expose a
+managed native OpenSpec command/SKILL, or it may expose only the common
+workspace and these rules. In the latter case, run explore, propose, apply, and
+archive from an ordinary natural-language request. Do not invent a slash
+command, install `@fission-ai/openspec`, or run `openspec update`.
+
+Both modes require the same preflight and completion evidence: record `Context
+Sources`, create and agree the proposal's test plan with the proposal artifacts, implement
+only the agreed artifacts, and finish apply with a fresh `/itl-check`. A missing
+native bundle is not a defect when the installed manifest records that it was
+intentionally skipped; a missing file from a managed native bundle is an
+ownership/integrity failure and must not be masked by natural fallback.
+
 ## MCP discipline for OpenSpec authoring
 
 OpenSpec artifacts (`proposal.md`, `design.md`, `tasks.md`, delta and current specs) are Markdown, but they make **factual claims about the 1C system** — metadata names, attributes, tabular sections, public API signatures, БСП subsystems, platform-version behaviour, project conventions. Every such claim must be grounded in MCP evidence, not memory or guessing. This is the **spec-authoring path** from `AGENTS.md → Development Procedure → Triage`.
@@ -119,6 +134,15 @@ Only then may the "Ready for implementation" message be emitted.
 ## Apply-phase clarification discipline
 
 `/opsx:apply` runs against approved artifacts — **their decisions are locked**. Apply implements them; it does not re-litigate them. The approved artifacts also satisfy the plan-approval gate of the subagent pipeline (`subagent-pipeline.md → Stage 2 → Plan approval gate`) — apply never runs a separate plan-approval round on top of them. This section kills two recurring failure modes: re-asking what `design.md` / `proposal.md` already records, and dribbling questions across the implementation loop instead of one consolidated preflight round.
+
+### Apply execution route and spec compliance
+
+Choose the implementation route during **apply**, after reading the approved artifacts and the current `ORCHESTRATION` setting. Whether explore or propose used subagents does not select the apply route, and the absence of an earlier delegation request is not itself a direct-execution decision. Use `AGENTS.md → Skills and Subagents` and `content/rules/subagents.md` for the actual choice.
+
+- **Direct execution:** the parent implements the tasks and does not load `subagent-pipeline.md`. Before completion, run a compact structural comparison against the approved artifacts: every planned task was executed; no file outside the plan was edited; new public procedure names, parameter types, and return types match; added or removed metadata objects match and edited-object UUIDs were preserved; module headers are present on new public procedures.
+- **Delegated execution:** load `subagent-pipeline.md` only after delegation is chosen and run its full Stage 4a. It performs the same structural comparison with the pipeline hand-back and evidence rules.
+
+Both routes then run the applicable closing verification through `verification-checklist.md`, including `verification-delivery.md → Soft gate B`. Stage 4b remains conditional on an explicit user request for code review. Do not weaken `tasks.md` completion or delta-spec synchronization on the direct route.
 
 ### Read first, then ask
 

@@ -37,7 +37,7 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 - **syntaxcheck** — verify syntax after changes
 - **review_1c_code** — style and ITS-standards compliance of the changed code
 
-After every edit run the full chain in order — `syntaxcheck` → `check_1c_code` → `review_1c_code` — within the budget from `AGENTS.md → MCP Tool Calling → B.1`; a blocking defect requires a clean confirming run on the changed state. If a validator is not exposed in the session — graceful degradation per `content/rules/verification-gates.md`; record the skip in the report.
+Do not validate after every edit. After the implementation reaches one closing coherent snapshot, run Gates 1–3 per `verification-gates.md`: reuse one direct-mode `check_1c_code` call for clean syntax plus logic when available, then run one final `review_1c_code`. A blocking defect requires a clean confirming run on the changed state within budget B.1. If a validator is not exposed in the session — graceful degradation per `content/rules/verification-gates.md`; record the skip in the report.
 
 **SDD Integration:** If the project has an `openspec/` workspace, read `content/rules/sdd-integrations.md` for OpenSpec integration guidance.
 
@@ -100,7 +100,7 @@ For each fix:
 1. Verify current behavior
 2. Apply minimal change to fix performance
 3. Verify functionality preserved
-4. Run the validator chain (`syntaxcheck` → `check_1c_code` → `review_1c_code`, budget B.1) on the touched module
+4. Run Gates 1–3 on the closing snapshot (combined direct syntax+logic when available, then final review; budget B.1) on the touched module
 5. Document performance improvement
 
 If you notice a real defect orthogonal to the performance task — report it to the parent agent in the final report; do not fix it within this task (`content/rules/subagent-pipeline.md → Stage 3`).
@@ -111,7 +111,7 @@ Before reporting, verify all of the following. For non-trivial changes also appl
 
 - [ ] Every assigned optimization is implemented; nothing was silently skipped or replaced
 - [ ] No file outside the assigned scope was edited; no "while we're here" changes
-- [ ] `syntaxcheck` → `check_1c_code` → `review_1c_code` pass on every touched module (budget B.1); substantive findings fixed
+- [ ] Gates 1–3 pass on every touched module using the minimum non-duplicative calls (budget B.1); substantive findings fixed
 - [ ] Observable behaviour is unchanged — only performance characteristics improved
 - [ ] Impact was considered when a public export or query shape changed (`trace_call_chain` for routine callers; `trace_impact` / `graph_dependencies` for object dependencies)
 

@@ -65,9 +65,9 @@ Canon — `AGENTS.md → Development Procedure → 1. Think Before Coding` (trig
 
 ### MCP-first search
 
-Canon — `content/rules/mcp-first-search.md` (chain: graph → code-metadata → `grep=true` retry → native tools; bounded priority, not a ban).
+Canon — `content/rules/mcp-first-search.md` (branch delta → worktree; untouched baseline → best-fitting MCP + at most one retry for the same intent → native fallback).
 
-**Subagent-specific:** the chain binds subagents exactly as it binds the parent; when you fall back to a native discovery tool, state in the report which MCP attempts were tried and why they missed.
+**Subagent-specific:** the parent passes the relevant known branch-delta files/objects in the brief; never paste the complete delta when only a subset matters. If the task requires project-source search and no usable delta context was supplied, the subagent builds or reuses it once. The subagent must not query a remote index to establish a branch-local target's existence/current contents; for untouched baseline fallback, report which bounded MCP attempt missed.
 
 ### Metadata mutations via the skill (mutating agents)
 
@@ -77,11 +77,15 @@ Canon — `AGENTS.md → Skills and Subagents`; exceptions only per `content/ski
 
 ### Verification checklist (mutating agents)
 
-Canon — `content/rules/verification-checklist.md` (ordered hard gates: `syntaxcheck` → `check_1c_code` → `review_1c_code` → impact analysis → metadata XML validation, as applicable).
+Canon — `content/rules/verification-gates.md` (ordered hard evidence: syntax + logic/performance, final style review, impact analysis, metadata XML validation, as applicable; direct syntax+logic may be one call).
 
 **Subagent-specific:** for every mutated artifact, report each applicable validator's result and run count **after the final edit** — the parent reuses that evidence instead of repeating validators on unchanged content. Read-only agents (`1c-explorer`, `1c-analytic`, `1c-arch-reviewer`, `1c-code-reviewer`, `1c-doc-writer` when not writing project sources) skip the mutating gates and the metadata-skill gate but still follow CONFUSION and MCP-first search.
 
 Each agent prompt ends with a short **Common obligations** pointer to this section — keep that pointer in sync when editing this file.
+
+### Defect-class ownership
+
+The parent bounds and classifies the defect before delegation. One confirmed class has one mutating owner: no fixer per manifestation and no parallel mutating agents. The brief names the task-owned surface, known cases, suspected cause, and equivalent-case check. Use `1c-developer` across a feature or multiple modules; use `1c-refactoring` only when consolidation is the confirmed solution. Reclassify the widened scope normally—repetition alone selects neither `full-cycle`, OpenSpec, nor an abstraction.
 
 ## Subagent catalog
 
@@ -92,11 +96,11 @@ Each agent prompt ends with a short **Common obligations** pointer to this secti
 | **1c-planner** | A multi-step implementation or refactoring plan is needed before coding | Task is small enough that the plan is 1–2 lines |
 | **1c-architect** | Designing the architecture of a sizable modification (new subsystem, integration, multi-module change) | Single-procedure or single-module change |
 | **1c-arch-reviewer** | User asks to review or validate an architectural decision before implementation | No architectural design exists yet |
-| **1c-developer** | Bulk code writing or modification across multiple modules that would otherwise drain the parent's context | Small local edit (Quick-fix path — see `AGENTS.md → Development Procedure`) |
+| **1c-developer** | Bulk code writing or modification across multiple modules, including one confirmed semantic defect class spanning a feature or multiple modules | Small local edit (Quick-fix path — see `AGENTS.md → Development Procedure`) |
 | **1c-metadata-manager** | Creating, scaffolding, compiling, or multi-step / multi-domain metadata operations (objects, forms, reports, layouts, roles, extensions) | Single info lookup or single XML attribute fix — use a direct edit or the `1c-metadata-manage` skill |
 | **1c-refactoring** | Dead-code cleanup, consolidation, or deduplication across multiple modules | Refactor is local to one procedure |
 | **1c-performance-optimizer** | User reports slowness, or query / loop optimization is the explicit task | No performance concern was raised |
-| **1c-error-fixer** | Quick fix of syntax / runtime errors / BSL LS warnings without architectural changes (tier `light` — runs on the small-tasks model when one is configured) | The fix requires architectural rework — escalate to `1c-architect` / `1c-developer` |
+| **1c-error-fixer** | One isolated syntax/runtime/BSL-LS error, or one bounded local defect class that remains a single-module change (tier `light`) | A confirmed class spans a broader feature or multiple modules, or requires architectural rework — return scope to the parent for `1c-developer` / `1c-architect` |
 | **1c-tester** | User asks to verify changes via deploy + UI automation against a test infobase, **and** `UI_TESTING` allows it (canon — `dev-standards-env.md`) | No test infobase; purely static task; `UI_TESTING=off`, or `manual` without an explicit UI-test request — never auto-trigger |
 | **1c-code-reviewer** | **Only when the user explicitly asks for a code review** | Auto-triggering after edits is forbidden |
 | **1c-doc-writer** | User-facing documentation: user guides, admin manuals, tutorials, codemaps, API references | Inline code documentation (module / procedure headers) — that is the developer's responsibility |
@@ -124,6 +128,7 @@ When delegating, the launch prompt must make the task **bounded and self-contain
 
 - **bounded responsibility** — one verifiable goal, not "help with the task";
 - **allowed and forbidden sources** — which MCP servers / files to use; the MCP-first search discipline (`mcp-first-search.md`) applies to subagents too;
+- **branch authority** — relevant changed files/objects from the parent's cached local-baseline delta, or an explicit statement that none are known;
 - **read/write scope** — explicitly read-only, or an explicit list of files the subagent may edit;
 - **expected output format** — what the report must contain;
 - a reminder that the subagent **is not alone in the codebase**: it must not revert or overwrite changes outside its scope and must not delete files without an explicit instruction.
@@ -134,7 +139,8 @@ Reusable templates (fill in `<...>`; they slot into the matching subagent from t
 
 ```text
 Read-only impact analysis. Find all references to <object / procedure / attribute>.
-Follow the project MCP fallback chain (graph metadata → code metadata → grep=true retry → Grep).
+Use the worktree first for supplied branch-delta targets; for untouched baseline follow the bounded
+best-fitting MCP → one changed retry for the same intent → native fallback route.
 Thoroughness: <quick | medium>. Do not edit files.
 Return: locations with file/line references and qualified 1C names, usage categories
 (call / query / RLS / form / subscription), risky dependencies, and gaps you could not verify.
@@ -162,8 +168,9 @@ validation risks, and a suggested write scope for the implementation step.
 ```text
 Bounded implementation. You are not alone in the codebase; do not revert or overwrite edits
 outside your scope. Edit only: <files>. Implement <specific change> per the approved plan.
-Follow project rules (dev-standards-code-style, module-structure). For BSL run syntaxcheck →
-check_1c_code → review_1c_code on every touched module within the verification budget;
+Follow project rules (dev-standards-code-style, module-structure). For BSL run Gates 1–3
+on every touched module at the closing snapshot within the verification budget; reuse combined
+direct syntax+logic evidence when available and run final review last;
 for metadata XML run verify_xml (and both chains when it embeds BSL).
 Return: changed files, diff summary against the plan, checks performed, unresolved risks.
 ```
