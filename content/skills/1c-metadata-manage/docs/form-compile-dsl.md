@@ -195,8 +195,8 @@ The key value sets the orientation: `"horizontal"`, `"vertical"`, `"alwaysHorizo
 |-----|-------------|
 | `path` | DataPath (binds to the table attribute) |
 | `columns: [...]` | Columns — array of elements (usually `input`) |
-| `changeRowSet: true` | Allow add/remove rows |
-| `changeRowOrder: true` | Allow row reorder |
+| `changeRowSet: boolean` | Allow or deny standard add/remove row actions |
+| `changeRowOrder: boolean` | Allow or deny standard row reordering |
 | `height` | Height in rows |
 | `header: false` | Hide the header |
 | `footer: true` | Show the footer |
@@ -208,6 +208,12 @@ The key value sets the orientation: `"horizontal"`, `"vertical"`, `"alwaysHorizo
 | `enableStartDrag: true` | Allow start of drag |
 | `rowPictureDataPath` | Path to the row picture (e.g. `"List.DefaultPicture"`) |
 | `tableAutofill: false` | Control autofill of the inner AutoCommandBar |
+
+Protected table or tree (row changes remain possible from BSL):
+
+```json
+{ "table": "ProtectedRows", "path": "ProtectedRows", "changeRowSet": false, "changeRowOrder": false }
+```
 
 Columns can be grouped via `columnGroup` (see below).
 

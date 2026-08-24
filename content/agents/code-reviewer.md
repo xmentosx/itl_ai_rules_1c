@@ -64,7 +64,7 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 - **codesearch** — verify compliance with existing patterns
 - **graph_dependencies** — analyze impact of the code being reviewed
 - **get_method_call_hierarchy** — trace call chains, find affected callers
-- **check_1c_code** — analyze code for syntax, logic and performance issues
+- **check_1c_logic** — preferred logic/performance analysis after standalone syntax; use **check_1c_code** only as compatibility fallback
 - **review_1c_code** — check style, ITS standards, naming, structure compliance
 - **its_help** → **fetch_its** — verify code against ITS standards (always read full article by ID)
 

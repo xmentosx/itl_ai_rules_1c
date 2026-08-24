@@ -82,7 +82,7 @@ The source of truth for images, ports, and environment variables is [docs.onerpa
 
 For each `id`, determine **TOOLS_OK** / **TOOLS_MISSING**:
 
-- **TOOLS_OK** — this server's tools are visible in the current session tool schema (for example, `syntaxcheck` for `1c-syntax-checker-mcp`, `templatesearch`/`recall` for `1c-templates-mcp`, `ssl_search` for `1c-ssl-mcp`, `docinfo`/`docsearch` for `1C-docs-mcp`, `metadatasearch`/`codesearch` for `1c-code-metadata-mcp`, `search_metadata`/`get_object_dossier` for `1c-graph-metadata-mcp`, `check_1c_code`/`its_help` for `1c-code-check-mcp`).
+- **TOOLS_OK** — this server's tools are visible in the current session tool schema (for example, `syntaxcheck` for `1c-syntax-checker-mcp`, `templatesearch`/`recall` for `1c-templates-mcp`, `ssl_search` for `1c-ssl-mcp`, `docinfo`/`docsearch` for `1C-docs-mcp`, `metadatasearch`/`codesearch` for `1c-code-metadata-mcp`, `search_metadata`/`get_object_dossier` for `1c-graph-metadata-mcp`, `check_1c_logic`/`check_1c_code`/`its_help` for `1c-code-check-mcp`).
 - **TOOLS_MISSING** — no tools are visible in the schema.
 
 If status is **TOOLS_OK**, treat the server as working and do not check it further.

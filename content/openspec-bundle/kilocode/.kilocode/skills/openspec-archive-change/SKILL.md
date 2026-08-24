@@ -9,6 +9,20 @@ metadata:
   generatedBy: "1.2.0"
 ---
 
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before repository exploration, proposal, or implementation:
+
+1. Read project-root `AGENTS.md` and `USER-RULES.md`; their project and ITL gates override generic rules.
+2. Activate every project skill required for the subject and current OpenSpec phase.
+3. Query mandatory product/documentation sources before broad repository traversal, then verify findings against code, tests, metadata, and available MCP evidence.
+4. Record material sources and conflicts in `## Context Sources`. If a required source is unavailable, label code-only conclusions as provisional and show the recovery action.
+<!-- itl:caveman-response-style -->
+## Response style (ITL downstream)
+
+Resolve an explicit session Caveman force/level first. Otherwise read `CAVEMAN=on|auto|off` and `CAVEMAN_LEVEL=lite|full|ultra` during the existing first project-context read; missing or invalid values mean `on/full`. Under `auto`, this `archive` phase is **inactive**. Do not add a separate narrated configuration preflight. Apply the effective style only to working commentary: keep required OpenSpec artifacts, exact technical text, safety warnings, and mandatory reports complete and unchanged.
+
 Archive a completed change in the experimental workflow.
 
 **Input**: Optionally specify a change name. If omitted, check if it can be inferred from conversation context. If vague or ambiguous you MUST prompt for available changes.

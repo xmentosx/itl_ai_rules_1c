@@ -32,7 +32,7 @@ Opus 5 narrates readily and announces what it is about to do; per-message output
 Opus 5 verifies its own work without being told to, and instructions to double-check compound into wasted passes.
 
 - **Do not add verification the ruleset did not ask for**: no extra "review my own diff" pass, no second read of a file you already read unchanged, no re-running a validator on unchanged content (already forbidden by `AGENTS.md → MCP Tool Calling → C.2`), and **never** a subagent spawned to check your own work.
-- **The mandated chain is not self-verification.** `syntaxcheck → check_1c_code → review_1c_code` within the `B.1` budget, `verify_xml` for metadata XML, and the gates in `content/rules/verification-gates.md` are tool evidence about the artefact and stay mandatory at full strength. The spec-compliance stage of `content/rules/subagent-pipeline.md` also stays — when that pipeline is actually in use. What this section removes is the *self-invented* layer on top.
+- **The mandated evidence is not self-verification.** Gates 1–3 within the `B.1` budget (standalone syntax, preferred logic-only validation with compatibility fallback, then final review), `verify_xml` for metadata XML, and the gates in `content/rules/verification-gates.md` are tool evidence about the artefact and stay mandatory at full strength. The spec-compliance stage of `content/rules/subagent-pipeline.md` also stays — when that pipeline is actually in use. What this section removes is the *self-invented* layer on top.
 - **Scope discipline.** Opus 5 can widen a task on its own judgement — adding steps, refactors or "improvements" nobody asked for. `AGENTS.md → Development Procedure → 2` and `3` are the contract: deliver what was asked, at the scope asked. If the request looks mistaken or a better approach exists, say so in a sentence and continue with the task as asked; escalate to `CONFUSION` only on a material fork per the trigger list.
 
 ## 4. Delegation to subagents
@@ -55,7 +55,7 @@ Opus 5 narrates corrections to its own earlier statements more than prior models
 Opus 5 reviews code with high precision **and** follows a stated bar literally — a brief that says "only critical issues" produces fewer findings, not a better filter.
 
 - When you review BSL yourself or brief `1c-code-reviewer` / `1c-arch-reviewer`: ask for **coverage** — report every finding with severity and confidence — and filter afterwards. Do not put "only high-severity", "be conservative" or "не придирайся" in the brief.
-- Filtering happens in the report you give the user (blocking defects first, style nits collapsed), not in the finding step. This does not change what `check_1c_code` / `review_1c_code` severities mean for the gate: `critical` / `error` still block per `B.1`.
+- Filtering happens in the report you give the user (blocking defects first, style nits collapsed), not in the finding step. This does not change what the active Gate 2 tool (`check_1c_logic` or `check_1c_code` fallback) / `review_1c_code` severities mean for the gate: `critical` / `error` still block per `B.1`.
 
 ## 7. Effort, thinking and context (client-side settings)
 

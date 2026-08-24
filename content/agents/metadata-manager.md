@@ -78,7 +78,7 @@ Before reporting success, apply `content/rules/verification-checklist.md` for th
 - [ ] Every assigned metadata operation is complete; nothing was silently skipped
 - [ ] No file outside the assigned scope was edited; no "while we're here" changes
 - [ ] `verify_xml` / form validators / skill validation scripts pass on every mutated artifact
-- [ ] Any touched BSL module passed `syntaxcheck` (and `check_1c_code` / `review_1c_code` within the budget when BSL was edited)
+- [ ] Any touched BSL module has clean Gates 1–3 evidence per `verification-gates.md` (standalone syntax, preferred logic-only validation with compatibility fallback, then final review)
 - [ ] Impact of renames / removals / new wiring was considered (`trace_impact` / `graph_dependencies` when applicable)
 
 If a criterion cannot be met, say so explicitly in the report — do not present a partial result as complete.
