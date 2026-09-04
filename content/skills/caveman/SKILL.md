@@ -8,7 +8,8 @@ description: >
   `CAVEMAN=off` disables auto-activation entirely. Force-on with "caveman",
   "как пещерный", "use caveman", "be brief", "коротко", `/caveman`. Force-off with
   "stop caveman" / "normal mode" / "обычный режим". Levels: `lite` / `full`
-  (default) / `ultra`. Explicit force commands work in every mode.
+  (default) / `ultra`, persisted by `.dev.env` `CAVEMAN_LEVEL`. Explicit force
+  commands work in every mode.
 ---
 
 # caveman — terse output style
@@ -42,9 +43,9 @@ When in doubt (still under `CAVEMAN=auto`), look at the verbs in the request: **
 Two scopes for changing the state:
 
 - **Session-only** (this chat, no file change): "caveman please" forces on; "stop caveman" / "normal mode" / "обычный режим" forces off; `/caveman lite|full|ultra` switches the level. A forced session state overrides everything below and holds until the next force or session end.
-- **Persistent** (project-wide, edits `.dev.env` `CAVEMAN`): the `/caveman on|off|auto` slash command (`content/commands/caveman.md`).
+- **Persistent** (project-wide): `/caveman on|off|auto` edits `.dev.env` `CAVEMAN`; `/caveman persist lite|full|ultra` edits `CAVEMAN_LEVEL` (`content/commands/caveman.md`).
 
-## Configuration — `.dev.env` (`CAVEMAN`)
+## Configuration — `.dev.env` (`CAVEMAN`, `CAVEMAN_LEVEL`)
 
 Automatic activation is gated by the `CAVEMAN` parameter in `.dev.env` (canonical description — `content/rules/dev-standards-env.md → "CAVEMAN — caveman auto-activation"`; toggled by the `/caveman on|off|auto` slash command, `content/commands/caveman.md`):
 
@@ -52,13 +53,15 @@ Automatic activation is gated by the `CAVEMAN` parameter in `.dev.env` (canonica
 - **`CAVEMAN=auto`** — task-type auto-classification as described in *Scope*: on for development, off for analysis / documentation / review.
 - **`CAVEMAN=off`** — auto-activation is disabled: caveman never turns on by itself on any task. It stays off until the user issues an explicit in-session force command.
 
-**Precedence:** an explicit session force ("caveman please" / "stop caveman" / "normal mode", or a `/caveman lite|full|ultra` level switch) always wins → then the persistent `CAVEMAN` value (`on` → all tasks, `auto` → by task type, `off` → no auto-on). Read `.dev.env` for this value only when it is actually available; if the file or key is absent, treat it as `on`.
+Persistent level is selected by **`CAVEMAN_LEVEL=lite|full|ultra`**; missing, empty, or invalid resolves to `full`.
+
+**Precedence:** an explicit session force or `/caveman lite|full|ultra` level switch always wins → then persistent `CAVEMAN` and `CAVEMAN_LEVEL` apply. Read `.dev.env` only when available; absent mode resolves to `on`, absent level to `full`. A level never enables an inactive mode by itself.
 
 ## Persistence
 
 When active (by default under `CAVEMAN=on`, by task-type classification under `CAVEMAN=auto`, or by force), caveman is ACTIVE FOR EVERY SUBSEQUENT RESPONSE within the same task. No filler drift. Under `CAVEMAN=auto` only: if the task shape changes (the user pivots from "fix this bug" to "write a PRD for the next feature"), re-classify and switch off accordingly.
 
-Default level when active: **full**. Switch with `/caveman lite`, `/caveman full`, or `/caveman ultra`. Level holds until session end or another switch.
+Default persistent level when active: **`CAVEMAN_LEVEL=full`**. Switch this chat with `/caveman lite|full|ultra`, or persist a project level with `/caveman persist lite|full|ultra`. A session level holds until session end or another switch.
 
 ## Compatibility with project rules (AGENTS.md, USER-RULES.md)
 

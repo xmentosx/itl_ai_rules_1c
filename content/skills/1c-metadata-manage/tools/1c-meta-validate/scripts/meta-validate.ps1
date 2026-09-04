@@ -174,7 +174,7 @@ $structuralOnlyTypes = @(
 	"Subsystem","Role","CommonForm","CommonCommand","CommandGroup","CommonAttribute",
 	"CommonTemplate","CommonPicture","SessionParameter","SettingsStorage","FilterCriterion",
 	"FunctionalOption","FunctionalOptionsParameter","Language","Style","StyleItem",
-	"WSReference","XDTOPackage","DocumentNumerator","Sequence"
+	"WSReference","XDTOPackage","DocumentNumerator","Sequence","Form"
 )
 
 # GeneratedType categories by type

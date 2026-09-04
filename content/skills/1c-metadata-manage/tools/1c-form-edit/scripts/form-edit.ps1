@@ -655,8 +655,12 @@ function Emit-Table {
 	Emit-Title -el $el -name $name -indent $inner
 	Emit-CommonFlags -el $el -indent $inner
 	if ($el.representation) { X "$inner<Representation>$($el.representation)</Representation>" }
-	if ($el.changeRowSet -eq $true) { X "$inner<ChangeRowSet>true</ChangeRowSet>" }
-	if ($el.changeRowOrder -eq $true) { X "$inner<ChangeRowOrder>true</ChangeRowOrder>" }
+	if ($el.PSObject.Properties['changeRowSet'] -and $null -ne $el.changeRowSet) {
+		X "$inner<ChangeRowSet>$(if ($el.changeRowSet -eq $true){'true'}else{'false'})</ChangeRowSet>"
+	}
+	if ($el.PSObject.Properties['changeRowOrder'] -and $null -ne $el.changeRowOrder) {
+		X "$inner<ChangeRowOrder>$(if ($el.changeRowOrder -eq $true){'true'}else{'false'})</ChangeRowOrder>"
+	}
 	if ($el.height) { X "$inner<HeightInTableRows>$($el.height)</HeightInTableRows>" }
 	if ($el.header -eq $false) { X "$inner<Header>false</Header>" }
 	if ($el.footer -eq $true) { X "$inner<Footer>true</Footer>" }

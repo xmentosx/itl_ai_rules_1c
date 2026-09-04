@@ -38,7 +38,7 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 - **metadatasearch** / **get_metadata_details** — verify metadata dependencies and structure
 - **templatesearch** — find better patterns to apply
 - **syntaxcheck** — verify refactored code syntax
-- **check_1c_code** — check for performance and logic issues
+- **check_1c_logic** — preferred performance/logic check; use **check_1c_code** only as compatibility fallback
 - **review_1c_code** — check style and ITS standards compliance
 - **rewrite_1c_code** — get AI-improved version of code (with `goal` parameter: `optimize`, `readability`)
 
@@ -138,7 +138,7 @@ Before removing ANYTHING:
 - [ ] Test affected functionality
 
 After each change:
-- [ ] Validator chain passes on every touched module — `syntaxcheck` → `check_1c_code` → `review_1c_code`; a blocking defect has a clean confirming run within the budget from `AGENTS.md → MCP Tool Calling → B.1`; if a validator is not exposed — graceful degradation per `content/rules/verification-checklist.md`, record the skip in the report
+- [ ] Gates 1–3 pass on every touched module at the closing snapshot, using standalone syntax, the preferred logic-only validator (`check_1c_code` fallback), and one final review; a blocking defect has a clean confirming run within budget B.1; if a validator is not exposed — graceful degradation per `content/rules/verification-gates.md`, record the skip in the report
 - [ ] No new errors introduced
 - [ ] Related tests still work
 - [ ] Document the change
@@ -180,7 +180,7 @@ After each change:
 
 ## Testing
 
-- [ ] Validator chain passed (syntaxcheck → check_1c_code → review_1c_code)
+- [ ] Gates 1–3 passed on the closing snapshot (standalone syntax, preferred logic-only validation with compatibility fallback, then final review)
 - [ ] Functionality verified
 - [ ] Performance tested
 - [ ] No regressions found

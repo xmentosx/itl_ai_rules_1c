@@ -5,7 +5,7 @@ Scans a Configurator XML dump for **duplicate UUIDs** and optionally regenerates
 Two carriers are checked:
 
 - `uuid="..."` attributes — objects, attributes, tabular sections, `ThisNode` of exchange plans;
-- `<xr:TypeId>` / `<xr:ValueId>` elements inside `<InternalInfo>` — generated types.
+- `<xr:TypeId>` / `<xr:ValueId>` definitions inside `<InternalInfo>` of a root `MetaDataObject` — generated-type identities. Elements with the same names in forms and templates are references and are ignored.
 
 ## When to run
 
@@ -19,7 +19,7 @@ Slash command: `/check-uuid` (source: `content/commands/check-uuid.md`).
 ## Usage
 
 ```
-1c-uuid-check <ConfigPath> [-IncludeIntra] [-Fix] [-Filter <mask>] [-MaxReported <n>] [-OutFile <path>]
+1c-uuid-check <ConfigPath> [-IncludeIntra] [-Fix] [-Filter <mask>] [-IncludePathList <path>] [-MaxReported <n>] [-OutFile <path>]
 ```
 
 | Parameter | Required | Default | Description |
@@ -28,6 +28,7 @@ Slash command: `/check-uuid` (source: `content/commands/check-uuid.md`).
 | IncludeIntra | no | off | Also report / repair duplicates **within one file** |
 | Fix | no | off | Regenerate every duplicate except the first occurrence |
 | Filter | no | `*.xml` | File mask to scan |
+| IncludePathList | no | — | UTF-8 file with one `ConfigPath`-relative XML path per line; scan only that explicit set |
 | MaxReported | no | `50` | Cap on duplicate groups printed per section |
 | OutFile | no | — | Write the report to a file instead of stdout |
 
@@ -39,9 +40,14 @@ powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-uuid-check/sc
 
 Exit codes: `0` — clean (or repaired), `1` — duplicates found.
 
+Without `IncludePathList`, the tool remains a full recursive audit. ITL merge
+integrity may pass the union of XML files changed on both merge sides plus
+`Configuration.xml`; this checks merge-created identity collisions without
+rescanning every unchanged XML file.
+
 ## Cross-file vs intra-file
 
-- **Cross-file** duplicates — the same UUID in two different files. Always a collision, always reported.
+- **Cross-file** duplicates — the same identity-bearing UUID in two different files. Always a collision, always reported. Repeated `TypeId`/`ValueId` references outside metadata `InternalInfo` do not claim identity and are not duplicates.
 - **Intra-file** duplicates — the same UUID twice inside one file. Reported only with `-IncludeIntra`, but the run always states how many were suppressed. In the Configurator XML format these are usually genuine errors too (each generated type gets its own `TypeId` and `ValueId`), so inspect them after bulk generation rather than assuming they are benign.
 
 ## `-Fix` — read before using

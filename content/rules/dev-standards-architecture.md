@@ -127,6 +127,9 @@ Visual form editing in extensions — **minimize**. Changes — programmatically
 ### Client-Server Interaction
 - **`&НаСервереБезКонтекста` is MANDATORY** for all server methods that do not access form data. `&НаСервере` is allowed only when the method directly reads/writes form attributes or elements.
 - If a method only needs a form attribute value — pass it as a parameter and use `&НаСервереБезКонтекста`.
+- **Managed-form boundary contract.** Before changing a cross-context path, record a compact trace from its UI entry through every changed client/server boundary to unchanged code. For each changed procedure, verify its directive/module properties and every new or suspect global property, manager, applied type, constructor, and method in that context. Syntax is not context proof; when uncertain, use `bsl_scope_members`, platform documentation, or a working project pattern.
+- At each boundary, verify that parameters and return values can cross it, retain the expected type, and are usable by the receiver. Never pass server-only applied objects, managers, or selections to the client; convert them in their owning context and return client-usable values or data structures. For example, client code obtains predefined values with `ПредопределенноеЗначение("Перечисление.ВидОперации.Значение")`, not the server-only `Перечисления.ВидОперации.Значение` manager.
+- Run the exact affected user path once before dependent implementation and reuse fresh evidence for the same code state/path. This diagnostic checkpoint creates no completion pass and replaces neither Vanessa nor final project verification. `&НаСервере` is not a universal fix: server code must avoid client-only UI APIs and return a valid client contract.
 
 ### Security
 - `Выполнить()` and `Вычислить()` — **PROHIBITED** without extreme necessity.

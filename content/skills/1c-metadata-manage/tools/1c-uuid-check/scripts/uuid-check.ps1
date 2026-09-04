@@ -1,7 +1,7 @@
 ﻿# uuid-check v1.0 — Detect (and optionally repair) duplicate UUIDs in a 1C XML configuration dump
 # Ported from check_uuid_duplicates.py of https://github.com/Desko77/claude-code-skills-1c (MIT)
 # and adapted to the Configurator XML format: `uuid="..."` attributes plus
-# <xr:TypeId> / <xr:ValueId> elements inside <InternalInfo>.
+# <xr:TypeId> / <xr:ValueId> definitions inside <InternalInfo> of a metadata object.
 param(
 	[Parameter(Mandatory)]
 	[Alias('Path')]
@@ -16,6 +16,10 @@ param(
 
 	# File mask to scan. The Configurator dump is XML; EDT (*.mdo) is not supported by this ruleset.
 	[string]$Filter = "*.xml",
+
+	# Optional UTF-8 file containing one ConfigPath-relative file per line. When supplied,
+	# scan only this explicit lifecycle delta instead of recursively reading the whole dump.
+	[string]$IncludePathList,
 
 	[int]$MaxReported = 50,
 
@@ -37,8 +41,42 @@ $resolvedPath = (Resolve-Path $ConfigPath).Path
 
 if (Test-Path $resolvedPath -PathType Container) {
 	$baseDir = $resolvedPath
-	$files = @(Get-ChildItem -LiteralPath $resolvedPath -Filter $Filter -File -Recurse)
+	if ($IncludePathList) {
+		if (-not (Test-Path -LiteralPath $IncludePathList -PathType Leaf)) {
+			Write-Host "[ERROR] Include path list not found: $IncludePathList"
+			exit 1
+		}
+		$basePrefix = $baseDir.TrimEnd('\', '/') + [System.IO.Path]::DirectorySeparatorChar
+		$files = @(
+			[System.IO.File]::ReadAllLines(
+				[System.IO.Path]::GetFullPath($IncludePathList),
+				[System.Text.Encoding]::UTF8
+			) |
+				ForEach-Object { ([string]$_).Trim() } |
+				Where-Object { $_ } |
+				ForEach-Object {
+					$candidate = [System.IO.Path]::GetFullPath((Join-Path $baseDir $_))
+					if (-not $candidate.StartsWith($basePrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+						Write-Host "[ERROR] Include path escapes ConfigPath: $_"
+						exit 1
+					}
+					if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
+						Write-Host "[ERROR] Included file not found: $_"
+						exit 1
+					}
+					Get-Item -LiteralPath $candidate
+				} |
+				Where-Object { $_.Name -like $Filter } |
+				Sort-Object FullName -Unique
+		)
+	} else {
+		$files = @(Get-ChildItem -LiteralPath $resolvedPath -Filter $Filter -File -Recurse)
+	}
 } else {
+	if ($IncludePathList) {
+		Write-Host "[ERROR] IncludePathList requires ConfigPath to be a directory."
+		exit 1
+	}
 	$baseDir = Split-Path $resolvedPath -Parent
 	$files = @(Get-Item -LiteralPath $resolvedPath)
 }
@@ -63,10 +101,23 @@ function Get-RelativePath {
 # --- UUID extraction -------------------------------------------------------
 # Two carriers in the Configurator XML dump:
 #   attribute  uuid="xxxxxxxx-...."         — object / attribute / tabular-section identity
-#   elements   <xr:TypeId>, <xr:ValueId>    — generated types inside <InternalInfo>
+#   elements   <xr:TypeId>, <xr:ValueId>    — generated-type identity definitions inside
+#                                             <MetaDataObject>/.../<InternalInfo>
+# The same element names outside that metadata InternalInfo are references to a generated
+# type (for example in Form.xml or a DCS template), not claims of a new identity.
 $guid = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
 $uuidRegex = [regex]("(?:\b(?<attr>uuid)\s*=\s*""(?<gattr>" + $guid + ")"")" +
                      "|(?:<(?:\w+:)?(?<el>TypeId|ValueId)>\s*(?<gel>" + $guid + ")\s*<)")
+$metadataRootRegex = [regex]::new(
+	'\A\s*(?:<\?xml\b[^?]*\?>\s*)?<(?:\w+:)?MetaDataObject\b',
+	[System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+	[System.Text.RegularExpressions.RegexOptions]::Singleline
+)
+$internalInfoRegex = [regex]::new(
+	'<(?:\w+:)?InternalInfo\b[^>]*>(?<body>.*?)</(?:\w+:)?InternalInfo\s*>',
+	[System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor
+	[System.Text.RegularExpressions.RegexOptions]::Singleline
+)
 
 function Read-FileText {
 	# Returns the decoded text plus the encoding needed to write it back byte-identically.
@@ -99,6 +150,25 @@ function Step-LineCursor {
 	return $Cursor.Line
 }
 
+function Get-GeneratedIdentityRanges {
+	param([string]$Text)
+	if (-not $metadataRootRegex.IsMatch($Text)) { return @() }
+	return @(
+		$internalInfoRegex.Matches($Text) | ForEach-Object {
+			$body = $_.Groups['body']
+			[pscustomobject]@{ Start = $body.Index; End = $body.Index + $body.Length }
+		}
+	)
+}
+
+function Test-IndexInsideRange {
+	param([int]$Index, [object[]]$Ranges)
+	foreach ($range in $Ranges) {
+		if ($Index -ge $range.Start -and $Index -lt $range.End) { return $true }
+	}
+	return $false
+}
+
 $registry = @{}   # uuid (lower) -> list of occurrences
 $scanned = 0
 
@@ -112,6 +182,7 @@ foreach ($file in $files) {
 	}
 	$scanned++
 	$cursor = New-LineCursor -Text $content.Text
+	$generatedIdentityRanges = @(Get-GeneratedIdentityRanges -Text $content.Text)
 
 	foreach ($m in $uuidRegex.Matches($content.Text)) {
 		if ($m.Groups['gattr'].Success) {
@@ -120,6 +191,9 @@ foreach ($file in $files) {
 		} else {
 			$group = $m.Groups['gel']
 			$carrier = $m.Groups['el'].Value
+			if (-not (Test-IndexInsideRange -Index $group.Index -Ranges $generatedIdentityRanges)) {
+				continue
+			}
 		}
 		$key = $group.Value.ToLowerInvariant()
 		if (-not $registry.ContainsKey($key)) { $registry[$key] = New-Object System.Collections.ArrayList }

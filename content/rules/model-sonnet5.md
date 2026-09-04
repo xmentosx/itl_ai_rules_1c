@@ -46,7 +46,7 @@ Sonnet 5 honours a stated severity bar more faithfully than earlier models: "onl
 
 - When you review BSL yourself or brief `1c-code-reviewer` / `1c-arch-reviewer`: ask for every finding, with severity and confidence attached, and filter in your own report. Never write "only critical", "be conservative" or "не мелочись" in the brief.
 - If you do want a single-pass self-filter, define the bar concretely ("сообщай всё, что может привести к неверному поведению, ошибке проведения или неверному результату; опускай только чисто стилевые придирки") instead of a qualitative word like "important".
-- Gate semantics are unchanged: `critical` / `error` from `check_1c_code` / `review_1c_code` block per `AGENTS.md → MCP Tool Calling → B.1`.
+- Gate semantics are unchanged: `critical` / `error` from the active Gate 2 tool (`check_1c_logic` or `check_1c_code` fallback) and `review_1c_code` block per `AGENTS.md → MCP Tool Calling → B.1`.
 
 ## 6. Token budget and context
 
