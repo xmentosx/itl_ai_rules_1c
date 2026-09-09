@@ -565,7 +565,7 @@ if (-not $stopped) {
 # --- Check 8: Command actions ---
 
 if (-not $stopped) {
-	$actionErrors = 0
+	$actionWarnings = 0
 	$actionChecked = 0
 
 	foreach ($cmd in $cmdNodes) {
@@ -574,12 +574,12 @@ if (-not $stopped) {
 		$actionNode = $cmd.SelectSingleNode("f:Action", $nsMgr)
 		$actionChecked++
 		if (-not $actionNode -or -not $actionNode.InnerText.Trim()) {
-			Report-Error "Command '$cmdName': missing or empty Action"
-			$actionErrors++
+			Report-Warn "COMMAND_ACTION_UNASSIGNED: Command '$cmdName': missing or empty Action. Advisory only; report to the user, do not create dummy handlers or bindings to silence this warning."
+			$actionWarnings++
 		}
 	}
 
-	if ($actionErrors -eq 0 -and $actionChecked -gt 0) {
+	if ($actionWarnings -eq 0 -and $actionChecked -gt 0) {
 		Report-OK "Command actions: $actionChecked commands checked"
 	} elseif ($actionChecked -eq 0) {
 		Report-OK "Command actions: none"

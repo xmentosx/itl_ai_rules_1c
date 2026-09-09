@@ -2,6 +2,25 @@
 description: Propose a new change - create it and generate all artifacts in one step
 ---
 
+<!-- itl:caveman-response-style -->
+## Response style (ITL downstream)
+
+Resolve an explicit session Caveman force/level first. Otherwise read `CAVEMAN=on|auto|off` and `CAVEMAN_LEVEL=lite|full|ultra` during the existing first project-context read; missing or invalid values mean `on/full`. Under `auto`, this `propose` phase is **inactive**. Do not add a separate narrated configuration preflight. Apply the effective style only to working commentary: keep required OpenSpec artifacts, exact technical text, safety warnings, and mandatory reports complete and unchanged.
+
+<!-- itl:project-skill-preflight -->
+## Project skill preflight (ITL downstream)
+
+Before repository exploration, proposal, or implementation:
+
+1. Read project-root `AGENTS.md` and `USER-RULES.md`; their project and ITL gates override generic rules.
+2. Activate every project skill required for the subject and current OpenSpec phase.
+3. Query mandatory product/documentation sources before broad repository traversal, then verify findings against code, tests, metadata, and available MCP evidence.
+4. Record material sources and conflicts in `## Context Sources`. If a required source is unavailable, label code-only conclusions as provisional and show the recovery action.
+<!-- itl:propose-test-design -->
+## 1C test design (ITL downstream)
+
+Create `openspec/changes/<change-id>/test-plan.md` before declaring a code, metadata, or observable-behavior change apply-ready. Resolve the effective ITL verification modes from project state. When `ITL_VANESSA_TESTING=off`, do not automatically add new Vanessa scenarios; record the skipped component and the evidence needed to enable it. Propose describes checks but does not create or edit executable tests.
+
 Propose a new change - create the change and generate all artifacts in one step.
 
 I'll create a change with artifacts:

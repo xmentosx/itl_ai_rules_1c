@@ -1,0 +1,267 @@
+BeforeAll {
+    . (Join-Path $PSScriptRoot "TestSupport.ps1")
+
+    function Invoke-TestInstall {
+        param([string]$ProjectRoot, [string]$Tool, [string]$McpMode = "delegated")
+        return Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "init", "-ProjectRoot", $ProjectRoot, "-Source", $script:ForkRoot,
+            "-Tools", $Tool, "-NonInteractive", "-AssumeYes", "-McpMode", $McpMode
+        )
+    }
+
+    $script:PublishedCommands = @("caveman", "deploy-and-test", "doctor", "economymode", "evolve", "getconfigfiles", "litemode", "loadfrom1cbase", "update1cbase")
+    $script:SuppressedCommands = @("checkmcp", "installmcp", "updatemcp", "updaterules")
+    $script:LayoutRoot = New-ForkTestRoot
+}
+
+AfterAll {
+    Remove-Item -LiteralPath $script:LayoutRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+
+Describe "Single-client adapter contract" -Tag "Fast" {
+    It "rejects multiple and unsupported clients before writing a manifest" {
+        foreach ($value in @("codex,kilocode", "other")) {
+            $project = Join-Path $script:LayoutRoot ("reject-" + $value.Replace(',', '-'))
+            New-Item -ItemType Directory -Force -Path $project | Out-Null
+            $result = Invoke-TestInstall -ProjectRoot $project -Tool $value
+            $result.ExitCode | Should -Not -Be 0
+            Test-Path (Join-Path $project ".ai-rules.json") | Should -BeFalse
+        }
+    }
+
+    It "initializes each supported client with exactly one manifest tool and native paths" {
+        $cases = @(
+            @{ Tool="codex"; Paths=@(".codex/rules", ".codex/agents", ".agents/skills", ".agents/skills/openspec-propose/SKILL.md", ".agents/skills/opsx-propose/SKILL.md", ".agents/skills/opsx-propose/agents/openai.yaml"); SkillPath=".agents/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="kilocode"; Paths=@(".kilo/rules-1c", ".kilo/agents", ".kilo/commands", ".kilo/skills", ".kilo/kilo.json"); SkillPath=".kilo/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="claude-code"; Paths=@(".claude/rules-1c", ".claude/agents", ".claude/commands", ".claude/skills"); SkillPath=".claude/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="cursor"; Paths=@(".cursor/rules", ".cursor/agents", ".cursor/commands", ".cursor/skills"); SkillPath=".cursor/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="opencode"; Paths=@(".opencode/rules", ".opencode/agent", ".opencode/command", ".claude/skills"); SkillPath=".claude/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="kimi"; Paths=@(".kimi-code/rules-1c", ".kimi-code/rules-1c/agents", ".kimi-code/skills"); SkillPath=".kimi-code/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="qwen"; Paths=@("QWEN.md", ".qwen/rules-1c", ".qwen/agents", ".qwen/commands", ".qwen/skills"); SkillPath=".qwen/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="command-code"; Paths=@(".commandcode/rules-1c", ".commandcode/agents", ".commandcode/commands", ".commandcode/skills"); SkillPath=".commandcode/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="cline"; Paths=@(".cline/rules-1c", ".cline/rules-1c/agents", ".cline/skills"); SkillPath=".cline/skills/1c-metadata-manage/SKILL.md" },
+            @{ Tool="pi"; Paths=@(".pi/rules-1c", ".pi/rules-1c/agents", ".pi/prompts", ".pi/skills"); SkillPath=".pi/skills/1c-metadata-manage/SKILL.md" }
+        )
+        foreach ($case in $cases) {
+            $project = Join-Path $script:LayoutRoot $case.Tool
+            New-Item -ItemType Directory -Force -Path $project | Out-Null
+            $result = Invoke-TestInstall -ProjectRoot $project -Tool $case.Tool
+            $result.ExitCode | Should -Be 0 -Because "$($case.Tool): $($result.Output)"
+            $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".ai-rules.json") | ConvertFrom-Json
+            @($manifest.tools) | Should -Be @($case.Tool)
+            $manifest.protocol | Should -Be "1.1"
+            $evidenceEntries = @($manifest.files.PSObject.Properties | Where-Object {
+                [string]$_.Value.source -eq 'content/rules/verification-ai-evidence.md'
+            })
+            $evidenceEntries.Count | Should -Be 1 -Because "$($case.Tool) must own the canonical AI evidence rule"
+            $installedEvidence = Get-Content -LiteralPath (Join-Path $project $evidenceEntries[0].Name) -Raw -Encoding UTF8
+            $sourceEvidence = Get-Content -LiteralPath (Join-Path $script:ForkRoot 'content/rules/verification-ai-evidence.md') -Raw -Encoding UTF8
+            $sourceBody = [regex]::Replace($sourceEvidence.Replace("`r`n", "`n"), '\A---\n.*?\n---\n', '', [Text.RegularExpressions.RegexOptions]::Singleline).Trim()
+            $installedEvidence.Replace("`r`n", "`n").Contains($sourceBody) | Should -BeTrue -Because "$($case.Tool) must retain the full decision policy, including its limits"
+            foreach ($path in $case.Paths) { Test-Path (Join-Path $project $path) | Should -BeTrue -Because "$($case.Tool): $path" }
+            $installedSkill = Get-Content -Raw -Encoding UTF8 (Join-Path $project $case.SkillPath)
+            $installedSkill | Should -Match ([regex]::Escape('is never an unambiguous one-line fix')) -Because $case.Tool
+            $skillRoot = Split-Path -Parent (Split-Path -Parent $case.SkillPath)
+            foreach ($grillingPath in @(
+                "$skillRoot/grilling/SKILL.md",
+                "$skillRoot/grill-me/SKILL.md",
+                "$skillRoot/grill-with-docs/SKILL.md",
+                "$skillRoot/domain-modeling/CONTEXT-FORMAT.md",
+                "$skillRoot/domain-modeling/ADR-FORMAT.md"
+            )) {
+                Test-Path (Join-Path $project $grillingPath) | Should -BeTrue -Because "$($case.Tool): $grillingPath"
+            }
+        }
+    }
+
+    It "records native bundles for the original five and natural mode for the new five" {
+        $native = @("codex", "kilocode", "claude-code", "cursor", "opencode")
+        $natural = @("kimi", "qwen", "command-code", "cline", "pi")
+        foreach ($tool in @($native + $natural)) {
+            $project = Join-Path $script:LayoutRoot $tool
+            $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".ai-rules.json") | ConvertFrom-Json
+            Test-Path (Join-Path $project "openspec/README.md") | Should -BeTrue
+            Test-Path (Join-Path $project "openspec/specs/README.md") | Should -BeTrue
+            Test-Path (Join-Path $project "openspec/changes/README.md") | Should -BeTrue
+            $bundleSources = @($manifest.files.PSObject.Properties.Value | Where-Object {
+                [string]$_.source -like "content/openspec-bundle/$tool/*"
+            })
+            $skippedProperty = $manifest.integrations.openspec.PSObject.Properties['bundleSkipped']
+            $skipped = if ($null -eq $skippedProperty) { @() } else { @($skippedProperty.Value) }
+            if ($tool -in $native) {
+                $bundleSources.Count | Should -BeGreaterThan 0 -Because "$tool has an upstream native bundle"
+                $skipped | Should -Not -Contain $tool
+            } else {
+                $bundleSources | Should -BeNullOrEmpty
+                $skipped | Should -Contain $tool
+            }
+        }
+    }
+
+    It "publishes the allowlist and suppresses generic update and MCP commands" {
+        foreach ($tool in @("kilocode", "claude-code", "cursor", "opencode", "qwen", "command-code", "pi")) {
+            $project = Join-Path $script:LayoutRoot $tool
+            $commandDir = switch ($tool) {
+                "kilocode" { ".kilo/commands" }
+                "claude-code" { ".claude/commands" }
+                "cursor" { ".cursor/commands" }
+                "opencode" { ".opencode/command" }
+                "qwen" { ".qwen/commands" }
+                "command-code" { ".commandcode/commands" }
+                "pi" { ".pi/prompts" }
+            }
+            foreach ($name in $script:PublishedCommands) { Test-Path (Join-Path $project "$commandDir/$name.md") | Should -BeTrue -Because "$tool publishes $name" }
+            foreach ($name in $script:SuppressedCommands) { Test-Path (Join-Path $project "$commandDir/$name.md") | Should -BeFalse -Because "$tool suppresses $name" }
+        }
+
+        $codex = Join-Path $script:LayoutRoot "codex"
+        foreach ($name in $script:PublishedCommands) { Test-Path (Join-Path $codex ".agents/skills/$name/SKILL.md") | Should -BeTrue -Because "Codex exposes $name as a project skill" }
+        foreach ($name in $script:SuppressedCommands) { Test-Path (Join-Path $codex ".agents/skills/$name/SKILL.md") | Should -BeFalse }
+        Test-Path (Join-Path $codex ".codex/skills") | Should -BeFalse
+
+        $opsxAliases = [ordered]@{
+            "opsx-explore" = "openspec-explore"
+            "opsx-propose" = "openspec-propose"
+            "opsx-apply" = "openspec-apply-change"
+            "opsx-archive" = "openspec-archive-change"
+        }
+        foreach ($alias in $opsxAliases.Keys) {
+            $aliasRoot = Join-Path $codex ".agents/skills/$alias"
+            $aliasText = Get-Content -LiteralPath (Join-Path $aliasRoot "SKILL.md") -Raw -Encoding UTF8
+            $aliasText | Should -Match "(?m)^name:\s*$([regex]::Escape($alias))\r?$"
+            $aliasText | Should -Match ([regex]::Escape("../$($opsxAliases[$alias])/SKILL.md"))
+            $policyText = Get-Content -LiteralPath (Join-Path $aliasRoot "agents/openai.yaml") -Raw -Encoding UTF8
+            $policyText | Should -Match ("(?m)^  display_name: `"" + [regex]::Escape($alias) + "`"\r?$")
+            $policyText | Should -Match 'allow_implicit_invocation:\s*false'
+            Test-Path (Join-Path $codex ".agents/skills/$($opsxAliases[$alias])/agents/openai.yaml") | Should -BeFalse -Because "canonical OpenSpec skills keep the default implicit policy"
+        }
+
+        Test-Path (Join-Path $script:LayoutRoot "kimi/.kimi-code/commands") | Should -BeFalse
+        Test-Path (Join-Path $script:LayoutRoot "cline/.cline/commands") | Should -BeFalse
+    }
+
+    It "does not write user-global Codex prompts" {
+        $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $script:LayoutRoot "codex/.ai-rules.json") | ConvertFrom-Json
+        @($manifest.files.PSObject.Properties.Name | Where-Object { $_ -match '^~|^[A-Za-z]:|\.codex/prompts' }) | Should -BeNullOrEmpty
+    }
+
+    It "keeps a no-op update byte-idempotent" {
+        $project = Join-Path $script:LayoutRoot "codex"
+        $manifestPath = Join-Path $project ".ai-rules.json"
+        $before = (Get-FileHash -Algorithm SHA256 $manifestPath).Hash
+        $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "update", "-ProjectRoot", $project, "-Source", $script:ForkRoot,
+            "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+        )
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $result.Output | Should -Match "Manifest unchanged"
+        (Get-FileHash -Algorithm SHA256 $manifestPath).Hash | Should -Be $before
+    }
+
+    It "preserves project LLM-RULES byte-for-byte on update" {
+        $project = Join-Path $script:LayoutRoot "codex"
+        $path = Join-Path $project "LLM-RULES.md"
+        [IO.File]::WriteAllText($path, "# LLM Rules`n`nuser-approved local rule`n", [Text.UTF8Encoding]::new($false))
+        $before = (Get-FileHash -Algorithm SHA256 $path).Hash
+        $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "update", "-ProjectRoot", $project, "-Source", $script:ForkRoot,
+            "-NonInteractive", "-AssumeYes", "-McpMode", "delegated"
+        )
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        (Get-FileHash -Algorithm SHA256 $path).Hash | Should -Be $before
+    }
+}
+
+Describe "Managed MCP schemas for new clients" -Tag "Fast" {
+    It "renders Kimi, Command Code, and Cline project MCP contracts" {
+        $cases = @(
+            @{ Tool = "kimi"; Path = ".kimi-code/mcp.json"; Type = $null },
+            @{ Tool = "command-code"; Path = ".mcp.json"; Type = "http" },
+            @{ Tool = "cline"; Path = ".cline/mcp.json"; Type = "streamableHttp" }
+        )
+        foreach ($case in $cases) {
+            $project = Join-Path $script:LayoutRoot ("managed-" + $case.Tool)
+            New-Item -ItemType Directory -Force -Path $project | Out-Null
+            $result = Invoke-TestInstall -ProjectRoot $project -Tool $case.Tool -McpMode managed
+            $result.ExitCode | Should -Be 0 -Because "$($case.Tool): $($result.Output)"
+            $config = Get-Content -Raw -Encoding UTF8 (Join-Path $project $case.Path) | ConvertFrom-Json
+            @($config.mcpServers.PSObject.Properties).Count | Should -BeGreaterThan 0
+            $remote = @($config.mcpServers.PSObject.Properties.Value | Where-Object { $_.url } | Select-Object -First 1)
+            $remote.Count | Should -Be 1
+            if ($case.Type) { $remote[0].type | Should -Be $case.Type }
+        }
+    }
+
+    It "merges and removes only the Qwen MCP key" {
+        $project = Join-Path $script:LayoutRoot "managed-qwen"
+        New-Item -ItemType Directory -Force -Path (Join-Path $project ".qwen") | Out-Null
+        [IO.File]::WriteAllText((Join-Path $project ".qwen/settings.json"), '{"model":"user-model"}', [Text.UTF8Encoding]::new($false))
+        $result = Invoke-TestInstall -ProjectRoot $project -Tool qwen -McpMode managed
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $config = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".qwen/settings.json") | ConvertFrom-Json
+        $config.model | Should -Be "user-model"
+        @($config.mcpServers.PSObject.Properties.Value | Where-Object { $_.httpUrl }).Count | Should -BeGreaterThan 0
+
+        $remove = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "remove", "-ProjectRoot", $project, "-Source", $script:ForkRoot, "-AssumeYes"
+        )
+        $remove.ExitCode | Should -Be 0 -Because $remove.Output
+        $after = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".qwen/settings.json") | ConvertFrom-Json
+        $after.model | Should -Be "user-model"
+        $after.PSObject.Properties.Name | Should -Not -Contain "mcpServers"
+    }
+
+    It "pins the Pi MCP package project-locally and preserves user packages on removal" {
+        $project = Join-Path $script:LayoutRoot "managed-pi"
+        New-Item -ItemType Directory -Force -Path (Join-Path $project ".pi") | Out-Null
+        [IO.File]::WriteAllText((Join-Path $project ".pi/settings.json"), '{"theme":"user","packages":["npm:user-package@2.0.0"]}', [Text.UTF8Encoding]::new($false))
+        $result = Invoke-TestInstall -ProjectRoot $project -Tool pi -McpMode managed
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        $settings = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".pi/settings.json") | ConvertFrom-Json
+        @($settings.packages) | Should -Contain "npm:user-package@2.0.0"
+        @($settings.packages) | Should -Contain "npm:pi-mcp-extension@1.5.0"
+        $mcp = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".pi/mcp.json") | ConvertFrom-Json
+        @($mcp.mcpServers.PSObject.Properties.Value | Where-Object { $_.transport -eq "streamable-http" }).Count | Should -BeGreaterThan 0
+
+        $remove = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot "install.ps1") -Arguments @(
+            "remove", "-ProjectRoot", $project, "-Source", $script:ForkRoot, "-AssumeYes"
+        )
+        $remove.ExitCode | Should -Be 0 -Because $remove.Output
+        $after = Get-Content -Raw -Encoding UTF8 (Join-Path $project ".pi/settings.json") | ConvertFrom-Json
+        $after.theme | Should -Be "user"
+        @($after.packages) | Should -Contain "npm:user-package@2.0.0"
+        @($after.packages) | Should -Not -Contain "npm:pi-mcp-extension@1.5.0"
+    }
+}
+
+Describe "Adapter safety guards" -Tag "Fast" {
+    It "blocks Kilo JSON and JSONC collision without changing either file" {
+        $project = Join-Path $script:LayoutRoot "kilo-jsonc-collision"
+        New-Item -ItemType Directory -Force -Path (Join-Path $project ".kilo") | Out-Null
+        $json = Join-Path $project ".kilo/kilo.json"
+        $jsonc = Join-Path $project ".kilo/kilo.jsonc"
+        [IO.File]::WriteAllText($json, '{"theme":"user"}', [Text.UTF8Encoding]::new($false))
+        [IO.File]::WriteAllText($jsonc, '{ // user config`n}', [Text.UTF8Encoding]::new($false))
+        $beforeJson = (Get-FileHash $json).Hash
+        $beforeJsonc = (Get-FileHash $jsonc).Hash
+        $result = Invoke-TestInstall -ProjectRoot $project -Tool "kilocode"
+        $result.ExitCode | Should -Not -Be 0
+        $result.Output | Should -Match "KILO_CONFIG_COLLISION"
+        (Get-FileHash $json).Hash | Should -Be $beforeJson
+        (Get-FileHash $jsonc).Hash | Should -Be $beforeJsonc
+        Test-Path (Join-Path $project ".ai-rules.json") | Should -BeFalse
+    }
+
+    It "preserves the five ITL-owned project skills" {
+        $project = Join-Path $script:LayoutRoot "itl-skills"
+        $names = @("1c-workflow", "1c-workflow-fast", "itl-roctup-1c-data", "itl-vanessa-ui-mcp", "product-docs")
+        foreach ($name in $names) {
+            $file = Join-Path $project ".agents/skills/$name/ITL-SENTINEL.txt"
+            New-Item -ItemType Directory -Force -Path (Split-Path -Parent $file) | Out-Null
+            [IO.File]::WriteAllText($file, "ITL owns $name", [Text.UTF8Encoding]::new($false))
+        }
+        $result = Invoke-TestInstall -ProjectRoot $project -Tool "codex"
+        $result.ExitCode | Should -Be 0 -Because $result.Output
+        foreach ($name in $names) { (Get-Content -Raw (Join-Path $project ".agents/skills/$name/ITL-SENTINEL.txt")) | Should -Be "ITL owns $name" }
+    }
+}

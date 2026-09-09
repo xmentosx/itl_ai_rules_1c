@@ -546,7 +546,7 @@ The PowerShell scripts under `tools/1c-meta-{compile,edit,info,remove,validate}/
 - **docsearch** — Look up platform documentation for metadata type properties and valid property values when investigating validation errors.
 - **business_search** — Semantic search of related objects when creating configuration objects.
 - **answer_metadata_question** — Natural-language questions about object structure (meta-info provides more detailed structural analysis).
-- **check_1c_code** — Verify BSL code in object modules after fixing structural issues (syntax, logic, performance).
+- **syntaxcheck** then **check_1c_logic** (**check_1c_code** fallback) — verify syntax first, then logic and performance in object modules after fixing structural issues.
 - **review_1c_code** — Check code style and ITS standards compliance in object modules.
 
 ## SDD Integration

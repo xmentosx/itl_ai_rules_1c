@@ -326,13 +326,19 @@ Value of the key sets orientation: `"horizontal"`, `"vertical"`, `"alwaysHorizon
 |-----|-------------|
 | `path` | DataPath (binding to table attribute) |
 | `columns: [...]` | Columns — array of elements (usually `input`) |
-| `changeRowSet: true` | Allow adding/removing rows |
-| `changeRowOrder: true` | Allow row reordering |
+| `changeRowSet: boolean` | Allow or deny standard add/remove row actions |
+| `changeRowOrder: boolean` | Allow or deny standard row reordering |
 | `height` | Height in table rows |
 | `header: false` | Hide header |
 | `footer: true` | Show footer |
 | `commandBarLocation` | `"None"`, `"Top"`, `"Auto"` |
 | `searchStringLocation` | `"None"`, `"Top"`, `"Auto"` |
+
+Protected table or tree (row changes remain possible from BSL):
+
+```json
+{ "table": "ProtectedRows", "path": "ProtectedRows", "changeRowSet": false, "changeRowOrder": false }
+```
 
 #### Pages (pages + page)
 
@@ -808,8 +814,25 @@ powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-form-validate
 | 7 | DataPath → references existing attribute | ERROR |
 | 8 | Button CommandName → references existing command | ERROR |
 | 9 | Events have non-empty handler names | ERROR |
-| 10 | Commands have Action (handler) | ERROR |
+| 10 | Missing, empty or whitespace-only command Action | WARN (advisory) |
 | 11 | No more than one MainAttribute | ERROR |
+
+### Unassigned command actions
+
+`COMMAND_ACTION_UNASSIGNED` reports the form command without making validation
+fail. Report it to the user and continue refresh, checks and task completion;
+it is not a mandatory agent repair. Do not add empty BSL handlers, assign an
+existing procedure, remove commands or otherwise change business sources merely
+to remove the warning. Implement command behavior only when the user's task or
+a confirmed functional defect requires it. An existing empty procedure body is
+a separate question; this XML check does not inspect BSL bodies.
+
+The platform developer guide, section 7.5.1, describes a command without a
+specified handler as unavailable for use, rather than invalid form structure
+([1C:Enterprise Developer Guide](https://1c-dn.com/download-trial/files/guides/developer_guide.pdf)).
+Malformed XML, duplicate command IDs, invalid `callType` and malformed event
+bindings retain their errors. Advisory output must not trigger an automatic
+repair loop or require a warning-free result.
 
 ### Output
 

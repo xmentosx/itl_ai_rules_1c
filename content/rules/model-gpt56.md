@@ -31,7 +31,7 @@ Removing repeated instructions and examples and simplifying tool descriptions im
 
 This model is proactive and persistent across multi-step tasks; it needs the boundary drawn, not the initiative suppressed.
 
-- **Proceed without asking** for safe, local, reversible work inside the project: reading and searching through MCP, editing project files, running validators (`syntaxcheck`, `check_1c_code`, `review_1c_code`, `verify_xml`), driving the `1c-metadata-manage` tools, writing OpenSpec artefacts, saving memory notes. Pausing on these only slows the task down.
+- **Proceed without asking** for safe, local, reversible work inside the project: reading and searching through MCP, editing project files, running validators (`syntaxcheck`, `check_1c_logic` / `check_1c_code` fallback, `review_1c_code`, `verify_xml`), driving the `1c-metadata-manage` tools, writing OpenSpec artefacts, saving memory notes. Pausing on these only slows the task down.
 - **Ask first** for anything that changes state outside your own edits or is hard to reverse: infobase operations that mutate the base or its configuration (`/update1cbase`, `/loadfrom1cbase`, config load, `/UpdateDBCfg`, web publication), deleting files or objects, `git push` / force-push / history rewrite, anything reaching an external system, and any **material expansion of scope** beyond what was requested.
 - The escalation format for a genuine fork is `CONFUSION` (`AGENTS.md → Development Procedure → 1`); a confirmation request for a destructive action is a plain one-line question, not a CONFUSION block.
 - Do not use a destructive shortcut to get past an obstacle (no bypassing checks, no discarding files you did not create, no rewriting a failing validation away).
