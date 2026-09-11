@@ -59,6 +59,12 @@ Describe "Fork release tooling" -Tag "Fast" {
         }
     }
 
+    It "sets an explicit UTF-8 boundary for redirected qualification" {
+        $check = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\check.ps1") -Raw -Encoding UTF8
+        $check | Should -Match '\[Console\]::OutputEncoding = \$utf8'
+        $check | Should -Match '\$OutputEncoding = \$utf8'
+    }
+
     It "derives the repository root at runtime instead of in param defaults" {
         foreach ($name in @("new-upstream-upgrade.ps1", "publish-fork-release.ps1")) {
             $text = Get-Content -LiteralPath (Join-Path $script:ForkRoot "scripts\$name") -Raw -Encoding UTF8

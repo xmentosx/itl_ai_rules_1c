@@ -11,6 +11,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
+$utf8 = New-Object System.Text.UTF8Encoding $false
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
 
 function Resolve-RepositoryPath {
     param([Parameter(Mandatory = $true)][string]$Path, [Parameter(Mandatory = $true)][string]$Root)
