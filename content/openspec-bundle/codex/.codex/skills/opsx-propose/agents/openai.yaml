@@ -1,0 +1,4 @@
+interface:
+  display_name: "opsx-propose"
+policy:
+  allow_implicit_invocation: false

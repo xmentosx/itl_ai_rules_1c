@@ -12,6 +12,15 @@ This file is the **router** for managed-form work. Load it first, then load only
 
 ## Routing
 
+Missing, empty or whitespace-only command `Action` is an advisory diagnostic,
+not a mandatory repair or a completion/refresh/check blocker. Report the form
+and command to the user, then continue. Never create empty BSL handlers, bind
+an existing procedure, remove a command, or edit business sources solely to
+silence this warning. Change command behavior only when required by the user's
+task or a separately confirmed functional defect. This does not suppress real
+structural errors, and does not classify an existing empty procedure body as
+an unassigned `Action`. See `form-manage.md` in `1c-metadata-manage/docs`.
+
 | Task | Load |
 |---|---|
 | Design a form layout from scratch, or when requirements do not specify element placement | `form-patterns.md` |

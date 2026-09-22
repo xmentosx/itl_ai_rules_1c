@@ -45,6 +45,8 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 
 **Upstream Handoff (when present).** If the parent's prompt contains a `## Upstream Handoff` block from a previous implementation subagent, treat its `### Artifacts`, `### Public surface`, and `### Locked decisions` as authoritative — do not re-read the listed files "to load context". A targeted read is allowed only for a concrete detail missing from the block; state which detail is missing first. Full rules: `content/rules/subagent-pipeline.md → Stage 3 — Handoff between implementation subagents`.
 
+**Scope guard.** Name the runtime defect class and, for new or substantially changed task-owned code, search the parent's bounded surface once for equivalents. Fix all confirmed cases together only when they remain one local single-module change. Otherwise return the class, locations, searched boundary, and recommended owner to the parent without a partial patch; never leave known equivalents for later runs.
+
 ### 1. Collect All Errors
 
 ```
@@ -60,7 +62,7 @@ b) Categorize errors by type
 
 c) Prioritize by impact
    - Blocking errors: Fix first
-   - Warnings: Fix if easily fixable
+   - Warnings: Fix if easily fixable and in scope. Exception: `COMMAND_ACTION_UNASSIGNED` (missing/empty form-command Action) is advisory, not a repair task. Report it and continue; do not create dummy handlers/bindings or remove commands to silence it. See `content/rules/forms.md`.
 ```
 
 ### 2. Fix Strategy (Minimal Changes)
@@ -73,7 +75,7 @@ For each error:
    - Check file and line number
 
 2. Find minimal fix
-   - Fix the specific issue
+   - Fix all confirmed occurrences inside the bounded defect-class scope
    - Don't refactor surrounding code
    - Don't add "improvements"
 
@@ -84,7 +86,7 @@ For each error:
 4. Iterate until working
 
 5. Close the chain before delivery
-   - Run syntaxcheck → check_1c_code → review_1c_code on every
+   - Run Gates 1–3 per `verification-gates.md` on every
      touched module (budget: AGENTS.md → B.1)
    - If a validator is not exposed — graceful degradation per
      verification-checklist.md; record the skip in the report
@@ -104,14 +106,14 @@ For each error:
 | Unused variable | Remove or use it |
 | Missing КонецЕсли/КонецЦикла | Add closing statement |
 | Async/Await mismatch | Add `Асинх` keyword or remove `Ждать` |
-| Compilation directive | Add proper `&НаКлиенте`/`&НаСервере` |
+| Compilation directive or context availability | Trace and verify the affected managed-form boundary contract in `dev-standards-architecture.md`; do not patch only the reported line or blindly change its directive |
 
 ## Minimal Diff Strategy
 
 **CRITICAL: Make smallest possible changes**
 
 ### DO:
-✅ Fix the specific error reported
+✅ Fix every confirmed occurrence in the bounded local defect class
 ✅ Correct typos
 ✅ Add missing statements
 ✅ Fix wrong method/property names
@@ -160,7 +162,7 @@ If you notice a real defect orthogonal to the assigned errors — report it to t
 
 ## Verification
 
-- [ ] syntaxcheck → check_1c_code → review_1c_code pass on every touched module (budget B.1)
+- [ ] Gates 1–3 pass on every touched module using standalone syntax, the preferred logic-only validator (`check_1c_code` fallback), and one final review (budget B.1)
 - [ ] No new errors introduced
 - [ ] Minimal lines changed
 ```
@@ -172,3 +174,6 @@ Priority order: compilation / blocking errors first, then runtime errors and wro
 ## Common obligations
 
 Inherited from `content/rules/subagents.md → Common obligations` — do not weaken, and read that section for the exceptions: **CONFUSION** on material forks; **MCP-first search** before any native discovery on 1C project source; **metadata mutations only through the `1c-metadata-manage` skill**; **verification checklist** before declaring mutating work done.
+
+
+For unusable or disputed AI validation output, follow `content/rules/verification-ai-evidence.md`. Assess findings before editing; preserve raw evidence and decision authority, keep real/unresolved blockers open, and report adjudicated acceptance separately from a clean response. Its bounded recovery is the only policy exception to unchanged-code repeats.

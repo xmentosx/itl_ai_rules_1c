@@ -36,7 +36,7 @@ Instruction following is strong enough that a brief statement steers behaviour b
 
 On long autonomous runs, unaudited status reports are the main failure mode this model has to be steered away from.
 
-- Before reporting progress or delivery, **audit each claim against an actual tool result from this session**. "Проверено", "тесты прошли", "синтаксис чистый", "шаблон использован" require the corresponding output — `syntaxcheck` / `check_1c_code` / `review_1c_code` / `verify_xml` results, the `templatesearch` hit, the `recall` notes, the Designer log line.
+- Before reporting progress or delivery, **audit each claim against an actual tool result from this session**. "Проверено", "тесты прошли", "синтаксис чистый", "шаблон использован" require the corresponding output — `syntaxcheck`, `check_1c_logic` / `check_1c_code` fallback, `review_1c_code`, `verify_xml` results, the `templatesearch` hit, the `recall` notes, the Designer log line.
 - Report outcomes faithfully: if a validator failed, say so and quote the finding; if a step was skipped, say which and why; when something is verified, state it plainly without hedging. Unverified is a status you report, not a gap you paper over (`AGENTS.md → MCP Tool Calling → B.1`).
 - This is the same obligation the ruleset already carries in `content/rules/verification-delivery.md`; on this model, state it in the answer explicitly rather than assuming it is visible.
 

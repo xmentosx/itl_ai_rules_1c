@@ -66,7 +66,7 @@ A profile tunes **how much the agent does on its own initiative** and **how it c
 **A profile MUST NOT** touch any of these, and any reading of a profile that seems to do so is a misreading:
 
 - the hard gates — `1c-metadata-manage` for metadata mutations and infobase-operation tooling (`AGENTS.md → Skills and Subagents`), MCP-first search (`content/rules/mcp-first-search.md`), the platform-capability check and `templatesearch` / `recall` obligations (`AGENTS.md → MCP Tool Calling → A`), and the memory gates (`AGENTS.md → Project memory`);
-- the validator chain and its budget (`syntaxcheck → check_1c_code → review_1c_code`, `AGENTS.md → MCP Tool Calling → B.1`) or the gates in `content/rules/verification-gates.md`. **Mandated validator calls are tool evidence, not self-verification** — a profile that damps "over-verification" damps only the extra passes the agent invents for itself;
+- the required syntax, logic/performance, and final style evidence and its budget (`content/rules/verification-gates.md`). **Mandated validator evidence is tool evidence, not self-verification** — a profile that damps "over-verification" damps only the extra passes the agent invents for itself;
 - triage (`content/rules/verification-policy.md`), the `CONFUSION` obligation on material forks, the completeness / no-placeholders principle, the source-language policy, or the evidence one-liners (`Template:`, `Memory:`, `Metadata tooling:`, `IB tooling:`);
 - the requirement to confirm destructive or hard-to-reverse actions.
 

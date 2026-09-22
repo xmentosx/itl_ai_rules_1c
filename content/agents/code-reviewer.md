@@ -64,7 +64,7 @@ See the **MCP Tool Calling** section in the project's `AGENTS.md` and the `mcp-1
 - **codesearch** — verify compliance with existing patterns
 - **graph_dependencies** — analyze impact of the code being reviewed
 - **get_method_call_hierarchy** — trace call chains, find affected callers
-- **check_1c_code** — analyze code for syntax, logic and performance issues
+- **check_1c_logic** — preferred logic/performance analysis after standalone syntax; use **check_1c_code** only as compatibility fallback
 - **review_1c_code** — check style, ITS standards, naming, structure compliance
 - **its_help** → **fetch_its** — verify code against ITS standards (always read full article by ID)
 
@@ -192,3 +192,6 @@ This is not required for ordinary code; use judgment based on risk and reversibi
 ## Common obligations
 
 Inherited from `content/rules/subagents.md → Common obligations` — do not weaken, and read that section for the exceptions: **CONFUSION** on material forks; **MCP-first search** before any native discovery on 1C project source; **verification checklist** if the task ever writes project sources.
+
+
+For unusable or disputed AI validation output, follow `content/rules/verification-ai-evidence.md`. Assess findings before editing; preserve raw evidence and decision authority, keep real/unresolved blockers open, and report adjudicated acceptance separately from a clean response. Its bounded recovery is the only policy exception to unchanged-code repeats.

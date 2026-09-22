@@ -48,7 +48,9 @@ Web UI testing (`1c-tester` / `/deploy-and-test` Step 4) is opt-in, gated by `UI
 
 ## Delivery summary — what the user sees
 
-After all gates pass, the delivery report MUST contain:
+After all applicable gates have valid outcomes, the delivery report MUST contain:
+
+For disputed/unusable AI results, also include the outcome, exact validation unit, evidence references, call counts and authority for each blocking disposition from `verification-ai-evidence.md`. Distinguish a clean response from adjudicated acceptance; report an unresolved gate as unverified. This does not change host export eligibility or fresh-check requirements.
 
 1. **What was done** — 1–3 lines, no preamble.
 2. **Files changed** — every path in backticks, one line per file describing the nature of the change.
@@ -66,8 +68,9 @@ Do not include in the delivery summary:
 
 ## Anti-patterns
 
-- **Skipping Gate 1** "because the edit was tiny" — `syntaxcheck` is the cheapest gate; skipping it never saves time.
-- **Running gates in the wrong order** — running `check_1c_code` before `syntaxcheck` wastes the AI checker on syntax-broken code.
-- **Looping on AI non-determinism** — if `check_1c_code` returns different items each run on the **same** code, take the strictest set and stop. Do not burn the 3-call budget on noise.
+- **Skipping Gate 1** "because the edit was tiny" — standalone `syntaxcheck` / `syntaxcheck_file` evidence is always required.
+- **Treating Code Checker output as Gate 1** — `check_1c_logic` does not inspect syntax, and the compatibility `check_1c_code` fallback does not replace the required standalone syntax evidence.
+- **Validating intermediate or overlapping snippets** — routine AI validation runs only on the latest coherent closing snapshot; `review_1c_code` is last and is never parallelized with `check_1c_code`.
+- **Looping on AI non-determinism** — retain all findings and assess them under `verification-ai-evidence.md`. Do not apply a harmful suggestion to appease a validator, erase an unresolved blocker with a later clean answer, or spend calls chasing green text.
 - **Marking the task done** with un-removed `Debug.*` log entries or temporary `ПоказатьЗначение` calls — soft gate A failure.
 - **Auto-running `1c-code-reviewer`** when the user did not ask — soft gate C failure, and a direct violation of `subagents.md`.
