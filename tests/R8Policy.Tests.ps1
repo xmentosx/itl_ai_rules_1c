@@ -48,6 +48,10 @@ Describe "r8 policy overlays" -Tag "Fast" {
         $deploy = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/commands/deploy-and-test.md')
         $agent = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/agents/tester.md')
         $doctor = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/commands/doctor.md')
+        $qa = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/skills/1c-qa-testing/SKILL.md')
+        $qa | Should -Match '`manual` / `off` only for an explicitly named one-off UI run, for that invocation only'
+        $qa | Should -Match 'broader current no-UI instruction still forbids the run'
+        $qa | Should -Not -Match 'never under `off`'
         $environment | Should -Match 'explicitly named one-off UI run.*for that invocation only'
         $environment | Should -Match 'broader current no-UI instruction still forbids'
         $uiPolicy = [regex]::Match($environment, '(?s)#### `UI_TESTING`.*?(?=####)').Value

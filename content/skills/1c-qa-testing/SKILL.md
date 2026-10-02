@@ -14,7 +14,7 @@ QA MCP (connection `1c-qa`) is the 1C test manager: it connects to a 1C test cli
 
 All of these hold:
 
-- `UI_TESTING` allows the check (`content/rules/dev-standards-env.md → UI_TESTING`): `essential` / `auto` after the change reached the dev/test infobase, `manual` on an explicit request, never under `off`.
+- `UI_TESTING` allows the check (`content/rules/dev-standards-env.md → UI_TESTING`): `essential` / `auto` after the change reached the dev/test infobase, `manual` / `off` only for an explicitly named one-off UI run, for that invocation only; a broader current no-UI instruction still forbids the run.
 - `TOOL_QA` is not `off` (`content/rules/mcp-policy.md → Tool availability`).
 - The `qa_*` / `ui_*` tools are exposed in this session and `qa_status` answers. A config entry or `/healthz` proves nothing.
 - The target is an authorized dev/test infobase (`INFOBASE_ROLE`), the one in `.dev.env`.

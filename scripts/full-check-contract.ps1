@@ -26,9 +26,35 @@ function Get-ForkFullInventory {
     foreach ($directory in @('tests', 'tools/tests', 'adapters', 'plugins/1c-rules', 'content/openspec-bundle')) {
         $root = Join-Path $RepositoryRoot ($directory.Replace('/', '\'))
         if (-not (Test-Path -LiteralPath $root -PathType Container)) { throw "FULL_CHECK_INPUT_MISSING: $root" }
-        foreach ($file in @(Get-ChildItem -LiteralPath $root -Recurse -File)) {
-            [void]$relativePaths.Add($file.FullName.Substring($RepositoryRoot.Length).TrimStart([char[]]'\/').Replace('\', '/'))
+    }
+    # Qualification outputs may live below these roots. Only Git-owned input
+    # paths belong to the proof; source bytes are still read from the worktree.
+    $start = [Diagnostics.ProcessStartInfo]::new()
+    $start.FileName = (Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $start.WorkingDirectory = [IO.Path]::GetFullPath($RepositoryRoot)
+    $start.Arguments = '-c core.quotepath=false ls-files --cached -z -- tests tools/tests adapters plugins/1c-rules content/openspec-bundle'
+    $start.UseShellExecute = $false
+    $start.CreateNoWindow = $true
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    $start.StandardOutputEncoding = [Text.UTF8Encoding]::new($false, $true)
+    $start.StandardErrorEncoding = [Text.UTF8Encoding]::new($false, $true)
+    $process = [Diagnostics.Process]::new()
+    $process.StartInfo = $start
+    try {
+        [void]$process.Start()
+        $stdout = $process.StandardOutput.ReadToEndAsync()
+        $stderr = $process.StandardError.ReadToEndAsync()
+        $process.WaitForExit()
+        $paths = $stdout.GetAwaiter().GetResult()
+        $diagnostic = $stderr.GetAwaiter().GetResult()
+        if ($process.ExitCode -ne 0) { throw "FULL_CHECK_INVENTORY_GIT_FAILED: exit=$($process.ExitCode); $diagnostic" }
+        if ($paths -and -not $paths.EndsWith([string][char]0)) { throw 'FULL_CHECK_INVENTORY_GIT_FAILED: missing NUL path terminator.' }
+        foreach ($relative in $paths.Split([char[]]@([char]0), [StringSplitOptions]::RemoveEmptyEntries)) {
+            [void]$relativePaths.Add($relative)
         }
+    } finally {
+        $process.Dispose()
     }
     foreach ($relative in @('install.ps1', 'AGENTS.md', 'USER-RULES.md',
             'tools/validate-rules.ps1', 'tools/render-gate-evals.ps1',

@@ -1,6 +1,43 @@
-BeforeAll {
+﻿BeforeAll {
     . (Join-Path $PSScriptRoot "TestSupport.ps1")
     . (Join-Path $script:ForkRoot 'scripts/full-check-contract.ps1')
+
+    function New-TestInventoryCheckout {
+        $parent = New-ForkTestRoot
+        $root = Join-Path $parent 'Инвентарь с пробелом'
+        New-Item -ItemType Directory -Path $root -Force | Out-Null
+        $files = @('install.ps1', 'AGENTS.md', 'USER-RULES.md',
+            'tools/validate-rules.ps1', 'tools/render-gate-evals.ps1',
+            'tools/refresh-openspec-bundle.ps1', 'tools/apply-openspec-downstream-overlay.ps1',
+            'content/skills/md-to-docx/package.json', 'content/skills/md-to-docx/package-lock.json',
+            'scripts/check.ps1', 'scripts/full-check-contract.ps1', 'scripts/publish-fork-release.ps1')
+        foreach ($relative in $files) {
+            $path = Join-Path $root ($relative.Replace('/', '\'))
+            New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+            Copy-Item -LiteralPath (Join-Path $script:ForkRoot ($relative.Replace('/', '\'))) -Destination $path
+        }
+        foreach ($relative in @('tests/тест с пробелом.ps1', 'tools/tests/исходник с пробелом.json',
+            'adapters/fixture.yaml', 'plugins/1c-rules/fixture.json', 'content/openspec-bundle/fixture.md')) {
+            $path = Join-Path $root ($relative.Replace('/', '\'))
+            New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+            [IO.File]::WriteAllText($path, "tracked fixture: Кириллица с пробелом`n", [Text.UTF8Encoding]::new($false))
+        }
+        [IO.File]::WriteAllText((Join-Path $root '.gitignore'), "*.generated.*`nbuild/`n", [Text.UTF8Encoding]::new($false))
+        foreach ($arguments in @(@('init', '--quiet', $root), @('-C', $root, 'config', 'user.email', 'test@example.invalid'),
+            @('-C', $root, 'config', 'user.name', 'ITL Test'), @('-C', $root, 'add', '--all'),
+            @('-C', $root, 'commit', '--quiet', '-m', 'fixture: tracked inventory'))) {
+            $gitResult = Invoke-TestNativeCommand -FilePath 'git' -Arguments $arguments
+            if ($gitResult.ExitCode -ne 0) { throw $gitResult.Output }
+        }
+        return [pscustomobject]@{ Root = $root; Parent = $parent }
+    }
+
+    function Remove-TestInventoryCheckout($Checkout) {
+        $parent = [IO.Path]::GetFullPath([string]$Checkout.Parent)
+        $prefix = Join-Path ([IO.Path]::GetFullPath([IO.Path]::GetTempPath())) 'itl-ai-rules-test-'
+        if (-not $parent.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected inventory fixture cleanup path.' }
+        Remove-Item -LiteralPath $parent -Recurse -Force
+    }
 
     function New-TestReleaseQualification([string]$ForkRoot, [string]$ArtifactRoot) {
         $scriptsDir = Join-Path $ForkRoot "scripts"
@@ -66,6 +103,86 @@ BeforeAll {
         }
         [System.IO.File]::WriteAllText($qualificationPath, ($qualification | ConvertTo-Json -Depth 10), [System.Text.UTF8Encoding]::new($false))
         return $qualificationPath
+    }
+}
+
+Describe 'Fork Full input inventory' {
+    It 'ignores generated outputs and preserves tracked Unicode paths across required roots' {
+        $checkout = New-TestInventoryCheckout
+        try {
+            $before = @(Get-ForkFullInventory -RepositoryRoot $checkout.Root)
+            $before.path | Should -Contain 'tools/tests/исходник с пробелом.json'
+            $before.path | Should -Contain 'tests/тест с пробелом.ps1'
+            foreach ($relative in @('tests/fixture.generated.json', 'tools/tests/driver.generated.ps1',
+                'tools/tests/render.generated.md', 'tools/tests/qualification.generated.json',
+                'adapters/runtime.generated.log', 'plugins/1c-rules/runtime.generated.log',
+                'content/openspec-bundle/render.generated.md')) {
+                $path = Join-Path $checkout.Root ($relative.Replace('/', '\'))
+                [IO.File]::WriteAllText($path, "generated artifact: Кириллица с пробелом`n", [Text.UTF8Encoding]::new($false))
+                (Invoke-TestNativeCommand -FilePath 'git' -Arguments @('-C', $checkout.Root, 'check-ignore', '--', $relative)).ExitCode | Should -Be 0
+            }
+            $after = @(Get-ForkFullInventory -RepositoryRoot $checkout.Root)
+            ($after | ConvertTo-Json -Depth 5 -Compress) | Should -BeExactly ($before | ConvertTo-Json -Depth 5 -Compress)
+        } finally { Remove-TestInventoryCheckout $checkout }
+    }
+
+    It 'shares inventory with the qualification reader and invalidates tracked edits while retaining the clean guard' {
+        $checkout = New-TestInventoryCheckout
+        try {
+            $RepositoryRoot = $checkout.Root
+            $tokens = $null; $errors = $null
+            $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $script:ForkRoot 'scripts/publish-fork-release.ps1'), [ref]$tokens, [ref]$errors)
+            $reader = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Test-ReusableQualification' }, $false)
+            . ([scriptblock]::Create($reader.Extent.Text))
+            Mock Get-ForkFullRuntimeIdentity { return [ordered]@{ fixture = 'inventory-reader-only' } }
+            $commit = (& git -C $RepositoryRoot rev-parse HEAD).Trim()
+            $tree = (& git -C $RepositoryRoot rev-parse 'HEAD^{tree}').Trim()
+            $artifactRoot = Join-Path $RepositoryRoot 'build/qualification'
+            New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
+            $junit = Join-Path $artifactRoot 'pester.xml'
+            [IO.File]::WriteAllText($junit, '<testsuites tests="0" failures="0"/>', [Text.UTF8Encoding]::new($false))
+            $scripts = @('scripts/check.ps1', 'scripts/full-check-contract.ps1', 'scripts/publish-fork-release.ps1')
+            $qualified = [ordered]@{
+                schemaVersion = 2; kind = 'itl-ai-rules-full-qualification'; status = 'passed'; reusable = $true
+                repository = @{ commit = $commit; tree = $tree; worktreeClean = $true }
+                environment = @{ externalRuntime = (Get-ForkFullRuntimeIdentity) }
+                inventory = @{
+                    tests = @((Get-ForkFullInventory -RepositoryRoot $RepositoryRoot) | Where-Object { $_.path -like 'tests/*.ps1' })
+                    scripts = @(foreach ($relative in $scripts) { @{ path = $relative; sha256 = (Get-FileHash -LiteralPath (Join-Path $RepositoryRoot $relative)).Hash.ToLowerInvariant() } })
+                    fullInputs = @(Get-ForkFullInventory -RepositoryRoot $RepositoryRoot)
+                    requiredStages = @(Get-ForkRequiredFullStageNames)
+                }
+                stages = @(Get-ForkRequiredFullStageNames | ForEach-Object { @{ name = $_; status = 'passed' } })
+                junit = @{ path = $junit; sha256 = (Get-FileHash -LiteralPath $junit).Hash.ToLowerInvariant() }
+            }
+            $qualificationPath = Join-Path $artifactRoot 'full.json'
+            [IO.File]::WriteAllText($qualificationPath, ($qualified | ConvertTo-Json -Depth 12), [Text.UTF8Encoding]::new($false))
+            Test-ReusableQualification -Path $qualificationPath -HeadCommit $commit -HeadTree $tree | Should -BeTrue
+            [IO.File]::WriteAllText((Join-Path $RepositoryRoot 'tools/tests/qualification.generated.json'), '{"generated":true}', [Text.UTF8Encoding]::new($false))
+            Test-ReusableQualification -Path $qualificationPath -HeadCommit $commit -HeadTree $tree | Should -BeTrue
+            [IO.File]::AppendAllText((Join-Path $RepositoryRoot 'adapters/fixture.yaml'), "source edit`n", [Text.UTF8Encoding]::new($false))
+            Test-ReusableQualification -Path $qualificationPath -HeadCommit $commit -HeadTree $tree | Should -BeFalse
+            $probe = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot 'scripts/publish-fork-release.ps1') -Arguments @(
+                '-UpstreamTag', 'fixture', '-RepositoryRoot', $RepositoryRoot, '-QualificationPath', $qualificationPath, '-QualificationProbeOnly')
+            $probe.ExitCode | Should -Not -Be 0
+            $probe.Output | Should -Match 'Qualification probe requires a clean worktree'
+        } finally { Remove-TestInventoryCheckout $checkout }
+    }
+
+    It 'retains missing mandatory input failure for <Kind>' -TestCases @(
+        @{ Kind = 'directory'; Relative = 'adapters' }
+        @{ Kind = 'explicit file'; Relative = 'AGENTS.md' }
+        @{ Kind = 'tracked file'; Relative = 'tools/tests/исходник с пробелом.json' }
+    ) {
+        param($Kind, $Relative)
+        $checkout = New-TestInventoryCheckout
+        try {
+            $target = [IO.Path]::GetFullPath((Join-Path $checkout.Root $Relative))
+            $root = [IO.Path]::GetFullPath($checkout.Root).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+            if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected missing-input fixture path.' }
+            Remove-Item -LiteralPath $target -Recurse -Force
+            { Get-ForkFullInventory -RepositoryRoot $checkout.Root } | Should -Throw '*FULL_CHECK_INPUT_MISSING:*'
+        } finally { Remove-TestInventoryCheckout $checkout }
     }
 }
 

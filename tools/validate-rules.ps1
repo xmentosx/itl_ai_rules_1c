@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Structural validator for the 1c-rules ruleset. Intended for CI and for a
@@ -104,12 +104,17 @@ param(
     # subagent start set 27,535 -> 30,059. Qualified ROCTUP Gate 3a adds the
     # read-only, target, provider and NOT_READY safety boundary: the measured
     # full-cycle set rose 133,815 -> 136,100 bytes (+2,285, about 618 tokens).
-    # Raise only this hard ceiling by 2,048 bytes; preserve the safety contract
-    # and route provider-specific procedure to the installed ITL skill.
+    # c1fb8e6 intake retains provider/schema, essential UI and independent
+    # saved-Vanessa safety boundaries. Compared with the prior qualified 9ec86f75
+    # candidate, full-cycle is 136,393 -> 138,224 bytes (+1,831, ~495 tokens),
+    # subagent start is 29,427 -> 31,370 (+1,943, ~525 tokens). Root remains
+    # 13,554 bytes within its unchanged 14 KiB ceiling. Keep these mandatory
+    # meanings intact; raise only hot 134 -> 136 KiB and start 30 -> 31 KiB.
+    # Provider-specific procedures remain on demand in the installed ITL skill.
     [int]$AgentsMaxBytes = 14336,
     [int]$RuleMaxBytes = 40960,
-    [int]$HotPathMaxBytes = 137216,
-    [int]$SubagentStartMaxBytes = 30720,
+    [int]$HotPathMaxBytes = 139264,
+    [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
     [int]$RuleDescriptionMaxBytes = 250,
