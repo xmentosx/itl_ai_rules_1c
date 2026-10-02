@@ -7,7 +7,7 @@ allowed-tools: mcp__1c-templates-mcp__templatesearch, mcp__1c-templates-mcp__get
 
 # 1c-templates-memory — templates and project memory
 
-Two separate obligations. Policy owners: templates — `AGENTS.md → MCP Tool Calling → A.8–A.9`; memory — `content/rules/project-memory.md` (recall-first, correction-capture, write priority Cognee → OpenViking → templates, `memory.md` as the strict fallback).
+Two separate obligations. Policy owners: templates — `AGENTS.md → MCP Tool Calling → A.8–A.9`; memory — `content/rules/project-memory.md` (recall-first, correction-capture, provider priority and managed-ITL isolation, `memory.md` as the local fallback). In an ITL managed project, use project-scoped templates memory; do not silently route project facts to Cognee or OpenViking.
 
 ## Templates
 

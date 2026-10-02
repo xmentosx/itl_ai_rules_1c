@@ -5,6 +5,10 @@ argumentHint: "[full|changes|partial|all]"
 
 # /loadfrom1cbase — dump from infobase to repository
 
+## Managed ITL project
+
+If `.agent-1c/project.json` exists, stop this standalone procedure here. Run host ITL preflight/state reconciliation; require a managed `itldev/*` branch and its proven branch infobase. Delegate a full or selected-object dump to the matching transactional ITL lifecycle helper. It owns the dirty-destination guard, snapshot, state/fingerprint, rollback and verification invalidation. Never substitute the source infobase, create an ad-hoc dump list or invoke Designer/`ibcmd` from the examples below. An unsupported requested mode returns `ITL_LIFECYCLE_HELPER_REQUIRED` and its host continuation, without falling through. Only a project without managed ITL state follows the standalone instructions below.
+
 Refresh configuration files from the infobase defined in `.dev.env`: full dump, incremental refresh or selected-object export. Read `content/rules/getconfigfiles.md → Configuration file synchronization contract` before choosing the scope. With `all` (or an explicit "with extensions" request), dump the **full snapshot** — main configuration plus every extension from `EXTENSION_NAMES`; see "Full-snapshot mode" below.
 
 This is the directory-refresh stage of the workflow shared with `/update1cbase`. It does not load files into the infobase or apply the database configuration.

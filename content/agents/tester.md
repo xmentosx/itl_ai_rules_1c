@@ -26,14 +26,16 @@ Tools — routing and parameters: `content/skills/mcp-1c-tools/SKILL.md`; entry 
 ## Testing Prerequisites
 
 - Project parameters — `content/rules/dev-standards-env.md §1` (`.dev.env` is the single source of truth). Blocking keys for this role: `PLATFORM_PATH`, `INFOBASE_PATH`, plus `INFOBASE_PUBLISH_URL` when a requested UI test has to run in the web client — an empty blocking key is asked for (never guessed) and persisted back into `.dev.env`; defaulted keys are never asked up front.
-- Resolve effective `UI_TESTING` before prerequisites — `content/rules/dev-standards-env.md → "UI_TESTING — UI-testing mode"`. `off` blocks UI without asking for setup; `essential` limits automatic checks to the important new or changed user-visible behaviour. With no route (no QA MCP, empty publication URL) automatic UI checks are skipped as unverified; an explicit permitted UI request makes the missing prerequisite blocking. Enabling policy alone never authorizes deployment.
-- Pick the route by `content/rules/ui-testing-tools.md → Route order`: QA MCP first, the web client as fallback.
+- Resolve effective `UI_TESTING` before prerequisites — `content/rules/dev-standards-env.md → "UI_TESTING — UI-testing mode"`. `off` blocks routine UI without asking for setup; an exact named run may override it for that invocation unless a broader no-UI instruction applies; `essential` limits automatic checks to the important new or changed user-visible behaviour. With no route (no QA MCP, empty publication URL) automatic UI checks are skipped as unverified; an explicit permitted UI request makes the missing prerequisite blocking. Enabling policy alone never authorizes deployment.
+- Pick the route by `content/rules/ui-testing-tools.md → Route order`: managed ITL projects use the installed `itl-vanessa-ui-mcp` route; standalone projects use QA MCP first, the web client as fallback. Required provider policy still applies.
 
 ## Deployment Process
 
 All deployment goes through the slash command `/deploy-and-test` (`content/commands/deploy-and-test.md`) — the single source of truth, including the `ibcmd`-vs-Designer choice; do not duplicate its PowerShell here. After deployment read the log at `{LOG_PATH}` (or `$env:TEMP/1cv8.log` when the placeholder was empty) and confirm no errors before UI testing. A failed deployment follows `content/commands/update1cbase.md → Update retry loop` (at most 3 attempts, cause fixed before each retry).
 
-## QA MCP Testing (main route)
+## QA MCP Testing (standalone main route)
+
+In a managed ITL project, use the managed route above before this procedure; never start or attach a standalone QA test client. Standalone QA integration into the ITL guards is not yet qualified.
 
 - Before the first call — `content/skills/1c-qa-testing/SKILL.md` (session, observe → act → assert loop, platform behaviour, unknown outcomes, journal and verdicts) and `content/rules/qa-testclient.md` (test client start / stop, visible or hidden window, screenshots, Windows-MCP, data confirmation through `1c-data-mcp`).
 - Workflow: start a fresh test client for the deployed infobase → `qa_status` / `qa_start` → per scenario: read the window, one action, read the change, assert on read values → confirm data effects the form does not show through `1c-data-mcp` → screenshots of key states → `qa_stop` and stop the client you started.

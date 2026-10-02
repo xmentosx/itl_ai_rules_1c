@@ -10,6 +10,8 @@ category: tooling
 
 These are not QA MCP functions. The server drives forms only. Everything on the Windows machine — starting the test client, the hidden desktop and screenshots in `native`, the MCPQAClient pointer, installing the extension — is done by the agent with the project's tools under this rule: the `qa-testclient.ps1` script of the `1c-qa-testing` skill (`scripts/qa-testclient.ps1`, found by file name in the installed skills folder), PowerShell, a project launcher script, Windows-MCP, Designer in batch mode. Do not write a home-grown screenshotter, OCR or window automation.
 
+**Managed ITL project:** stop this standalone QA procedure before any client launch, attachment, hidden-desktop work, extension installation or cleanup. Use `ui-testing-tools.md → Managed ITL route` and the installed `itl-vanessa-ui-mcp` skill. A physical `TOOL_QA=required` prerequisite remains unverified; Vanessa does not impersonate QA MCP. Standalone QA lifecycle integration is a separate unqualified capability.
+
 ## Windows scenario (`native`)
 
 Settle two facts once per session:

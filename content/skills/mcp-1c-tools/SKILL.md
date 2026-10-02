@@ -23,7 +23,7 @@ Load the skill for the operation, not this whole catalogue. Each skill lists the
 | Platform reference, capability check, БСП API, routed standards, ITS, configuration docs | `content/skills/1c-platform-help/SKILL.md` | docs, ssl, checker, code |
 | Templates as the base, project memory recall / save | `content/skills/1c-templates-memory/SKILL.md` | templates, cognee, openviking |
 | Run a query or fragment in the live infobase, last event-log error | `content/skills/1c-live-ib/SKILL.md` | data |
-| Check behaviour in the 1C interface (thin client): forms, fields, tables, commands, messages | `content/skills/1c-qa-testing/SKILL.md` + `content/rules/qa-testclient.md` | qa |
+| Check behaviour in the 1C interface (thin client): forms, fields, tables, commands, messages | `content/rules/ui-testing-tools.md`; standalone QA: `content/skills/1c-qa-testing/SKILL.md` + `content/rules/qa-testclient.md` | managed Vanessa UI or distinct qa |
 | Create / edit / remove metadata, forms, roles, DCS, MXL, infobases | `content/skills/1c-metadata-manage/SKILL.md` | scripts, not MCP |
 | Live 1C:EDT workspace (`USE_EDT=true` only) | `docs/edt-mcp.md`, `content/rules/edt-workflow.md` | edt |
 
@@ -34,13 +34,13 @@ Load the skill for the operation, not this whole catalogue. Each skill lists the
 | `1c-graph-metadata-mcp` | Neo4j graph: dossier, impact, call graph, usages, business search, extension layers | `docs/1c-graph-metadata-mcp.md` |
 | `1c-code-metadata-mcp` | Metadata and BSL search, navigation, forms, XSD, `verify_xml` | `docs/1c-code-metadata-mcp.md` |
 | `1c-syntax-checker-mcp` | BSL Language Server: `syntaxcheck_file` (default), `syntaxcheck` (text fallback) | `docs/1c-syntax-checker-mcp.md` |
-| `1c-code-check-mcp` | 1С:Напарник: `check_1c_code`, `review_1c_code`, AI drafts, ITS, version docs | `docs/1c-code-check-mcp.md` |
+| `1c-code-check-mcp` | 1С:Напарник: preferred `check_1c_logic` (if exposed), `check_1c_code` fallback, `review_1c_code`, AI drafts, ITS, version docs | `docs/1c-code-check-mcp.md` |
 | `1C-docs-mcp` | Platform reference (`docsearch`, `docinfo`), `standards`, `formatspec` | `docs/1C-docs-mcp.md` |
 | `1c-ssl-mcp` | БСП / SSL API search | `docs/1c-ssl-mcp.md` |
 | `1c-templates-mcp` | Code templates, memory fallback | `docs/1c-templates-mcp.md` |
 | `cognee`, `openviking` *(optional)* | Memory providers | `docs/memory-providers.md` |
-| `1c-data-mcp` | Live-IB execution over `hs/mcp` | `docs/1c-data-mcp.md` |
-| `1c-qa` | QA MCP: test manager driving a 1C test client — UI checks under `UI_TESTING` | `content/skills/1c-qa-testing/SKILL.md` |
+| `itl-roctup-data`, `1c-data-mcp` | Managed branch data through ROCTUP; conditional HTTP live-IB provider | `docs/1c-data-mcp.md` |
+| `1c-qa` | Physical QA MCP: standalone test manager/client; distinct from managed Vanessa UI and its provider policy | `content/skills/1c-qa-testing/SKILL.md` |
 | `edt-mcp` *(conditional)* | Live EDT workspace | `docs/edt-mcp.md` |
 
 ### Optional pre-alpha servers

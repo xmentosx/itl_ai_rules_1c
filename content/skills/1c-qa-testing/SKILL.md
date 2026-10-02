@@ -8,6 +8,8 @@ argument-hint: "<feature or scenario to check>"
 
 QA MCP (connection `1c-qa`) is the 1C test manager: it connects to a 1C test client (`/TestClient`) and drives its forms through the platform testing model — windows, fields, tables, commands, messages. It reads structured state, not pixels, so it is the main route for checking behaviour in the 1C interface. The web client (`content/rules/ui-testing-tools.md`) is the fallback.
 
+**Managed ITL project:** stop this standalone QA procedure before any client launch, attachment, hidden-desktop work, extension installation or cleanup. Use `ui-testing-tools.md → Managed ITL route` and the installed `itl-vanessa-ui-mcp` skill. A physical `TOOL_QA=required` prerequisite remains unverified; Vanessa does not impersonate QA MCP. Standalone QA lifecycle integration is a separate unqualified capability.
+
 ## When this route applies
 
 All of these hold:

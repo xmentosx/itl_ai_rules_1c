@@ -35,7 +35,7 @@ Skip episodes already consumed by an earlier pass: consumed episodes are cited i
 
 ### 3. Protected areas — higher bar
 
-Proposals that **weaken** any of the following are safety-relevant: the verification chain (`syntaxcheck` / `check_1c_code` / `review_1c_code`, validator budgets, the `content/rules/verification-gates.md` gates), transactions / locks discipline, security / RLS / secrets / PII handling, `CONFUSION` gates on material forks, MCP evidence gates for BSL / metadata / spec authoring.
+Proposals that **weaken** any of the following are safety-relevant: the selected verification gates (standalone syntax / preferred `check_1c_logic` or `check_1c_code` fallback / `review_1c_code`, validator budgets, the `content/rules/verification-gates.md` gates), transactions / locks discipline, security / RLS / secrets / PII handling, `CONFUSION` gates on material forks, MCP evidence gates for BSL / metadata / spec authoring.
 
 For such proposals:
 

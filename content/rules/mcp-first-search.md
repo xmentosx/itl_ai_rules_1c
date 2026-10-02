@@ -14,6 +14,14 @@ This file is the single owner of the search discipline and of the project-source
 
 **Policy and scope before tools.** Apply `TOOL_GRAPH` / `TOOL_CODE` (`content/rules/mcp-policy.md → Tool availability`). For multiple contours, use `content/rules/multi-contour-search.md` for mappings, coverage and selectors. Skip `off` or uncovered lanes without probes. Without an eligible index, scoped native search starts immediately; a missing/wrong-scope `required` index remains an unmet requirement even if local reads gather context. A catalog is optional for one contour.
 
+In an ITL managed worktree, first identify the current checkout and its relevant
+committed, staged, unstaged and untracked delta with the host's bounded Git
+path-list helper. This is source-state identification, not a native search for
+unknown project code. Query the eligible MCP index for the baseline, then
+reconcile every relevant hit or absence with that local delta before using it
+for an edit or a negative claim. An index that omits an uncommitted module is
+not evidence that the module does not exist; inspect that exact local path.
+
 **Explicit project on scoped calls.** Extension work and a graph serving multiple projects require a verified mapping from the current project/source roots to `list_graph_projects`' returned base `project_id`. State the selected project and relevant layer once, and supply that `project_id` on every project-data call that accepts it, including retries, evidence, comparisons and cursor pages. Never rely on an omitted/default scope, the first returned project, a configuration display name, or `EXTENSION_NAME`. A legacy `project_name` filter is not scope. Follow the live schema for other servers and layer selectors; do not invent or copy unsupported arguments. Resolve ambiguity from existing mappings/descriptors, then ask only if still unresolved; meanwhile scoped local work can continue.
 
 ---

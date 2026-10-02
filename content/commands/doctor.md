@@ -9,6 +9,8 @@ Run a read-only health check for the current project. The goal is to answer one 
 
 Do not modify files, install packages, start containers, or write secrets. If a fix is obvious, report the exact next action instead of applying it.
 
+In an ITL-managed project, every standalone `install.ps1` or `/updaterules` repair example below is diagnostic background only: use the pinned project helper's `doctor`, `update-ai-rules`, `itl-switch-client`, or `update-workflow` continuation. Never run the standalone installer there or configure its MCP twice.
+
 ## Output format
 
 Return a compact status table with these statuses:
@@ -24,20 +26,21 @@ After the table, list only actionable fixes. Do not include secret values from `
 
 ## Check 1. Current agent and rules loading
 
-1. Identify the current AI tool when possible: Cursor, Claude Code, Codex, OpenCode, Kilo Code, or `other`.
+1. Identify the executing AI client from this session. In an ITL-managed project compare it with the desired `aiRules.tools` set in `.agent-1c/project.json`; an identified absent client is not silently attached. An explicit empty set is valid and needs an `itl-switch-client -Mode attach` continuation for client-specific work. A multi-client set with no identifiable session client is ambiguous, not permission to choose the first.
 2. Check that `AGENTS.md` exists at the project root and is readable.
 3. Check that `USER-RULES.md` and `memory.md` exist at the project root. Check `LLM-RULES.md` too, but report a missing `LLM-RULES.md` as **WARN**, not FAIL — older installs predate it; it is placed by `install.ps1 update` or created by the first `/evolve` write.
 4. If `.ai-rules.json` exists, read it and verify:
-   - `activeTools` contains the current tool, or explain why the current tool is still supported through `other`;
+   - `tools` contains the executing client and agrees with the ITL configured set; `other` is a standalone fallback, not an attached ITL client;
    - managed files listed in the manifest still exist;
    - the canonical rules directory referenced by the manifest exists.
 5. If `.ai-rules.json` is missing:
-   - in an installed project, report **FAIL** and recommend `install.ps1 init`;
+   - in an ITL-managed project with an attached client, report **FAIL** and recommend pinned `agent-1c.ps1 -Action update-ai-rules` from master; if the client set is empty, report its attach continuation instead;
+   - in a standalone rules-only project, recommend `install.ps1 init`;
    - in the source repository of `1c-rules`, report **WARN** and continue with source-layout checks.
 6. Verify that the current tool has the files it can actually load:
    - Cursor: `.cursor/rules/`, `.cursor/commands/`, `.cursor/mcp.json` when installed;
    - Claude Code: `.claude/rules-1c/` (on-demand rules referenced through `AGENTS.md` — deliberately **not** `.claude/rules/`, which Claude Code v2.0.64+ auto-loads in full at session start), `.claude/agents/`, `.claude/commands/`, MCP config when installed; managed rule files left in `.claude/rules/` from older installs are **legacy** and the `update` flow removes them (user-authored files there are kept);
-   - Codex: `.codex/skills/`, `.codex/config.toml` when installed;
+   - Codex: project `.agents/skills/` for commands, `.codex/agents/` for custom agents, `.codex/rules/` for on-demand rules, `.codex/config.toml` when installed; user-global `~/.codex/prompts/` is outside this project's ownership;
    - OpenCode: `.opencode/command/`, `.opencode/agent/` (also accept `.opencode/agents/` if present), `.opencode/rules/`, and the user's actual JSON/JSONC config (top-level `mcp` key). Fresh installs default to root `opencode.json`; existing configs at the root or under `.opencode/` are preserved in place, never migrated or removed by rules updates. Check the active client's config sources before diagnosing a path as unused; a missing root config alone is not a failure;
    - **OpenCode agent frontmatter hard gate** (when `.opencode/agent/` or `.opencode/agents/` exists): every `*.md` agent file must **not** have a `tools` **array** in its YAML frontmatter (`tools: ["Read", …]`). OpenCode validates `tools` as object | undefined; a Cursor-style array makes it reject the whole config and refuse to start (`Configuration is invalid … Expected object | undefined, got […] tools`). Correct installed shape uses a `permission` object (`read`/`edit`/`grep`/`glob`/`bash`: `allow`|`deny`) and `mode: subagent`|`primary` — produced by `adapters/opencode.yaml → toolsToPermission`. Any file still carrying a `tools` array → **FAIL**. Repair: `install.ps1 update -Source <clone> -AssumeYes -ForcePaths .opencode/agent/*` (or re-apply the adapter transform on the agent channel). Do **not** confuse source `content/agents/*.md` (arrays are correct there) with installed `.opencode/agent/*.md`. Quick check:
 
@@ -59,6 +62,8 @@ After the table, list only actionable fixes. Do not include secret values from `
    - other: `.ai-agent/rules/`, `.ai-agent/agents/`, `.ai-agent/commands/`, `.ai-agent/skills/`, `.ai-agent/mcp.json`.
 
 Pass criterion: the root always-on files exist, and either the installed tool layout is present or the repository is clearly the `1c-rules` source repository being edited directly.
+
+File presence proves placement only. Report runtime discovery, enabled MCP servers, callable tools, model selection, CLI/bundle/store resolution and plugin version separately as `passed`, `failed`, or `unverified` with the observed client/build. A configured MCP file or model id does not prove effective callability. The check is read-only: no install, attach, repair, network probe with side effects or automatic version change.
 
 ## Check 2. Ruleset file integrity — mechanical (`tools/validate-rules.ps1`)
 
@@ -82,7 +87,7 @@ and report its output: every `ERRORS` line → **FAIL**, every `WARNINGS` line �
 
    Advisory and Defaulted keys are never critical — report an empty one as "uses default" (naming the default from `dev-standards-env.md §1`), not as a missing value.
 4. Verify that `PLATFORM_PATH` contains `bin\1cv8.exe`.
-5. For every key with an enumerated value set (`INFOBASE_KIND`, `UI_TESTING`, `VERIFICATION_DEPTH`, `CAVEMAN`, `DEBUG_FAST_PATH`, `ORCHESTRATION`, `SUPPORT_GUARD`), a non-empty value outside the set listed in `dev-standards-env.md §1` is **WARN** — the default applies.
+5. For every key with an enumerated value set (`INFOBASE_KIND`, `UI_TESTING`, `VERIFICATION_DEPTH`, `CAVEMAN`, `DEBUG_FAST_PATH`, `ORCHESTRATION`, `SUPPORT_GUARD`), a non-empty value outside the set listed in `dev-standards-env.md §1` is **WARN**. State the documented handling; invalid `UI_TESTING` falls back to `manual`, so automatic UI verification is not selected. A named UI request follows the normal explicit-request policy. Other keys retain their documented defaults or failure handling.
 6. `AGENT_MODEL`: a recognised non-empty value must have its rule file (`model-<slug>.md`, or `.mdc` on Cursor) in the rules directory — missing = **FAIL** (the install is incomplete — run `/updaterules`). An unrecognised value is **WARN** with the fix `/rulesmodel <модель>`. When the value names a model different from the one you are running, report **WARN**, say which profile you actually apply per `model-adaptation.md §2`, and suggest `/rulesmodel auto`. Empty is **OK** ("uses default"), never a WARN.
 7. **Optional UI tooling (non-blocking).** When `UI_TESTING=auto` or the user is about to run web UI tests: if `agent-browser` is not on `PATH` and no `agent-browser` MCP entry is in the active client config — report **WARN** and suggest `/install-agent-browser` (token-efficient default per `ui-testing-tools.md`). Absence of `windows-mcp` is not a WARN (desktop CV is last resort only).
 8. **EDT flag (non-blocking).** Report `USE_EDT` as `true` / `false` / `unknown` (missing or invalid). When `true`: check that `edt-workflow.md` exists in the rules directory (missing = **FAIL**, the install is incomplete — run `/updaterules`), and report whether EDT-MCP tools are exposed in this session (not exposed = **WARN** with the fix `/install-edt-mcp`; a closed EDT is a valid reason, not a broken install). Also report a **WARN** when `USE_EDT=true` but the working tree looks like a Designer XML dump only, or when it holds an EDT workspace (`.project`, `DT-INF/`, `src/Configuration.mdo`) while `USE_EDT` is `false` / `unknown` — the flag and the tree disagree, and the fix is one line in `.dev.env`. When `USE_EDT=false` and no EDT workspace is present, say nothing about EDT.

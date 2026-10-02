@@ -7,6 +7,8 @@ description: "Create, edit, validate and remove 1C metadata — catalogs, docume
 
 Use this skill when the task involves **1C metadata structure** (creating, editing, validating, or removing configuration objects, forms, reports, layouts, roles, extensions, or databases).
 
+For a managed-form path crossing client/server code in an ITL project, first load `content/rules/itl-managed-form-context.md`; form syntax and XML validation do not prove that runtime boundary.
+
 ## Hard rule
 
 The gate itself — every metadata-XML mutation and every infobase operation goes through this skill (dispatch below → domain doc → PowerShell tools) or the `1c-metadata-manager` subagent, hand-editing is a defect, repository-bound projects add the `1c-repository-manage` lock / commit discipline, EDT-format trees (`.mdo` / `.form`, never fed to these tools) route per `content/rules/edt-workflow.md` — is owned by `AGENTS.md → Skills and Subagents`; this skill's own canon is only the exceptions:
@@ -63,7 +65,7 @@ Rules:
 
 `tools/_common/Invoke-1CEdit.ps1` wraps any tool of this skill and adds three things the vendored scripts do not have: a **logical address** instead of a physical path, a **unified diff** of what the run changed, and an optional **preview** that runs the real tool and then puts the tree back. Full reference: [edit-preview.md](docs/edit-preview.md).
 
-**Apply immediately by default.** `.dev.env` `METADATA_PREVIEW` (default `auto`, editor `/previewmode`) reserves the preview for two cases: generation from a DSL (`form-compile`, `meta-compile`, `role-compile`, `skd-edit` batches) and a tool or `-Operation` this project has not run before. Ordinary edits apply straight away.
+**Apply immediately by default.** `.dev.env` `METADATA_PREVIEW` (default `auto`, editor `/previewmode`) reserves the preview for two cases: generation from a DSL (`form-compile`, `meta-compile`, `role-compile`, `skd-edit` batches) and a tool or `-Operation` this project has not run before. Ordinary edits apply straight away. In an ITL managed worktree, rollback preview is unavailable unless the tool has its own non-writing `-DryRun`; the wrapper refuses before mutation. Use the ITL-owned edit route and inspect its scoped diff. An explicit preview-only request never becomes an apply automatically.
 
 ```powershell
 # default: write now (logical address + unified diff after the run)
@@ -78,7 +80,7 @@ powershell -NoProfile -File skills/1c-metadata-manage/tools/_common/Invoke-1CEdi
 ```
 
 - **`-Object <Kind>.<Name>[.Форма|Макет|Права|МодульОбъекта.<Member>]`** resolves to the path the tool expects and is passed as `-Path`. Russian and English kind names both work. This is the same address the MCP servers use for `object_name`, so one task no longer carries two addressing schemes. Unknown kind = a refusal listing the accepted ones, never a path that points at nothing.
-- **`-Preview`** (alias `-DryRun`) shows the diff and restores the tree; a tool with its own `-DryRun` (`meta-remove`, `remove-form`, `remove-template`, `web-unpublish`, `db-load-git`) uses that native plan instead. The wrapper previews its own script writes only; a dirty git tree applies with a one-line note.
+- **`-Preview`** (alias `-DryRun`) shows the diff and restores the tree outside ITL managed worktrees; a tool with its own `-DryRun` (`meta-remove`, `remove-form`, `remove-template`, `web-unpublish`, `db-load-git`) uses that native plan instead. The wrapper previews its own script writes only; dirty or managed rollback scope refuses without applying.
 - **Deletions keep their own gate:** native `-DryRun` then `-Force`, in every mode. A preview is never a substitute for `meta-validate` / `verify_xml`.
 - Applying without the wrapper stays valid. Cite a preview on the `Metadata tooling:` line only when one actually ran.
 

@@ -92,7 +92,7 @@ A self-contained instruction a person follows in the Configurator without the ch
 ## Проверка после внесения
 
 1. Конфигуратор: синтаксический контроль изменённых модулей и проверка конфигурации (`/CheckModules`, `/CheckConfig` — `designer-batch-checks.md`) — без ошибок.
-2. Выгрузка обновлённых исходников → гейты на внесённом коде: `syntaxcheck_file` → `check_1c_code` → `review_1c_code`, для метаданных и форм — `verify_xml` и валидаторы `1c-metadata-manage`.
+2. Выгрузка обновлённых исходников → выбранные по `verification-policy.md` гейты на внесённом коде: standalone `syntaxcheck_file` → preferred `check_1c_logic` / fallback `check_1c_code` → `review_1c_code` по применимости; для метаданных и форм — `verify_xml` и валидаторы `1c-metadata-manage`.
 3. Поведение: UI-подтверждение по `UI_TESTING` (`1c-tester`, `/deploy-and-test`) — сценарий: …; ожидаемое состояние: … Если подтверждение не выполнялось — «не проверено».
 
 ## Откат

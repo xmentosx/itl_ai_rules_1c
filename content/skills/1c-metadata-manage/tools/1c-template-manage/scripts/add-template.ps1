@@ -242,9 +242,26 @@ $processorDir = Join-Path $SrcDir $ObjectName
 $templatesDir = Join-Path $processorDir "Templates"
 $templateMetaPath = Join-Path $templatesDir "$TemplateName.xml"
 
-if (Test-Path $templateMetaPath) {
-	Write-Error "Макет уже существует: $templateMetaPath"
-	exit 1
+$templateMetaExists = Test-Path -LiteralPath $templateMetaPath -PathType Leaf
+if ($templateMetaExists) {
+	$templateMetaDoc = New-Object System.Xml.XmlDocument
+	$templateMetaDoc.PreserveWhitespace = $true
+	$templateMetaDoc.Load($templateMetaPath)
+	$templateMetaNs = New-Object System.Xml.XmlNamespaceManager($templateMetaDoc.NameTable)
+	$templateMetaNs.AddNamespace('md', 'http://v8.1c.ru/8.3/MDClasses')
+	$templateMetaNs.AddNamespace('v8', 'http://v8.1c.ru/8.1/data/core')
+	$existingTemplate = $templateMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Template', $templateMetaNs)
+	$existingName = $templateMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Template/md:Properties/md:Name', $templateMetaNs)
+	$existingType = $templateMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Template/md:Properties/md:TemplateType', $templateMetaNs)
+	$existingSynonym = $templateMetaDoc.SelectSingleNode("/md:MetaDataObject/md:Template/md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", $templateMetaNs)
+	$existingUuid = if ($existingTemplate) { $existingTemplate.GetAttribute('uuid') } else { '' }
+	$parsedUuid = [guid]::Empty
+	if (-not $existingName -or $existingName.InnerText -cne $TemplateName -or
+		-not $existingType -or $existingType.InnerText -cne $tmpl.TemplateType -or
+		-not $existingSynonym -or -not [guid]::TryParse($existingUuid, [ref]$parsedUuid)) {
+		Write-Error "Существующие метаданные макета несовместимы с запросом: $templateMetaPath"
+		exit 1
+	}
 }
 
 Assert-EditAllowed $rootXmlPath 'editable'
@@ -300,12 +317,22 @@ $templateMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($templateMetaPath, $templateMetaXml, $encBom)
+if ($templateMetaExists) {
+	$existingSynonym.InnerText = $Synonym
+	$templateMetaSettings = New-Object System.Xml.XmlWriterSettings
+	$templateMetaSettings.Encoding = $encBom
+	$templateMetaSettings.Indent = $false
+	$templateMetaWriter = [System.Xml.XmlWriter]::Create($templateMetaPath, $templateMetaSettings)
+	try { $templateMetaDoc.Save($templateMetaWriter) } finally { $templateMetaWriter.Close() }
+} else {
+	[System.IO.File]::WriteAllText($templateMetaPath, $templateMetaXml, $encBom)
+}
 
 # --- 2. Содержимое макета (Templates/<TemplateName>/Ext/Template.<ext>) ---
 
 $templateFilePath = Join-Path $templateExtDir "Template$($tmpl.Ext)"
 
+if (-not (Test-Path -LiteralPath $templateFilePath -PathType Leaf)) {
 switch ($TemplateType) {
 	"HTML" {
 		$content = @"
@@ -354,6 +381,7 @@ switch ($TemplateType) {
 "@
 		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
 	}
+}
 }
 
 # --- 3. Модификация корневого XML ---
@@ -434,7 +462,7 @@ $targetEol = if ([System.IO.File]::ReadAllText($rootXmlFull.Path) -match "`r`n")
 $xmlText = ($xmlText -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($rootXmlFull.Path, $xmlText, $encBom)
 
-Write-Host "[OK] Создан макет: $TemplateName ($TemplateType)"
+Write-Host "[OK] $(if ($templateMetaExists) { 'Обновлён' } else { 'Создан' }) макет: $TemplateName ($TemplateType)"
 if ($alreadyRegistered) {
 	Write-Host "     Already registered: <Template>$TemplateName</Template> in ChildObjects (skipped duplicate)"
 }

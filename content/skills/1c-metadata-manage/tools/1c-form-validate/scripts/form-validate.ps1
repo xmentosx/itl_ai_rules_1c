@@ -609,7 +609,7 @@ if (-not $stopped) {
 		$actionNode = $cmd.SelectSingleNode("f:Action", $nsMgr)
 		$actionChecked++
 		if (-not $actionNode -or -not $actionNode.InnerText.Trim()) {
-			Report-Error "Command '$cmdName': missing or empty Action"
+			Report-Warn "COMMAND_ACTION_UNASSIGNED: Command '$cmdName': missing or empty Action. Advisory only; report to the user, do not create dummy handlers or bindings to silence this warning."
 			$actionErrors++
 		}
 	}

@@ -43,7 +43,7 @@ All 13 agents declare `allowParallel: true`. That licenses parallel **read-only*
 
 **Model profile.** The active-model profile (`AGENT_MODEL` in `.dev.env` — `content/rules/model-adaptation.md`) may tune **how eagerly** you delegate within these criteria: some models delegate too readily and their profile biases toward direct execution and low spawn counts, others sustain parallel subagents well and their profile encourages independent parallel tracks. The criteria above, the per-subagent "when NOT to call" column, the built-in-explorer ban, and every common obligation stay unchanged — a profile never adds a subagent the rules forbid, and never removes one they require. In particular, no profile authorises a subagent spawned to double-check your own work.
 
-**Economy mode.** When `.dev.env` has `ORCHESTRATION=economy` (toggled by `/economymode`; empty / missing = `standard`), load `content/rules/orchestrator-economy.md`: delegation of execution becomes the default — the parent keeps decisions, specs, and verification, subagents do the reading and writing. Check the key when loading this file for a non-trivial task. The mode only widens delegation; every constraint of this file stays intact, and model selection still resolves from `SUBAGENT_MODEL_*` per tier.
+**Economy mode.** When `.dev.env` has `ORCHESTRATION=economy` (toggled by `/economymode`; empty / missing = `standard`), load `content/rules/orchestrator-economy.md`: delegation of execution becomes the default — the parent keeps decisions, specs, and verification, subagents do the reading and writing. Check the key when loading this file for a non-trivial task. The mode only widens delegation; every constraint of this file stays intact, and model selection still resolves from the executing client's `modelTiersByClient` entry.
 
 ## Host-tool built-in explorers (hard ban)
 
@@ -76,9 +76,11 @@ Owned by `content/rules/subagent-core.md` — CONFUSION on material forks, MCP-f
 | **1c-refactoring** | Dead-code cleanup, consolidation, or deduplication across multiple modules | Refactor is local to one procedure |
 | **1c-performance-optimizer** | User reports slowness, or query / loop optimization is the explicit task | No performance concern was raised |
 | **1c-error-fixer** | Quick fix of syntax / runtime errors / BSL LS warnings without architectural changes (tier `coding` — it authors production code, often on transactional paths) | The fix requires architectural rework — escalate to `1c-architect` / `1c-developer` |
-| **1c-tester** | Applicable UI verification with effective `UI_TESTING=essential` (important new or changed user-visible behaviour) or `auto`, or explicit UI-test request under `manual`; authorized dev/test target required (`dev-standards-env.md`) | No test infobase; purely static task; `off`, or `manual` without an explicit UI-test request |
+| **1c-tester** | Applicable UI verification with effective `UI_TESTING=essential` (important new or changed user-visible behaviour) or `auto`, or a named one-off UI request under `manual`/`off`; authorized dev/test target and no broader no-UI instruction required (`dev-standards-env.md`) | No test infobase; purely static task; `off` without a named request, or `manual` without an explicit request |
 | **1c-code-reviewer** | **Only when the user explicitly asks for a code review** and the reviewer model gate below is satisfied | Auto-triggering after edits is forbidden; no explicitly selected reviewer model |
 | **1c-doc-writer** | User-facing documentation: user guides, admin manuals, tutorials, codemaps, API references | Inline code documentation (module / procedure headers) — that is the developer's responsibility |
+
+One confirmed defect class has one mutating owner. The error-fixer may inspect repeated symptoms to establish a common cause, but it must return the shared diagnosis to the parent before broadening its assigned write scope. A second confirmed occurrence ends per-symptom patching; repetition alone selects neither `full-cycle`, OpenSpec, nor an abstraction. The parent chooses the route from the affected contracts and risk.
 
 ## Tool declarations
 
@@ -91,9 +93,9 @@ Two consequences for anyone editing these files or diagnosing a subagent:
 
 ## Model-tier routing
 
-Host limitation: the new Kimi Code runtime ignores custom-agent `model` fields. Its adapter drops the resolved model hint; `SUBAGENT_MODEL_*` cannot select per-agent models there. Command Code needs `tools: "*"` plus native `disallowedTools` to inherit MCP while preserving read-only roles. Follow the adapter, not another client's defaults.
+Host limitation: the new Kimi Code runtime ignores custom-agent `model` fields. Its adapter drops the resolved model hint; `modelTiersByClient` cannot select per-agent models there. Command Code needs `tools: "*"` plus native `disallowedTools` to inherit MCP while preserving read-only roles. Follow the adapter, not another client's defaults.
 
-Subagent source files do **not** hard-code model names. Each agent declares an abstract tier in its frontmatter — `modelTier: coding`, `modelTier: analysis`, or `modelTier: light` — and the installer resolves the tier into a concrete model from `.dev.env` (`SUBAGENT_MODEL_CODING` / `SUBAGENT_MODEL_ANALYSIS` / `SUBAGENT_MODEL_LIGHT`, all Defaulted: empty = the AI client's default model; see `dev-standards-env.md → "Subagent model parameters"`). Model names live only in project settings, never in rules or agent prompts. On first install the installer proposes a benchmark-based profile (`Balanced` / `Economy` / `Quality`, derived from <https://onec-llm-bench.lovable.app/>); the recommendation lives in the installer / `.dev.env`, not here.
+Subagent source files do **not** hard-code model names. Each agent declares an abstract `modelTier: coding | analysis | light`. The installer resolves that tier from the executing client's own `modelTiersByClient` entry: `.agent-1c/project.json → aiRules.modelTiersByClient` in ITL projects, or `.ai-rules.json → modelTiersByClient` in standalone rules-only projects. Empty = that client's default model. Legacy `SUBAGENT_MODEL_*` values in `.dev.env` are bound to the original sole client during migration, never copied to another client. Model names live in project settings, not rules or agent prompts.
 
 The three tiers:
 
@@ -110,7 +112,7 @@ Routing rules:
 
 ## Reviewer model gate
 
-`1c-code-reviewer` and `1c-arch-reviewer` are **disabled unless a reviewer model is explicitly selected**: a non-empty `SUBAGENT_MODEL_ANALYSIS` in `.dev.env`, or a concrete model explicitly chosen by the user for this review invocation. An absent file / key, an empty value, the client's default model, and the legacy fallback to `SUBAGENT_MODEL_CODING` do not enable reviewers. Do not ask for a model merely to complete an ordinary development task.
+`1c-code-reviewer` and `1c-arch-reviewer` are **disabled unless a reviewer model is explicitly selected**: a non-empty `analysis` tier for the executing client in `modelTiersByClient` with `analysisExplicit` not `false`, or a concrete model explicitly chosen for this review invocation. An absent/empty entry, the client's default model, and a migrated legacy two-tier fallback marked `analysisExplicit: false` do not enable reviewers. `/economymode models` sets `analysisExplicit: true` when the user selects that tier. Do not ask for a model merely to complete an ordinary development task.
 
 Before dispatch, confirm that the active client's reviewer definition or supported invocation override selects that model. A setting that has not been rendered into the installed agent is insufficient; never silently substitute inheritance or another model. This is a launch condition, not a change to installer tier resolution for other agents.
 
@@ -164,7 +166,7 @@ Bounded implementation. You are not alone in the codebase; do not revert or over
 outside your scope. Edit only: <files>. Implement <specific change> per the approved plan.
 Follow project rules (dev-standards-code-style, module-structure). For BSL select the applicable
 gates and budget from verification-policy.md using the supplied task path, depth and risk;
-run selected validators in syntaxcheck → check_1c_code → review_1c_code order.
+run selected validators in Gate 1 → Gate 2 (preferred check_1c_logic, check_1c_code fallback) → Gate 3 order.
 For metadata XML run verify_xml; embedded/generated BSL also needs its applicable BSL gates.
 Return: changed files, diff summary against the plan, checks performed, unresolved risks.
 ```

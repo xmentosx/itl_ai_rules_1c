@@ -8,15 +8,15 @@
 # https://mimo.xiaomi.com/mimocode/config-overrides
 # Root AGENTS.md is the entry point. Agent permissions use an object, not
 # the source tools array. Only managed MCP servers are merged/removed;
-# user settings and unrelated servers in mimocode.json are preserved.
+# user settings and unrelated servers in .mimocode/mimocode.json are preserved.
 
 tool: mimocode
 schemaVersion: 1
 
 detection:
   - exists: ".mimocode/"
-  - exists: "mimocode.json"
-  - exists: "mimocode.jsonc"
+  - exists: ".mimocode/mimocode.json"
+  - exists: ".mimocode/mimocode.jsonc"
 
 rules:
   copyTo: ".mimocode/rules-1c/{name}.md"
@@ -57,7 +57,7 @@ skills:
 
 mcp:
   source: "content/mcp-servers.json"
-  target: "mimocode.json"
+  target: ".mimocode/mimocode.json"
   schema: "mcp[id]={ type: 'remote', url, enabled: true } | { type: 'local', command: [...], enabled: true }"
   format: json
   merge: true

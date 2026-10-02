@@ -8,6 +8,10 @@ category: tooling
 
 This file is the **EDT branch** of the ruleset. Everything else in `content/rules/` is written for the Designer-oriented default; this file states exactly what changes when the project is developed in **1C:EDT**, and nothing more.
 
+## Managed ITL boundary
+
+If `.agent-1c/project.json` exists, EDT-MCP exposure does not transfer lifecycle ownership. Resolve the exact registered worktree, source format, branch infobase and recorded operation through the installed ITL helper before any EDT mutation, DB update, branch switch, import/export or deployment. Use its supported `/itl*` action. If that helper has no EDT path for the requested mutation, report `ITL_LIFECYCLE_HELPER_REQUIRED` with the missing capability and preserve the current state; do not run EDT-MCP or the standalone steps below as a fallback. Read-only EDT inspection is allowed only against a verified matching workspace and remains context, not proof of the loaded branch infobase.
+
 ## Activation — the master switch
 
 `.dev.env` `USE_EDT` is the project's explicit statement about EDT (canon — `content/rules/dev-standards-env.md → USE_EDT — project uses 1C:EDT`):
@@ -73,7 +77,7 @@ EDT-MCP is the better source when the question is about the **live workspace** r
 
 ## Validation
 
-BSL validation is **format-agnostic**: Gates 1–3 (`syntaxcheck` → `check_1c_code` → `review_1c_code`) run unchanged on every touched `.bsl`, in EDT projects too (`content/rules/verification-gates.md`).
+BSL validation is **format-agnostic**: the Gates 1–3 selected by `verification-policy.md` run on touched `.bsl` in EDT projects too, with Gate 2 preferring `check_1c_logic` and falling back to `check_1c_code` (`content/rules/verification-gates.md`).
 
 What changes:
 

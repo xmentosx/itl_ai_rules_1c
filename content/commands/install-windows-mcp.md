@@ -5,6 +5,11 @@ userOnly: true
 
 # /install-windows-mcp — install Windows desktop UI MCP
 
+**ITL managed project (`.agent-1c/project.json`):** invoke the installed
+helper's `install-windows-mcp` action. It owns the runtime pin, client MCP
+configuration and recovery. Do not run the generic uvx setup below. The
+standalone procedure applies only outside managed ITL projects.
+
 Installs [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) (`uvx windows-mcp`): an MCP server for Windows UI automation (mouse/keyboard, window state, optional browser DOM mode).
 
 **Policy (mandatory):** this is a **last resort**, not the default for 1C testing.

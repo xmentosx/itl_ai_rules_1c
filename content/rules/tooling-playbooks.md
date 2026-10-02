@@ -14,7 +14,7 @@ Use the smallest set that closes the real context gaps; do not promote a task to
 
 | Task shape | Required before edit | Required after edit |
 |---|---|---|
-| **Quick-fix BSL** | The target module / procedure and any directly referenced helper needed to understand the change | The validator chain of the active `VERIFICATION_DEPTH` on the touched module (default `standard`: `syntaxcheck` → `check_1c_code`; `verification-policy.md → Verification depth levels`) |
+| **Quick-fix BSL** | The target module / procedure and any directly referenced helper needed to understand the change | The validator chain of the active `VERIFICATION_DEPTH` on the touched module (default `standard`: Gate 1 → preferred `check_1c_logic` or `check_1c_code` fallback; `verification-policy.md → Verification depth levels`) |
 | **Full-cycle BSL** | Common preamble below; `search_code` / `codesearch` for local patterns; `get_object_dossier` / `metadatasearch` when metadata shape affects the code; platform / БСП / ITS docs only when a versioned API or standard matters | The validator chain; impact analysis when public surface or metadata usage changed (`verification-gates.md → Gate 4`) |
 | **Metadata XML / forms** | Similar object / form examples, metadata lookup, `get_xsd_schema`; **the mutation goes through the `1c-metadata-manage` skill** (hard gate, `AGENTS.md → Skills and Subagents`) | `verify_xml`; the skill's validation / form compilation |
 | **Integrations / platform APIs** | Existing integrations, templates, relevant БСП APIs, platform docs for exact API names and version availability, security requirements | The validator chain; ITS check when relying on an ITS standard |
@@ -23,10 +23,10 @@ Use the smallest set that closes the real context gaps; do not promote a task to
 ## Common preamble — every playbook that writes or changes BSL
 
 0. **Platform-capability check** when the task enters a specialized domain (cryptography, СЛАУ / numerical methods, data analysis, collaboration system / bots, integration bus / queues, full-text search, regex, …) — `AGENTS.md → MCP Tool Calling → A.7`.
-1. **`recall`** with the task's key terms — `content/rules/project-memory.md`.
+1. **Project memory lookup** through the configured project owner with the task's key terms — `content/rules/project-memory.md`; managed ITL projects do not implicitly enable shared `recall`.
 2. **`templatesearch`** — task text verbatim; a hit is the base — `AGENTS.md → MCP Tool Calling → A.8–A.9`.
 
-The steps below assume the preamble is done. Validator steps are `syntaxcheck` (by path — `syntaxcheck_file`) → `check_1c_code` → `review_1c_code` within `verification-policy.md → Validator budget`.
+The steps below assume the preamble is done. Validator order is standalone `syntaxcheck` (by path — `syntaxcheck_file`) → preferred `check_1c_logic` or fallback `check_1c_code` → `review_1c_code`, selecting only the gates required by `verification-policy.md` and its budget.
 
 ## Writing New Code
 
@@ -36,7 +36,7 @@ Load `content/rules/coding-standards.md` first; forms — `forms.md`; non-trivia
 2. `search_code` → `codesearch` — existing patterns in the configuration; `search_function` — an existing routine to reuse; `get_module_structure` — the module you will edit.
 3. `metadatasearch` / `get_metadata_details` — attribute names and types; `bsl_scope_members` — members of a context.
 4. `docinfo` (exact name) / `docsearch` (by description) — built-in functions; `ssl_search` — reusable БСП functions.
-5. Validator chain; then `vcvalidatequery` (`1c-data-mcp`, if exposed) for every new / non-trivial query string, especially after AI generation.
+5. Validator chain; then the exposed provider query parser (`validatequery` / `vcvalidatequery`; `docs/1c-data-mcp.md`) for every new / non-trivial query string, especially after AI generation.
 
 ## Code Review
 
@@ -59,10 +59,10 @@ Method — `standards(name="systematic-debugging")` (`DEBUG_FAST_PATH` for direc
 
 1. `recall` — recurring errors and their fixes are stored there.
 2. `vcloggetlasterror` (`1c-data-mcp`, if exposed) — exact text, timestamp and affected metadata of the last error; skip when the scenario is not reproduced in the connected IB.
-3. `syntaxcheck` (by path) → `check_1c_code` — syntax and logic defects.
+3. `syntaxcheck` (by path) → preferred `check_1c_logic` or `check_1c_code` fallback — syntax and logic defects, within the selected gate budget.
 4. `search_function`, `search_code` (`detail_level="L0"` for a full routine body) → `codesearch`, `get_module_structure` — locate and understand the failing routine; `trace_call_chain` → `get_method_call_hierarchy` — propagation.
 5. `docinfo` / `docsearch`, `metadatasearch` / `get_metadata_details` — verify names the code relies on.
-6. `vcvalidatequery` → `vcexecutequery` (read-only) → `vcexecutecode` (read-only fragment; never a mutation without explicit consent — `docs/1c-data-mcp.md → Safety`) — confirm a data-state or platform-behaviour hypothesis in the live IB.
+6. `content/skills/1c-live-ib/SKILL.md` — select the eligible live provider for a bounded read-only data-state or platform-behaviour check on the exact IB. Managed branches prefer metadata-first ROCTUP; parsing is a separate exposed-tool capability. No code execution or mutation is implied by query authorization.
 7. `modify_1c_code` — targeted AI fix (a draft: re-validate).
 
 ## Performance Optimization
@@ -72,7 +72,7 @@ Method — `standards(name="systematic-debugging")` (`DEBUG_FAST_PATH` for direc
 2. `metadatasearch` / `get_metadata_details` — indexes and structure; establish the baseline result and measured bottleneck. If diagnosis needs `check_1c_code`, first obtain syntax evidence for that same state.
 3. Reuse the common preamble's `templatesearch` result as the base when it fits; search again only for a newly identified gap. `its_help` → `fetch_its` — applicable ITS performance standards **before** choosing the rewrite. Confirm the candidate preserves row multiplicity, values and other required behaviour.
 4. Adapt the matching template, or use `rewrite_1c_code` (`goal: optimize`) when no fitting template exists — a draft. Run the validator chain after the edit.
-5. `vcvalidatequery` → bounded read-only `vcexecutequery` (`1c-data-mcp`, test or copy IB) — compare results with the baseline, including duplicates and overlapping conditions, then compare performance. Parsing alone proves neither metadata resolution nor result equivalence (`verification-gates.md → Gate 3a`).
+5. The exposed query parser, then a bounded read-only query through the eligible provider (`1c-live-ib`, test or copy IB) — compare results with the baseline, including duplicates and overlapping conditions, then compare performance. Parsing alone proves neither metadata resolution nor result equivalence (`verification-gates.md → Gate 3a`).
 
 ## Refactoring
 

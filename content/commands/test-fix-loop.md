@@ -5,9 +5,42 @@ argumentHint: "[<scenario / task description>] [--iterations N]"
 
 # /test-fix-loop — deploy → test → fix → redeploy until green
 
+**ITL managed project (`.agent-1c/project.json`):** route a named scenario set
+through the installed helper's `scenario-loop` repair kind. Record the requested
+scenarios and their expected outcomes. Reuse an existing Vanessa `.feature` and
+optional tag filter when they cover that exact scope. Otherwise author the
+smallest executable transient `.feature` under the project's ignored
+`.agent-1c/verification/scenario-loop/` directory using the existing Vanessa
+steps and authoring rules; check that Git ignores its path. Preserve that file
+through the repair session and any evidence or diagnosis that references it.
+It is current proof, not retained regression coverage; do not add it to a
+retained suite merely to make the command run. If the requested behavior cannot
+be represented by a reliable executable scenario, report that prerequisite
+before any load or test. Start once with
+`run-itl-command.ps1 -- -Action begin-verification-repair -VerificationRepairKind
+scenario-loop -VanessaFeaturePath <path> [-VanessaFilterTags <tags>]
+[-VerificationRepairMaxAttempts N]`. The default is three rounds; explicit `N`
+applies to a new session only. Pass the path as one quoted argument, including
+when it contains spaces and Cyrillic. Keep the returned session ID. For each round use
+`run-itl-command.ps1 -- -Action check-dev-branch -VerificationTrigger repair
+-RepairSessionId <id> -VanessaFeaturePath <same-path> [-VanessaFilterTags
+<same-tags>] -ExplicitVerificationComponent vanessa`. If the user's authorization
+also covers all due components while their project execution switches are off,
+use `-ExplicitVerificationComponent all` for that invocation. The helper owns
+one base update, a focused Vanessa diagnostic and the subsequent unfiltered
+assessment in the same persisted attempt. Only fresh full evidence completes
+the session. If the obligation is classified as one-off, record its result through
+the installed `begin-one-off-proof` / `complete-one-off-proof` route before
+claiming export readiness; a passed diagnostic alone is not that receipt. On
+failure, diagnose and change the relevant input before repeating
+the same ID and scope; deploy recovery never resets the outer budget. A broad
+no-UI instruction still needs explicit lifting, and neither invocation changes
+the stored execution switches. The standalone procedure below applies only
+outside managed ITL projects.
+
 Run the requested test scenarios against the test infobase and, when they fail, close the loop: diagnose → fix the code → redeploy → re-test — until every scenario passes or the iteration budget runs out. This is the *outer* loop over test failures; the *inner* retry loop for deploy errors stays where it lives (`/update1cbase → Update retry loop`) and does not consume test iterations.
 
-**Strictly opt-in.** This loop runs only when invoked as a command or explicitly requested in words; `UI_TESTING=essential` / `auto` enable routine UI verification, not this repeated deploy/fix loop. Invoking it **is** the explicit UI-test request that `manual` requires. Effective `UI_TESTING=off` still blocks: point to `/uitests essential`, `/uitests on` or `/uitests manual`; an explicit enable-and-run instruction satisfies the switch without a second confirmation. Execution prerequisites still apply. Web-client iterations are token-expensive — on that route state the expected cost once at the start.
+**Strictly opt-in.** This loop runs only when invoked as a command or explicitly requested in words; `UI_TESTING=essential` / `auto` enable routine UI verification, not this repeated deploy/fix loop. An exact `/test-fix-loop` request authorizes its named UI run for this invocation under `manual` or `off` without changing the project setting. A broader current no-UI instruction must be lifted explicitly first. Target and provider prerequisites still apply. Web-client iterations are token-expensive — on that route state the expected cost once at the start.
 
 ## Step 0. Prerequisites
 

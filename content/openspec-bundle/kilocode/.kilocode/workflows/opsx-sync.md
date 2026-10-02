@@ -1,3 +1,19 @@
+<!-- itl:openspec-integration-v2:start -->
+<!-- itl:project-skill-preflight -->
+<!-- itl:caveman-response-style -->
+## ITL project contract for OpenSpec sync
+
+Before this phase in a managed ITL project, read project-root `AGENTS.md` and `USER-RULES.md`, then load the on-demand OpenSpec, product-documentation, and subject skills they route to. Confirm 1C facts through the required MCP provider before broad repository traversal; record material sources and conflicts in the change artifacts. Unavailable required evidence makes the dependent conclusion provisional, not silently verified.
+
+In a managed ITL project, use the OpenSpec CLI pinned to the installed workflow checkout: resolve its absolute Node executable and JS entrypoint through the ITL runtime, and provision the selected pin with the existing `provision-openspec-cli` action if missing. Do not select a global `openspec` from PATH or run `openspec update` to regenerate these adapted files. Before any planning write, call the ITL `openspec-context` action and require its local root to equal this checkout. `OPEN_SPEC_EXTERNAL_STORE_DEFERRED` stops the dependent phase before any direct `--store`, artifact write, sync or archive move; preserve the external binding and documents, and continue only after an explicit local selection or a later qualified release. For a local new change or archive, use the ITL pinned `openspec-new-change` or `openspec-archive-change` action; agent-authored artifacts and sync use only the resolved local paths. A standalone rules-only project without ITL state follows the upstream OpenSpec CLI workflow and its own installation.
+
+An existing authorization for this phase and selected change remains valid across its steps. Do not repeat an approval request solely because an upstream step says to confirm. Ask only when a new material choice, explicit waiver, or unaccepted risk actually requires the user's decision; continue independent work while that decision is pending.
+
+Sync writes local current specs while leaving the change active; validate the selected delta again before archive. External main specs are unavailable in this release.
+
+Caveman follows the project skill: explicit session force first; otherwise `CAVEMAN=auto` by default, with session level `full` by default. Auto classifies the current verb; it does not impose a permanent style on all OpenSpec phases. Shorten only working commentary. Keep artifacts, exact technical text, evidence, safety warnings, and mandatory reports complete.
+<!-- itl:openspec-integration-v2:end -->
+
 Sync delta specs from a change to main specs.
 
 This is an **agent-driven** operation - you will read delta specs and directly edit main specs to apply the changes. This allows intelligent merging (e.g., adding a scenario without copying the entire requirement).

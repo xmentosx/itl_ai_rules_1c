@@ -5,6 +5,10 @@ userOnly: true
 
 # /installtools — guided tool installation
 
+## Managed ITL project
+
+If `.agent-1c/project.json` exists, use the host ITL provisioning/status helper for workflow-owned MCP, browser/UI, 1C runtimes and dependent tools. Do not run this command's generic installers or rewrite workflow-managed client MCP entries. Present optional tools only when their owner and explicit selection are clear; Cognee/OpenViking are not enrolled by this upstream upgrade. If a requested optional installer has no ITL-compatible route, report the missing capability and continuation without mutating project state. The standalone menu below applies only without managed ITL state.
+
 Use this command after installing the rules, and again after an update announces new tool installers. It detects the supported tools, explains what each one is for, asks one compact selection question, and then runs the corresponding standalone installer procedures.
 
 This command is an orchestrator. Do not duplicate installation steps here and do not silently install anything.

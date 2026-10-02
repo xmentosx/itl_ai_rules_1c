@@ -1,5 +1,5 @@
 ---
-description: Toggle orchestrator economy mode via ORCHESTRATION in .dev.env; on enable, offers to configure per-tier subagent models and to set up the rtk output-compression proxy
+description: Toggle project economy mode; configure models separately for the selected AI client and optionally set up rtk
 userOnly: true
 argumentHint: "[on|off|status|models|rtk]"
 ---
@@ -12,29 +12,29 @@ Parameters, classes and defaults — `content/rules/dev-standards-env.md §1`; D
 
 Parse the argument: empty or `on` — enable; `off` — disable; `status` — report the current state; `models` — (re)configure per-tier subagent models without changing the mode; `rtk` — run `/install-rtk` (`content/commands/install-rtk.md`) without changing the mode.
 
-The command edits **only** the `ORCHESTRATION` and (when the user confirms) `SUBAGENT_MODEL_CODING` / `SUBAGENT_MODEL_ANALYSIS` / `SUBAGENT_MODEL_LIGHT` lines in `.dev.env` — never other keys, never other files. Rewrite the `KEY=` line in place, or append `KEY=value` at the end; if `.dev.env` is missing, run the installer (`install.ps1 init`) instead of creating a partial file — until then apply the mode for the current session only.
+The command edits `ORCHESTRATION` only in `.dev.env`. Explicit model choices belong to the selected client's `coding` / `analysis` / `light` entry in `aiRules.modelTiersByClient` of `.agent-1c/project.json` in an ITL-managed project, or `modelTiersByClient` of `.ai-rules.json` in a standalone rules-only project. Keep every other client's entry and every unrelated project value unchanged. If `.dev.env` is missing, run the appropriate installer instead of creating a partial file; until then apply the mode only for this session. Never run the standalone installer over an ITL-managed project.
 
 ## on (default)
 
-1. Read `.dev.env`: `ORCHESTRATION` and the three `SUBAGENT_MODEL_*` keys.
-2. **Model check.** Economy mode pays off only when subagents run on cheaper models than the parent; with empty `SUBAGENT_MODEL_*` subagents inherit the parent's model and the saving shrinks to context offloading. The installer renders `SUBAGENT_MODEL_*` into the active client's agent files (Cursor `.cursor/agents/`, Claude Code `.claude/agents/`, Codex `.codex/agents/*.toml`, OpenCode `.opencode/agent/`, Kilo `.kilo/agents/`), so each value must be a model id **in that client's own format**.
-   - If **all three** tier models are set — do not ask; show the current tier → model mapping in the confirmation.
-   - If **any** tier model is empty — determine the active AI client (from `.ai-rules.json` `activeTools`; several active → ask which one; none recorded → ask the user). Then ask **one** question: a model per tier, plus "keep inheriting". Tier meaning is the same everywhere: `coding` = strongest (writes production code / metadata), `analysis` = value / mid (plan / review / test / docs), `light` = cheapest and fastest (read-only scouting / search / impact lists); error fixes that author production code use `coding`. There is no canonical slug catalog in the ruleset: the canonical ids are whatever the client accepts — take them from the client's own model list (e.g. Cursor's model picker, OpenCode `/models`) or from the ids the user gives, and verify an id against that list before writing it. **OpenCode** ids have a mandatory `provider/model` format (optional `#variant` for reasoning effort); a bare slug does not resolve, and an invalid id can make OpenCode reject the whole config and fail to start. Which model fits which tier — the 1C benchmark (<https://onec-llm-bench.lovable.app/>) is the reference; the user may always pick their own.
+1. Read `ORCHESTRATION` from `.dev.env`, identify the executing client from the session or an explicit user selection, and verify that it is attached in `aiRules.tools` / the standalone manifest. An unattached client gets the ITL attach route; do not connect it implicitly. Read only that client's model entry.
+2. **Model check.** Economy mode pays off only when subagents use cheaper models than the parent; empty tiers inherit this client's default. The installer renders the selected client's ids into its agent files (Cursor `.cursor/agents/`, Claude Code `.claude/agents/`, Codex `.codex/agents/*.toml`, OpenCode `.opencode/agent/`, Kilo `.kilo/agents/`).
+   - If **all three** tier models for this client are set — show its current mapping without asking.
+   - If **any** tier is empty — ask **one** question for this client's model per tier, including "keep inheriting". `coding` writes code/metadata, `analysis` plans/reviews/tests/docs, `light` scouts. Error fixes that author production code use `coding`. Use ids confirmed by this client's own model list or supplied by the user; do not copy another client's id. OpenCode needs `provider/model` (optional `#variant`); a bare slug may prevent the client from starting. The 1C benchmark (<https://onec-llm-bench.lovable.app/>) is advisory.
    - **Keep inheriting** is a valid answer: do not write the models, and warn that subagents will run on the parent's model, so the saving is limited to context offloading.
-   - Write the chosen values into `.dev.env`. Fill **empty** keys; overwrite already-filled keys only when the user explicitly said so.
+   - Write the chosen values into this client's model map entry. Fill **empty** tiers; overwrite a nonempty tier only on explicit user request. Preserve an absent tier as empty/inherited. When `analysis` is explicitly selected, set `analysisExplicit: true`; a migrated `false` marker must not enable reviewers by accident. In an ITL project, the host owns the project configuration and pinned re-render; never run `install.ps1` directly against it.
 3. Set `ORCHESTRATION=economy`.
-4. **Re-render note.** `SUBAGENT_MODEL_*` are consumed by the installer when rendering subagent files — editing `.dev.env` alone does not change the already-installed agent files. If models were written in step 2, offer to re-render right away: in the `1c-rules` source repo — `./install.ps1 update`; in an installed project — the `/updaterules` flow. In Cursor the user may instead set the model per subagent in the UI. **OpenCode** (and Kilo / Codex) read agent definitions only at startup — after the re-render, tell the user to restart the client for the new subagent models to take effect. `ORCHESTRATION` itself needs **no** re-render — rules read it directly from `.dev.env`.
+4. **Re-render note.** Editing the model map alone does not change installed agent files. If models changed, re-render with `install.ps1 update` for standalone rules-only projects or the pinned `agent-1c.ps1 -Action update-ai-rules` from master for ITL projects; the latter reconciles the attached set. Restart the affected client afterward, especially OpenCode/Kilo/Codex. `ORCHESTRATION` itself needs no re-render.
 5. **Optional companion — `rtk`.** Economy mode saves orchestrator tokens by delegating; `rtk` compresses the output of shell commands before it reaches the model. Ask once whether to set it up now (skip is always valid); on yes run `/install-rtk` (`content/commands/install-rtk.md`), which also states its limits.
 6. Load the `orchestrator-economy.md` rule and apply it immediately — from this message on, in this session, without any restart.
 7. Confirm to the user in 3–4 lines, in Russian:
    - режим экономии включён и записан в `.dev.env` (`ORCHESTRATION=economy`) — действует для проекта, включая новые чаты;
-   - карта ярусов: `coding` / `analysis` / `light` → фактические модели (или «наследование от родителя» с предупреждением);
+   - клиент и его карта ярусов: `coding` / `analysis` / `light` → фактические модели (или «наследование от клиента» с предупреждением);
    - если настроили `rtk` — вывод shell-команд теперь сжимается (после перезапуска клиента);
    - решения, спеки и верификация остаются за головным агентом; выключение — `/economymode off`.
 
 ## off
 
-1. In the project `.dev.env`: set `ORCHESTRATION=standard` (same edit rule as above; if `.dev.env` is missing there is nothing to persist). Do not touch `SUBAGENT_MODEL_*` — configured models stay.
+1. In the project `.dev.env`: set `ORCHESTRATION=standard` (same edit rule as above; if `.dev.env` is missing there is nothing to persist). Do not touch client model entries.
 2. Stop applying the mode immediately in this session and confirm: режим экономии выключен (`ORCHESTRATION=standard`), действует обычная политика делегирования из `subagents.md` (делегировать крупное, мелкое исполнять напрямую).
 
 ## status
@@ -42,7 +42,7 @@ The command edits **only** the `ORCHESTRATION` and (when the user confirms) `SUB
 Read `.dev.env` and report, without editing anything:
 
 - the `ORCHESTRATION` value (or the default when the file / key is absent or the value is invalid) and what it means;
-- the tier → model mapping from `SUBAGENT_MODEL_*` (or «наследование от родителя»);
+- the selected attached client and its tier → model mapping (or «наследование от клиента»); report other attached clients only if requested;
 - whether `rtk` is installed (`rtk --version`) and, if not, that `/economymode rtk` (= `/install-rtk`) can set it up.
 
 ## models

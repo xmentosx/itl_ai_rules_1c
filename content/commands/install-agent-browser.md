@@ -5,6 +5,11 @@ userOnly: true
 
 # /install-agent-browser — install token-efficient browser automation
 
+**ITL managed project (`.agent-1c/project.json`):** invoke the installed
+helper's `install-agent-browser` action. It owns the runtime pin, client MCP
+configuration and recovery. Do not run the global npm procedure below. The
+standalone procedure applies only outside managed ITL projects.
+
 Installs [agent-browser](https://github.com/vercel-labs/agent-browser) (Vercel Labs): a headless Chromium CLI with accessibility-tree snapshots. Preferred tool for 1C **web** UI testing — snapshots cost far fewer tokens than screenshot / vision loops (`cursor-ide-browser`, Playwright MCP, custom screenshot+OCR).
 
 Policy and fallback order — `content/rules/ui-testing-tools.md`. Shell on Windows — `powershell-windows` skill.

@@ -4826,6 +4826,21 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
     if btn_type:
         lines.append(f'{inner}<Type>{btn_type}</Type>')
 
+    # Match the editor's platform order; preserve compiler-only properties below.
+    if el.get('visible') is False or el.get('hidden') is True:
+        lines.append(f'{inner}<Visible>false</Visible>')
+    if el.get('userVisible') is not None:
+        emit_xr_flag(lines, 'UserVisible', el.get('userVisible'), inner)
+    if el.get('representation'):
+        btn_repr = 'PictureAndText' if el['representation'] == 'TextPicture' else el['representation']
+        lines.append(f'{inner}<Representation>{btn_repr}</Representation>')
+    if el.get('defaultButton') is True:
+        lines.append(f'{inner}<DefaultButton>true</DefaultButton>')
+    if el.get('enabled') is False or el.get('disabled') is True:
+        lines.append(f'{inner}<Enabled>false</Enabled>')
+    if el.get('readOnly') is True:
+        lines.append(f'{inner}<ReadOnly>true</ReadOnly>')
+
     # CommandName
     if el.get('command'):
         lines.append(f'{inner}<CommandName>Form.Command.{el["command"]}</CommandName>')
@@ -4853,11 +4868,6 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
     if el.get('path'):
         lines.append(f'{inner}<DataPath>{el["path"]}</DataPath>')
 
-    emit_title(lines, el, name, inner, auto=not (el.get('command') or el.get('commandName') or el.get('stdCommand')))
-    emit_common_flags(lines, el, inner)
-
-    if el.get('defaultButton') is True:
-        lines.append(f'{inner}<DefaultButton>true</DefaultButton>')
     # Check (пометка toggle-кнопки командной панели) — платформа эмитит только true.
     # Ключ 'checked' (не 'check': 'check' — тип-ключ CheckBoxField, был бы конфликт диспетчера типов)
     if el.get('checked') is True:
@@ -4866,8 +4876,7 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
     # Picture
     emit_command_picture(lines, el.get('picture'), el.get('loadTransparent'), inner)
 
-    if el.get('representation'):
-        lines.append(f'{inner}<Representation>{el["representation"]}</Representation>')
+    emit_title(lines, el, name, inner, auto=not (el.get('command') or el.get('commandName') or el.get('stdCommand')))
 
     if el.get('locationInCommandBar'):
         lines.append(f'{inner}<LocationInCommandBar>{el["locationInCommandBar"]}</LocationInCommandBar>')
@@ -6034,6 +6043,12 @@ def emit_commands(lines, cmds, indent):
         if cmd.get('use') is not None:
             emit_xr_flag(lines, 'Use', cmd.get('use'), inner)
 
+        # Shortcut and Picture precede Action in the platform sequence.
+        if cmd.get('shortcut'):
+            lines.append(f'{inner}<Shortcut>{cmd["shortcut"]}</Shortcut>')
+
+        emit_command_picture(lines, cmd.get('picture'), cmd.get('loadTransparent'), inner)
+
         if cmd.get('action'):
             lines.append(f'{inner}<Action>{cmd["action"]}</Action>')
 
@@ -6053,13 +6068,9 @@ def emit_commands(lines, cmds, indent):
         if cmd_table:
             lines.append(f'{inner}<AssociatedTableElementId xsi:type="xs:string">{esc_xml(str(cmd_table))}</AssociatedTableElementId>')
 
-        if cmd.get('shortcut'):
-            lines.append(f'{inner}<Shortcut>{cmd["shortcut"]}</Shortcut>')
-
-        emit_command_picture(lines, cmd.get('picture'), cmd.get('loadTransparent'), inner)
-
         if cmd.get('representation'):
-            lines.append(f'{inner}<Representation>{cmd["representation"]}</Representation>')
+            cmd_repr = 'TextPicture' if cmd['representation'] == 'PictureAndText' else cmd['representation']
+            lines.append(f'{inner}<Representation>{cmd_repr}</Representation>')
 
         lines.append(f'{indent}\t</Command>')
     lines.append(f'{indent}</Commands>')

@@ -7,6 +7,8 @@ userOnly: true
 
 To connect already installed servers and memory to a new repository, use `/setupmcp` (`content/commands/setupmcp.md`). It collects their actual endpoints and writes project connections; `/checkmcp` keeps MCP configs read-only.
 
+In an ITL-managed project, the pinned helper owns client MCP config, facades, lifecycle and recovery. Inspect its recorded endpoints and exposed tools; route a repair through the original helper operation, never the standalone installer, raw backend HTTP or an extra config writer. Branch data prefers `itl-roctup-data` (`.agents/skills/itl-roctup-1c-data/SKILL.md`); an empty `INFOBASE_PUBLISH_URL` is normal when web publication is disabled, not a missing data channel. Diagnose the conditional HTTP `1c-data-mcp` only when that intentionally published route is configured. A reachable URL still needs protocol and safe callable-tool proof; availability checks do not grant publication/start/repair authority.
+
 Load `content/rules/mcp-deployment.md`. Use recorded full client URLs in every deployment mode, including custom local ports and shared Debian/Ubuntu hosts. Remote services require no local Docker/Desktop/WSL. Docker inspection/start runs only against the verified owning host/context; without that access report container state as unverified and continue client endpoint checks. Never allocate new ports during diagnosis of an existing service. Catalog ports are only candidates when no installation mapping exists, never replacements for custom managed endpoints. A proxy's client port need not equal the container's published host port.
 
 This command checks that all MCP servers from the project catalog (`content/mcp-servers.json`; after 1c-rules installation, rendered into the active tool config such as `.cursor/mcp.json` / `.mcp.json` / `.kilo/kilo.json` / `opencode.json` / `.codex/config.toml` / `.qwen/settings.json` / `.kimi-code/mcp.json` / `.zcode/config.json` under `mcp.servers` / `mimocode.json` under `mcp`) are actually available in the current session, and helps start or install missing ones. Config file, top-level key and per-server shape per client — including the Kilo legacy `.kilocode/mcp.json` warning and the OpenCode `onec-` key rule — are owned by `/installmcp` → *Step 7. Per-client MCP config*; `install.ps1` renders the same placement. This command only reads those files.
@@ -101,7 +103,7 @@ For each `id`, determine **TOOLS_OK** / **TOOLS_MISSING**:
   - `docinfo`, `docsearch`, `standards`, `formatspec` — `1C-docs-mcp`;
   - `metadatasearch`, `codesearch`, `search_function`, `get_module_structure` — `1c-code-metadata-mcp`;
   - `search_metadata`, `get_object_dossier`, `trace_impact`, `trace_call_chain` — `1c-graph-metadata-mcp`;
-  - `check_1c_code`, `review_1c_code`, `its_help`, `fetch_its` — `1c-code-check-mcp`.
+  - `check_1c_logic` (preferred Gate 2 when exposed), `check_1c_code` (fallback), `review_1c_code`, `its_help`, `fetch_its` — `1c-code-check-mcp`.
 - **TOOLS_MISSING** — no tools are visible in the schema.
 
 If status is **TOOLS_OK**, treat the server as working and do not check it further.

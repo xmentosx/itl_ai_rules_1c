@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Refreshes content/openspec-bundle/ from a locally installed OpenSpec CLI.
+    Refreshes content/openspec-bundle/ from an explicitly pinned OpenSpec CLI.
 
 .DESCRIPTION
     Maintainer-only utility. Runs `openspec init` in a temporary directory
@@ -13,10 +13,9 @@
     to get OpenSpec slash commands and SKILLs without needing npm at install
     time. Re-run after upgrading the OpenSpec CLI.
 
-    Requirements (maintainer machine only):
-      - Node.js + npm
-      - The official OpenSpec CLI installed globally:
-          npm install -g @fission-ai/openspec@latest
+    Requirements (maintainer machine only): an absolute Node executable and
+    official OpenSpec JS entrypoint with their expected SHA-256 values. The
+    expected version is supplied explicitly; a global CLI is never selected.
 
 .PARAMETER RepoRoot
     Path to the 1c-rules source repository. Defaults to the parent directory
@@ -25,15 +24,20 @@
 .PARAMETER DryRun
     Show planned actions and the diff summary; do not modify the repository.
 
-.EXAMPLE
-    .\tools\refresh-openspec-bundle.ps1
+.PARAMETER ExpectedVersion
+    Exact version selected for this controlled fork intake.
 
 .EXAMPLE
-    .\tools\refresh-openspec-bundle.ps1 -DryRun
+    .\tools\refresh-openspec-bundle.ps1 -NodePath C:\node\node.exe -NodeSha256 <sha256> -OpenSpecEntryPath C:\runtime\openspec.js -EntrySha256 <sha256> -ExpectedVersion 1.13.1 -DryRun
 #>
 [CmdletBinding()]
 param(
     [string]$RepoRoot,
+    [Parameter(Mandatory = $true)][string]$NodePath,
+    [Parameter(Mandatory = $true)][string]$NodeSha256,
+    [Parameter(Mandatory = $true)][string]$OpenSpecEntryPath,
+    [Parameter(Mandatory = $true)][string]$EntrySha256,
+    [Parameter(Mandatory = $true)][string]$ExpectedVersion,
     [switch]$DryRun
 )
 
@@ -61,20 +65,32 @@ function Resolve-RepoRoot {
     return (Resolve-Path (Join-Path $scriptDir '..')).Path
 }
 
-function Test-OpenSpecAvailable {
-    $cmd = Get-Command openspec -ErrorAction SilentlyContinue
-    if (-not $cmd) {
-        throw "OpenSpec CLI not found on PATH. Install it first: npm install -g @fission-ai/openspec@latest"
+function Assert-PinnedOpenSpecCli {
+    foreach ($inputPath in @($NodePath, $OpenSpecEntryPath)) {
+        if (-not [IO.Path]::IsPathRooted($inputPath) -or -not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
+            throw "OPEN_SPEC_BUNDLE_PIN_PATH_INVALID: '$inputPath' must be an existing absolute file."
+        }
+    }
+    if ($ExpectedVersion -notmatch '^\d+\.\d+\.\d+$' -or
+        $NodeSha256 -notmatch '^[a-fA-F0-9]{64}$' -or $EntrySha256 -notmatch '^[a-fA-F0-9]{64}$') {
+        throw 'OPEN_SPEC_BUNDLE_PIN_INVALID: provide an exact version and two SHA-256 values.'
+    }
+    if ((Get-FileHash -LiteralPath $NodePath -Algorithm SHA256).Hash -ine $NodeSha256 -or
+        (Get-FileHash -LiteralPath $OpenSpecEntryPath -Algorithm SHA256).Hash -ine $EntrySha256) {
+        throw 'OPEN_SPEC_BUNDLE_PIN_DRIFT: Node or OpenSpec entrypoint bytes differ from the supplied hashes.'
     }
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $version = (& openspec --version 2>&1 | Out-String).Trim()
+        $version = (& $NodePath $OpenSpecEntryPath --version 2>&1 | Out-String).Trim()
+        $exitCode = $LASTEXITCODE
     }
     finally {
         $ErrorActionPreference = $prevPref
     }
-    if (-not $version) { throw "openspec --version returned empty output" }
+    if ($exitCode -ne 0 -or $version -cne $ExpectedVersion) {
+        throw "OPEN_SPEC_BUNDLE_VERSION_MISMATCH: expected '$ExpectedVersion', got '$version' (exit $exitCode)."
+    }
     return $version
 }
 
@@ -87,7 +103,7 @@ function Invoke-OpenSpecInit {
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & openspec init --tools $script:OpenSpecToolsArg 2>&1 | Out-String
+        $output = & $NodePath $OpenSpecEntryPath init --tools $script:OpenSpecToolsArg 2>&1 | Out-String
         if ($LASTEXITCODE -ne 0) {
             Write-Host $output
             throw "openspec init failed (exit $LASTEXITCODE)"
@@ -113,6 +129,12 @@ function Get-RelativeFiles {
     } | Sort-Object)
 }
 
+function Get-NormalizedBundleText {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $strictUtf8 = [Text.UTF8Encoding]::new($false, $true)
+    return $strictUtf8.GetString([IO.File]::ReadAllBytes($Path)).Replace("`r`n", "`n")
+}
+
 function Sync-ToolBundle {
     param(
         [string]$Tool,
@@ -122,9 +144,17 @@ function Sync-ToolBundle {
     )
     $dot = $script:DotMap[$Tool]
     $sourceDir = Join-Path $ProbeRoot $dot
-    # The whole per-tool folder is compared and replaced, so a dot directory the
-    # CLI stopped writing (e.g. codex/.codex after the move to .agents) is removed.
+    # Compare each generated file and replace only changed content. A
+    # same-version refresh remains byte-stable across checkout line endings.
     $toolDir = Join-Path $BundleRoot $Tool
+    $bundleFull = [IO.Path]::GetFullPath($BundleRoot).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $toolFull = [IO.Path]::GetFullPath($toolDir)
+    if (-not $toolFull.StartsWith($bundleFull, [StringComparison]::OrdinalIgnoreCase) -or
+        $Tool -notin $script:Tools -or
+        ((Test-Path -LiteralPath $toolFull) -and
+            ((Get-Item -LiteralPath $toolFull -Force).Attributes -band [IO.FileAttributes]::ReparsePoint))) {
+        throw "OPEN_SPEC_BUNDLE_TOOL_SCOPE_INVALID: refusing to replace '$toolDir'."
+    }
 
     if (-not (Test-Path $sourceDir)) {
         Write-Warning "  [$Tool] no $dot in probe output - skipped"
@@ -141,18 +171,24 @@ function Sync-ToolBundle {
     $shared = @($sourceFiles | Where-Object { $targetSet.Contains($_) })
     $updated = @()
     foreach ($rel in $shared) {
-        $a = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $ProbeRoot $rel)).Hash
-        $b = (Get-FileHash -Algorithm SHA256 -Path (Join-Path $toolDir $rel)).Hash
-        if ($a -ne $b) { $updated += $rel }
+        $a = Get-NormalizedBundleText -Path (Join-Path $ProbeRoot $rel)
+        $b = Get-NormalizedBundleText -Path (Join-Path $toolDir $rel)
+        if ($a -cne $b) { $updated += $rel }
     }
 
     if (-not $DryRun) {
-        if (Test-Path $toolDir) { Remove-Item -Recurse -Force $toolDir }
-        foreach ($rel in $sourceFiles) {
+        foreach ($rel in $removed) {
+            $obsolete = [IO.Path]::GetFullPath((Join-Path $toolDir $rel))
+            if (-not $obsolete.StartsWith(($toolFull + [IO.Path]::DirectorySeparatorChar), [StringComparison]::OrdinalIgnoreCase)) {
+                throw "OPEN_SPEC_BUNDLE_FILE_SCOPE_INVALID: '$obsolete'."
+            }
+            Remove-Item -LiteralPath $obsolete -Force
+        }
+        foreach ($rel in @($added) + @($updated)) {
             $dest = Join-Path $toolDir $rel
             $parent = Split-Path -Parent $dest
             if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Force -Path $parent | Out-Null }
-            Copy-Item -Force -Path (Join-Path $ProbeRoot $rel) -Destination $dest
+            Copy-Item -LiteralPath (Join-Path $ProbeRoot $rel) -Destination $dest -Force
         }
     }
 
@@ -172,7 +208,7 @@ Write-Host "Repo:    $repo"
 Write-Host "Bundle:  $bundleRoot"
 Write-Host "DryRun:  $DryRun"
 
-$cliVersion = Test-OpenSpecAvailable
+$cliVersion = Assert-PinnedOpenSpecCli
 Write-Host "OpenSpec CLI version: $cliVersion"
 
 $probe = Join-Path $env:TEMP ("opsx-refresh-" + [Guid]::NewGuid().ToString('N'))
@@ -182,6 +218,11 @@ try {
     Write-Host "Running openspec init in $probe ..."
     $initOut = Invoke-OpenSpecInit -WorkDir $probe
     Write-Verbose $initOut
+    $overlayPath = Join-Path $repo 'tools/apply-openspec-downstream-overlay.ps1'
+    if (-not (Test-Path -LiteralPath $overlayPath -PathType Leaf)) {
+        throw "OPEN_SPEC_BUNDLE_OVERLAY_MISSING: $overlayPath"
+    }
+    & $overlayPath -Root $probe -GeneratedRoot
 
     Write-Host ''
     Write-Host 'Per-tool diff:'
@@ -196,7 +237,7 @@ try {
     $verFile = Join-Path $bundleRoot 'version.txt'
     $existingVersion = ''
     if (Test-Path $verFile) { $existingVersion = ((Get-Content -Raw -Path $verFile) -replace '\s+$', '').Trim() }
-    if (-not $DryRun) {
+    if (-not $DryRun -and $existingVersion -cne $cliVersion) {
         Set-Content -Path $verFile -Value $cliVersion -NoNewline -Encoding UTF8
     }
 
@@ -221,5 +262,11 @@ try {
     }
 }
 finally {
-    if (Test-Path $probe) { Remove-Item -Recurse -Force $probe }
+    $tempFull = [IO.Path]::GetFullPath($env:TEMP).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $probeFull = [IO.Path]::GetFullPath($probe)
+    if (-not $probeFull.StartsWith($tempFull, [StringComparison]::OrdinalIgnoreCase) -or
+        -not ([IO.Path]::GetFileName($probeFull) -match '^opsx-refresh-[a-f0-9]{32}$')) {
+        throw "OPEN_SPEC_BUNDLE_PROBE_SCOPE_INVALID: refusing to remove '$probeFull'."
+    }
+    if (Test-Path -LiteralPath $probeFull) { Remove-Item -LiteralPath $probeFull -Recurse -Force }
 }

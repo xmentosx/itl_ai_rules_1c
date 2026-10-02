@@ -10,6 +10,22 @@ metadata:
   generatedBy: "1.13.1"
 ---
 
+<!-- itl:openspec-integration-v2:start -->
+<!-- itl:project-skill-preflight -->
+<!-- itl:caveman-response-style -->
+## ITL project contract for OpenSpec explore
+
+Before this phase in a managed ITL project, read project-root `AGENTS.md` and `USER-RULES.md`, then load the on-demand OpenSpec, product-documentation, and subject skills they route to. Confirm 1C facts through the required MCP provider before broad repository traversal; record material sources and conflicts in the change artifacts. Unavailable required evidence makes the dependent conclusion provisional, not silently verified.
+
+In a managed ITL project, use the OpenSpec CLI pinned to the installed workflow checkout: resolve its absolute Node executable and JS entrypoint through the ITL runtime, and provision the selected pin with the existing `provision-openspec-cli` action if missing. Do not select a global `openspec` from PATH or run `openspec update` to regenerate these adapted files. Before any planning write, call the ITL `openspec-context` action and require its local root to equal this checkout. `OPEN_SPEC_EXTERNAL_STORE_DEFERRED` stops the dependent phase before any direct `--store`, artifact write, sync or archive move; preserve the external binding and documents, and continue only after an explicit local selection or a later qualified release. For a local new change or archive, use the ITL pinned `openspec-new-change` or `openspec-archive-change` action; agent-authored artifacts and sync use only the resolved local paths. A standalone rules-only project without ITL state follows the upstream OpenSpec CLI workflow and its own installation.
+
+An existing authorization for this phase and selected change remains valid across its steps. Do not repeat an approval request solely because an upstream step says to confirm. Ask only when a new material choice, explicit waiver, or unaccepted risk actually requires the user's decision; continue independent work while that decision is pending.
+
+Explore is read-only; record sources and material uncertainty before proposing.
+
+Caveman follows the project skill: explicit session force first; otherwise `CAVEMAN=auto` by default, with session level `full` by default. Auto classifies the current verb; it does not impose a permanent style on all OpenSpec phases. Shorten only working commentary. Keep artifacts, exact technical text, evidence, safety warnings, and mandatory reports complete.
+<!-- itl:openspec-integration-v2:end -->
+
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.
 
 **IMPORTANT: Explore mode is for thinking, not implementing.** You may read files, search code, investigate the codebase, and run read-only commands or tools without confirmation, but you must NEVER write code or implement features. If the user asks you to implement something, do not start it here: say that explore mode does not implement, and point them at `/opsx:propose`, which turns the discussion into a change. The work happens from that change, never from explore mode. You MAY create or update OpenSpec change artifacts (proposals, designs, specs) within a confirmed scope—that's capturing thinking, not implementing. Answering design or clarifying questions is never consent to write. Before the first write-capable action, name the artifacts or files you would change and what you would do, ask a direct yes/no question, and wait for the user's confirmation in a separate message. Confirmation covers only the scope you described; ask again before expanding it. An explicit request from the user to capture the exploration as a new change is itself that confirmation, covering the change and the change artifacts the request names; scaffold it first as described below.

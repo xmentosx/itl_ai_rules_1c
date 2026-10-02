@@ -8,6 +8,10 @@ category: workflow
 
 Two layers. Every project-specific fact worth keeping lands in one of them, otherwise it is lost between sessions. This file is the single owner of the memory rules; `AGENTS.md` carries only their triggers and summary.
 
+### Managed ITL project boundary
+
+When `.agent-1c/project.json` exists, keep the previously installed project-memory route: project-root `memory.md` for the strict long-term rules below and the project-scoped `1c-templates-mcp` `recall`/`remember` capability for narrower facts. The generic Cognee → OpenViking priority and multi-provider recall below apply outside managed ITL projects. This upgrade does not enroll a managed project in either new provider, copy its notes to a shared dataset, or start their setup. Even an exposed tool or `TOOL_COGNEE`/`TOOL_OPENVIKING=auto` is not a verified project-isolated destination. If either is marked `required`, report that the managed memory route has no qualified binding and stop only the dependent memory operation; do not bypass that request through a shared namespace. A later separately qualified project-scoped integration may change this route explicitly. `templatesearch` is independent of memory selection and remains available under its own tool policy.
+
 ## Two layers
 
 - **`memory.md`** (project root, strict long-term store) — only rules that are **all** of: global (whole project), critical (violation = production breakage / data leak / regulatory issue), stable (does not change task-to-task), non-derivable (cannot be inferred from `AGENTS.md`, `USER-RULES.md`, or official docs). No TODOs, temporary agreements, style notes, or subsystem-scoped rules. Entry format is documented inside the file itself.

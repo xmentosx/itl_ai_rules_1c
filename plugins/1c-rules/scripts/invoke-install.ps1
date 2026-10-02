@@ -1,27 +1,27 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Marketplace wrapper around install.ps1.
+    Marketplace wrapper around standalone install.ps1 or the pinned ITL helper.
 
 .DESCRIPTION
     Host plugins (Cursor, Claude Code, OpenCode, Kilo Code) call this script
-    instead of copying content/ themselves. Rules stay adapted per host
-    because the real installer still runs.
+    instead of copying content/ themselves. A managed ITL root is dispatched
+    through its installed helper and dependency lock.
 
     Actions:
-      ensure  If this looks like a 1C project: init when there is no
-              manifest, add the host tool when the manifest exists but
-              lacks it, otherwise no-op. Never auto-updates.
+      ensure  Inspect only in standalone and managed projects. Never install,
+              attach a client, or update rules on session creation.
       init    Always run install.ps1 init for the given tool.
+      add     Attach the named tool through ITL or install.ps1 add.
       update  Always run install.ps1 update.
       doctor  Always run install.ps1 doctor.
 
-    -DryRun prints one JSON object and does not call install.ps1.
+    -DryRun prints one JSON object and does not call either installer.
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('ensure', 'init', 'update', 'doctor')]
+    [ValidateSet('ensure', 'init', 'add', 'update', 'doctor')]
     [string]$Action = 'ensure',
 
     [ValidateSet('auto', 'cursor', 'claude-code', 'codex', 'opencode', 'kilocode')]
@@ -33,6 +33,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$pluginUtf8 = New-Object System.Text.UTF8Encoding $false
+[Console]::OutputEncoding = $pluginUtf8
+$OutputEncoding = $pluginUtf8
 $script:DefaultSourceUrl = 'https://github.com/comol/ai_rules_1c.git'
 
 function Get-NormalizedPath {
@@ -269,7 +272,7 @@ function Get-BootstrapPlan {
     $sourceRoot = Resolve-RulesSource -Requested $RequestedSource
     $hostTool = Resolve-HostTool -Requested $RequestedTool
     $installer = ''
-    if (Test-SourceTree $sourceRoot) {
+    if (-not (Test-SourceIsUrl $sourceRoot) -and (Test-SourceTree $sourceRoot)) {
         $installer = Join-Path $sourceRoot 'install.ps1'
     }
 
@@ -278,6 +281,21 @@ function Get-BootstrapPlan {
     }
     if (Test-ForbiddenProjectRoot $project) {
         return (New-Plan -Action 'skip' -Reason 'forbidden-root' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+    }
+
+    # A managed ITL project owns its rules pin and client membership. The
+    # marketplace bundle must never install an independently fetched HEAD into
+    # this root, even when its .ai-rules.json is absent or stale.
+    if (Test-Path -LiteralPath (Join-Path $project '.agent-1c\project.json') -PathType Leaf) {
+        $helper = Join-Path $project '.agents\skills\1c-workflow\scripts\agent-1c.ps1'
+        $managedAction = switch ($CommandName) {
+            'ensure' { 'managed-ensure' }
+            'doctor' { 'managed-doctor' }
+            'update' { 'managed-update' }
+            'init' { 'managed-attach' }
+            'add' { 'managed-attach' }
+        }
+        return (New-Plan -Action $managedAction -Reason 'itl-owned-project' -Project $project -SourceRoot '' -HostTool $hostTool -Installer $helper)
     }
 
     $manifestTools = Get-ManifestTools -Root $project
@@ -298,25 +316,50 @@ function Get-BootstrapPlan {
             }
             return (New-Plan -Action 'init' -Reason 'explicit' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
         }
-        default {
+        'add' {
             if ($null -eq $manifestTools) {
-                if (-not (Test-OneCProjectRoot $project)) {
-                    return (New-Plan -Action 'skip' -Reason 'not-1c-project' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
-                }
-                if (-not $hostTool) {
-                    return (New-Plan -Action 'skip' -Reason 'no-tool' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
-                }
-                return (New-Plan -Action 'init' -Reason 'first-install' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+                return (New-Plan -Action 'skip' -Reason 'no-manifest-use-init' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
             }
             if (-not $hostTool) {
-                return (New-Plan -Action 'skip' -Reason 'already-installed' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+                return (New-Plan -Action 'skip' -Reason 'no-tool' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
             }
-            if ($manifestTools -contains $hostTool) {
-                return (New-Plan -Action 'skip' -Reason 'already-installed' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+            return (New-Plan -Action 'add' -Reason 'explicit' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+        }
+        default {
+            $reason = if (-not (Test-OneCProjectRoot $project) -and $null -eq $manifestTools) {
+                'not-1c-project'
+            } elseif ($null -eq $manifestTools) {
+                'explicit-install-required'
+            } elseif ($hostTool -and $manifestTools -notcontains $hostTool) {
+                'explicit-client-add-required'
+            } else {
+                'already-installed'
             }
-            return (New-Plan -Action 'add' -Reason 'missing-tool' -Project $project -SourceRoot $sourceRoot -HostTool $hostTool -Installer $installer)
+            return (New-Plan -Action 'skip' -Reason $reason -Project $project -SourceRoot '' -HostTool $hostTool -Installer '')
         }
     }
+}
+
+function Assert-ManagedItlDispatch {
+    param([string]$Root)
+    $helper = Join-Path $Root '.agents\skills\1c-workflow\scripts\agent-1c.ps1'
+    $protocolPath = Join-Path $Root '.agents\skills\1c-workflow\scripts\plugin-dispatch.json'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf) -or -not (Test-Path -LiteralPath $protocolPath -PathType Leaf)) {
+        throw "ITL_PLUGIN_PROTOCOL_UNAVAILABLE: the installed workflow helper does not support plugin dispatch. Update the project's workflow through /itl-update-workflow, then retry."
+    }
+    $protocol = Get-Content -LiteralPath $protocolPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([int]$protocol.protocolVersion -ne 1 -or [string]$protocol.owner -cne 'itl-workflow') {
+        throw "ITL_PLUGIN_PROTOCOL_UNSUPPORTED: installed helper protocol in '$protocolPath' is not version 1. Update the project's workflow, then retry."
+    }
+    $lockPath = Join-Path $Root '.agent-1c\dependency-lock.json'
+    if (-not (Test-Path -LiteralPath $lockPath -PathType Leaf)) {
+        throw "ITL_PLUGIN_RULES_PIN_MISSING: '$lockPath'. Recover the project's dependency lock through /itl-update-workflow."
+    }
+    $lock = Get-Content -LiteralPath $lockPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([string]$lock.dependencies.aiRules1c.commit -notmatch '^[a-fA-F0-9]{40}$') {
+        throw "ITL_PLUGIN_RULES_PIN_MISSING: aiRules1c.commit must be an exact SHA in '$lockPath'. Recover it through /itl-update-workflow."
+    }
+    return $helper
 }
 
 function Invoke-InstallPlan {
@@ -324,6 +367,23 @@ function Invoke-InstallPlan {
     if ($Plan.action -eq 'skip') {
         Write-Host ("1c-rules bootstrap: skip ({0})" -f $Plan.reason)
         return 0
+    }
+
+    if ([string]$Plan.action -like 'managed-*') {
+        $helper = Assert-ManagedItlDispatch -Root ([string]$Plan.projectRoot)
+        switch ([string]$Plan.action) {
+            'managed-ensure' { Write-Host '1c-rules plugin: installed ITL workflow owns this project; no session-time mutation.'; return 0 }
+            'managed-attach' {
+                if (-not [string]$Plan.tool) { throw 'ITL_PLUGIN_CLIENT_UNKNOWN: choose a supported client tool explicitly before attaching it.' }
+                & $helper -Action itl-switch-client -Mode attach -Client ([string]$Plan.tool) -ProjectRoot ([string]$Plan.projectRoot)
+                return $LASTEXITCODE
+            }
+            'managed-update' { $hostAction = 'update-ai-rules' }
+            'managed-doctor' { $hostAction = 'doctor' }
+            default { throw "Unknown managed plugin action: $($Plan.action)" }
+        }
+        & $helper -Action $hostAction -ProjectRoot ([string]$Plan.projectRoot)
+        return $LASTEXITCODE
     }
 
     $sourceRoot = [string]$Plan.source

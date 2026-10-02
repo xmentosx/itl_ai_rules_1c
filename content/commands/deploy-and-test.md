@@ -4,6 +4,12 @@ description: Load the configuration into the test infobase from .dev.env and che
 
 # /deploy-and-test — deploy to test infobase + UI tests
 
+## Managed ITL project
+
+If `.agent-1c/project.json` exists, stop the standalone deployment procedure here. Run host ITL preflight/state reconciliation; require a managed `itldev/*` branch and its proven branch infobase. Delegate to `check-dev-branch` with `trigger=command`. The host helper owns load, executable verification, effective ITL test modes, retries, evidence freshness and result classification. A skipped component is partial evidence, not a fresh pass; follow the project's `verificationPolicy`.
+
+After the helper-owned deploy/check succeeds, resolve `UI_TESTING` and verify its applicable important new/changed behaviour (`essential`) or selected scenarios (`auto` / named request) through `ui-testing-tools.md`'s managed ITL route and the installed `itl-vanessa-ui-mcp` skill on the same branch infobase. Preserve the exact artifact, target, expected/actual evidence and the helper's one-off proof receipt when required. This interactive evidence does not enable or replace saved Vanessa suites (`ITL_VANESSA_TESTING`) or the fresh final helper assessment. An unavailable route leaves the dependent criterion unverified. Never run the Designer/`ibcmd` examples below, publish the source infobase or construct a second deployment/test loop. Only a project without managed ITL state follows the standalone steps below.
+
 Deploy the current configuration to the test infobase defined in `.dev.env`, then check the result in the 1C interface: through QA MCP in the thin client when it is connected, otherwise in the web client at `INFOBASE_PUBLISH_URL`. UI testing is gated by `UI_TESTING`; see Step 4.
 
 Resolve project, main/named-extension target and source root through `content/rules/extension-workspace.md` before substitution. Keep that target through deployment, applicability checks and scenarios; a single-extension task uses its own root, and does not rewrite the primary `EXTENSION_NAME`. MCP-backed test preparation must use the same verified project/layer; confirm the live test connection is the intended infobase before attributing its results.
@@ -116,12 +122,12 @@ Apply the **Update retry loop** from `/update1cbase` (`content/commands/update1c
 
 UI testing is controlled by `UI_TESTING` (values and default — `dev-standards-env.md → "UI_TESTING — UI-testing mode"`). Resolve the effective value and act on it:
 
-- **`off`** — skip this step; report the effective policy and point to `/uitests essential`, `/uitests on` or `/uitests manual`. Apply an explicit enable-and-run instruction through `/uitests` before resolving this branch; it needs no second toggle confirmation.
+- **`off`** — skip routine UI and report the policy. An exact named one-off UI run permits this step for that invocation only, unless a broader no-UI instruction applies; never persistently change the setting as a side effect.
 - **`manual`** — run this step **only if the user explicitly asked to run UI tests** in the current request. Otherwise skip it and finish with: "UI tests skipped: `UI_TESTING=manual` — run only on explicit request."
 - **`essential`** (default) — run automatically, limited to the important new or changed user-visible behaviour of the deployed change; name what was left unchecked.
 - **`auto`** — run every applicable scenario automatically.
 
-Pick the route by `ui-testing-tools.md → Route order`: QA MCP (Step 4a) when its tools are exposed and `TOOL_QA` allows it, else the web client (Steps 4b–4c). If no route is available — no QA MCP and an empty `INFOBASE_PUBLISH_URL` — skip an automatic run and mark affected criteria unverified with this reason. For an explicitly requested UI run, ask for the missing prerequisite and continue independent work; do not claim the tests passed. Policy `off` takes precedence and does not trigger this question.
+Pick the route by `ui-testing-tools.md → Route order`: QA MCP (Step 4a) when its tools are exposed and `TOOL_QA` allows it, else the web client (Steps 4b–4c). If no route is available — no QA MCP and an empty `INFOBASE_PUBLISH_URL` — skip an automatic run and mark affected criteria unverified with this reason. For an explicitly requested UI run, ask for the missing prerequisite and continue independent work; do not claim the tests passed. `off` without a permitted named invocation override takes precedence and does not trigger this question.
 
 ### Step 4a. QA MCP in the thin client (main route)
 

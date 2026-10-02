@@ -22,6 +22,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'install-files-update.ps1'
+
 function Resolve-UpdatePath([string]$Value, [string]$Base) {
     if (-not [IO.Path]::IsPathRooted($Value)) { $Value = Join-Path $Base $Value }
     return [IO.Path]::GetFullPath($Value).TrimEnd('\', '/')
