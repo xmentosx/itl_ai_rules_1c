@@ -154,7 +154,22 @@ Gates 1–5 read source. They cannot answer the question the platform answers: d
 1. **An extension is about to be applied** to an infobase — by `/deploy-and-test`, `/update1cbase`, `/restore-testbase`, `/build-release`, or a `db-ops` load. A `&Вместо` / `&ИзменениеИКонтроль` interceptor naming a method that no longer exists in the vendor original passes Gates 1–5 untouched: the source is well-formed and the XML is schema-valid. Only `/CheckCanApplyConfigurationExtensions` sees it.
 2. **The main configuration is about to be loaded and applied**, and the change touched metadata or module code that the MCP validators did not cover (a whole-snapshot deploy, a large refactor, a release build).
 
+In a managed ITL project, the existing load/check/apply helper owns this trigger.
+A small partial CF quick-fix with complete current saved-input/raw MCP validation
+coverage does not automatically select the full ladder. Coverage must match every
+relevant saved BSL/XML input, the current artifact and target, and the actual
+provider/capability identity. Full, unknown, deleted, uncovered or stale inputs
+retain the platform route. A generic successful test
+receipt or an agent's declared `passed` is not MCP coverage. Supply the exact
+operation-local evidence through the helper's verification-evidence input; do
+not create a second loader or edit managed runtime state to bypass the check.
+
 Execution and pass criterion — `content/rules/designer-batch-checks.md`: first bind the current artifact to the checked configuration, then the ladder (`/CheckModules` → `/CheckCanApplyConfigurationExtensions` → `/CheckConfig`), stop at the first failure, and the **three-signal verdict** (process exit code + `/DumpResult` + `/Out` diagnostics). Success phrases neutralize only their own fragment, never other diagnostics on the same line. Warnings fail this gate — `-WarningsAsErrors` will reject the same content at apply time.
+
+Only managed ITL main-CF structural findings may use the bound legacy continuation
+in `designer-batch-checks.md`. The helper retains native failure and reports the
+assessment explicitly; this is not a clean Gate 6 pass. Compilation and extension
+applicability remain blocking, including warnings.
 
 Evidence includes the artifact fingerprint and source-to-IB match, target configuration / extension,
 platform / modes, process exit code, log path and `/DumpResult` code. Reuse it only while the

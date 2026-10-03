@@ -50,6 +50,33 @@ Regression cases: `Ошибок: 0; предупреждений: 1` fails; `О�
 
 **Warnings fail a check gate.** In a check run (unlike a load), a warning is a finding — `/UpdateDBCfg -WarningsAsErrors` will refuse the same content later, so accepting it here only moves the failure downstream.
 
+### Managed ITL main-configuration compatibility
+
+The three-signal native verdict above stays strict. In a managed ITL project,
+the existing load/check/apply owner may separately assess full main-CF structural
+findings against the proven previous version of the same corpus. This preserves
+Surgical Changes when a full load exposes unrelated old findings.
+
+Use complete raw diagnostics, object/source hashes and multiplicity, with matching
+target/layer, platform, modes and relevant extension state. The owner binds a
+before-check to its exact-target snapshot and established seed/previous-load
+identity, then compares the candidate under the same operation. An unrelated or
+empty base, the first failed log, a count alone or a global whitelist is not a
+baseline. New, increased, inside-scope or unclassified findings remain unresolved
+and stop apply. Unknown impact or missing owner/source proof cannot establish
+that a finding is outside scope. Only confirmed unchanged outside-scope structural findings may
+yield `accepted-with-preexisting-findings`; retain the failed native exit,
+`/DumpResult`, logs and comparison evidence, and never report this as a clean pass.
+
+Compilation and extension applicability, including warnings, remain blocking. Snapshot, per-infobase
+guard, timeout, rollback, source identity and fresh executable verification are
+unchanged. A missing comparison does not fail an otherwise clean native check.
+Do not manually suppress the native result, remove check switches, repair unrelated
+product code, or run a second standalone deployment loop. Use the original helper
+continuation. This exception belongs only to managed main-CF structural assessment;
+the ladder's stop/fix-source rules below allow only this explicit compatibility
+continuation. Standalone and extension check gates retain the strict upstream contract.
+
 ## Common launch shape
 
 ```powershell
