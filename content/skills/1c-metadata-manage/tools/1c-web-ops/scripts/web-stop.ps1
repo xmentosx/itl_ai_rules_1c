@@ -27,6 +27,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'web-stop.ps1'
+
 # --- Resolve ApachePath ---
 if (-not $ApachePath) {
     $projectRoot = (Get-Item $PSScriptRoot).Parent.Parent.Parent.Parent.FullName

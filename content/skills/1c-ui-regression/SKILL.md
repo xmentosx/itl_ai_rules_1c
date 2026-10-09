@@ -12,10 +12,12 @@ Turn a relevant acceptance scenario into a saved, executable test with determini
 
 Authoring test files and running a browser are separate operations. The skill can be selected implicitly; selection neither changes `UI_TESTING` nor authorizes deployment, writes to an infobase or installation of a new service.
 
-- Read `content/rules/dev-standards-env.md` for the target and effective UI policy. `manual` permits a run on an explicit UI-test request; `essential` and `auto` permit applicable checks with a configured publication; `off` prevents execution. Interactive checks in the thin client go through QA MCP (`content/skills/1c-qa-testing/SKILL.md`); this skill covers saved web-client suites. Do not enable UI tests as a side effect of selecting this skill.
+- Read `content/rules/dev-standards-env.md` for the target and effective UI policy. `manual` permits a run on an explicit UI-test request; `essential` and `auto` permit applicable checks with a configured publication; `off` prevents routine execution; a named one-off request may override it for that invocation unless a broader no-UI instruction applies. Interactive checks use `ui-testing-tools.md` (managed Vanessa UI or standalone QA); this skill covers saved web-client suites. Do not enable UI tests as a side effect of selecting this skill.
 - Use an authorized dev/test infobase with the current feature loaded. Resolve the main configuration / extension and source-to-target match through `content/rules/extension-workspace.md`. Missing runtime prerequisites leave execution unverified; useful local authoring may continue.
 - Interactive discovery uses `content/rules/ui-testing-tools.md` and `content/rules/web-client-driving.md`. A saved suite uses its verified runner and the applicable `TOOL_BROWSER` / driver policies. Do not use it to bypass an `off` or unavailable `required` provider. A reusable Playwright runner does not require replacing a project's interactive driver.
 - Read connection values from the project's `.dev.env` through an existing loader or explicit runtime environment mapping. Never copy URLs from another project or embed credentials / saved authentication state in a committed test.
+
+**Managed ITL saved Vanessa suites** remain under their existing helper and `ITL_VANESSA_TESTING`, independently of `UI_TESTING`. Use the installed scenario-loop/one-off proof route when the requested scope calls for it; do not retain a transient scenario merely to run the command. An interactive UI result or Playwright suite cannot replace fresh helper-owned verification/export evidence.
 
 ## Build the smallest useful suite
 

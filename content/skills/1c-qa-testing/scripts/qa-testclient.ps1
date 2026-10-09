@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Start, capture and stop a 1C test client (/TestClient) for QA MCP in native mode.
 
@@ -51,6 +51,12 @@ param(
 $ErrorActionPreference = 'Stop'
 # The JSON carries window titles and 1C messages; the console code page would garble them.
 try { [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false } catch { }
+# Reuse the package's lifecycle boundary before state, Add-Type or processes.
+# The scope keeps its strict mode out of the standalone QA implementation.
+& {
+    . (Join-Path $PSScriptRoot '..\..\1c-metadata-manage\tools\_common\Assert-ItlLifecycleOwnership.ps1')
+    Assert-ItlLifecycleOwnership -ScriptName 'qa-testclient.ps1'
+}
 $StateDir = Join-Path $env:LOCALAPPDATA 'mcp_qa_testclient'
 $StateFile = Join-Path $StateDir "$Port.json"
 

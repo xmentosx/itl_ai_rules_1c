@@ -1028,6 +1028,8 @@ if (-not $NoValidate) {
 		Write-Host ""
 		Write-Host "--- Running cf-validate ---"
 		& powershell.exe -NoProfile -File $validateScript -ConfigPath $resolvedPath
+		$validationExitCode = $LASTEXITCODE
+		if ($validationExitCode -ne 0) { exit $validationExitCode }
 	}
 }
 

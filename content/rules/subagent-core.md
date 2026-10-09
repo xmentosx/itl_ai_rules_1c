@@ -32,7 +32,7 @@ Subagent-specific: the gates bind **every** mutating subagent, not only `1c-meta
 
 ### Validator chain (mutating agents)
 
-Canon — `content/rules/verification-gates.md` (ordered hard gates: `syntaxcheck` → `check_1c_code` → `review_1c_code` → impact analysis → metadata XML validation, as applicable; graceful degradation when a validator is not exposed — the skip is recorded in the report, never silent). Retry budget — `content/rules/verification-policy.md → "Validator budget"`.
+Canon — `content/rules/verification-gates.md` (ordered selected gates: standalone syntax → preferred `check_1c_logic` or `check_1c_code` fallback → `review_1c_code` → impact analysis → metadata XML validation, as applicable; graceful degradation when a validator is not exposed — the skip is recorded in the report, never silent). Gate selection and retry budget — `content/rules/verification-policy.md`.
 
 Resolve the task path, `VERIFICATION_DEPTH` and promotion triggers through `verification-policy.md` before running validators. Chains in role prompts specify execution order, not an unconditional request for all three tools. Delegation and `ORCHESTRATION=economy` never change gate selection. Mark a gate outside the selected scope as not applicable, never passed; unavailable required gates remain unverified.
 

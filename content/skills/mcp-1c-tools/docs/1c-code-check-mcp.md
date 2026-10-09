@@ -8,9 +8,10 @@
 
 | Tool | Purpose | When to use |
 |---|---|---|
-| **check_1c_code** | `code` **or** `files`; technical check: syntax, logic, performance | After writing code — find bugs and performance issues |
+| **check_1c_logic** | Read its exposed schema; logic and performance without using its response as standalone syntax evidence | Preferred Gate 2 when exposed, after Gate 1 |
+| **check_1c_code** | `code` **or** `files`; technical check: syntax, logic, performance | Upstream-compatible Gate 2 fallback when `check_1c_logic` is absent |
 | **review_1c_code** | `code` **or** `files`; code review: style, ITS standards, naming, structure | After writing code — verify standards compliance |
-| **rewrite_1c_code** | `code` **or** `files`, optional `goal`; AI rewrite proposal | When code needs significant improvement. **Non-deterministic — mandatory re-validation** via `syntaxcheck` + `check_1c_code` + `review_1c_code` |
+| **rewrite_1c_code** | `code` **or** `files`, optional `goal`; AI rewrite proposal | When code needs significant improvement. **Non-deterministic — mandatory re-validation** by the selected Gate 1–3 matrix |
 | **modify_1c_code** | required `instruction`, optional `code` **or** `files`; modify/generate proposal | Targeted fixes, specific bug fixes, feature additions. **Non-deterministic — mandatory re-validation** |
 | **ask_1c_ai** | required `question`, `create_new_session=false`, optional `files` | Architectural questions, concept explanations, advice. **Non-deterministic — treat as a hint, not authority** |
 
@@ -26,7 +27,8 @@
 
 The image published since 2026-08-24 bounds a whole upstream operation by one budget (`ONEC_AI_OPERATION_TIMEOUT`, default 300 s) and retries a transport failure — network error, single-request timeout, HTTP 5xx/429 — up to `ONEC_AI_TRANSPORT_RETRIES` times (default 2) on a fresh discussion, inside that budget. `ONEC_AI_TIMEOUT` (30 s) no longer cuts the event stream, so a large module no longer fails with an empty `Ошибка сети при отправке сообщения:`.
 
-- A check of a large module may legitimately run for minutes. Do not re-issue the same call because it is slow — the server is already retrying, and a manual retry spends the call budget above on nothing.
+- A check of a large module may legitimately run for minutes. Call the exposed Gate 2 tool once after implementation reaches a coherent closing snapshot. Do not re-issue the same call because it is slow — the server is already retrying, and a manual retry spends the call budget above on nothing. Call `review_1c_code` once only after logic validation passes when Gate 2 is selected; an explicit Gate 3 at `lite` follows Gate 1 directly.
+- Do not send same-server validator calls through `Promise.all`; this server serializes AI operations and the apparent parallel batch gives no independent evidence.
 - When a call does fail, the diagnostic, the fallback reason and the telemetry state how many attempts were made and name the exception class. Report that instead of guessing, and treat a budget-exhausted failure as an operator/configuration matter, not something to work around by resending.
 
 ## Documentation & knowledge base
@@ -46,7 +48,8 @@ The image published since 2026-08-24 bounds a whole upstream operation by one bu
 
 ## Notes on AI tools
 
-`ask_1c_ai`, `rewrite_1c_code`, `modify_1c_code` are non-deterministic. Their output is a draft hint, not authority. Generated / rewritten code is **always** re-validated: `syntaxcheck` + `check_1c_code` + `review_1c_code`.
+`ask_1c_ai`, `rewrite_1c_code`, `modify_1c_code` are non-deterministic. Their output is a draft hint, not authority. Generated / rewritten code is **always** re-validated by the selected `VERIFICATION_DEPTH` and task-path matrix; standalone Gate 1 is never skipped.
+`check_1c_logic` does not accept syntax evidence as an argument. A syntax section returned by `check_1c_code` is additional diagnostic data, not a substitute for `syntaxcheck` / `syntaxcheck_file`.
 
 `rewrite_1c_code` and `modify_1c_code` return a **proposal**, never write the workspace. Apply it only when `safe_to_apply` is true, validation is acceptable, and the current source hash still equals `original_hash`; then run the validators against the actual saved result.
 

@@ -15,11 +15,13 @@ Trim whitespace and compare case-insensitively:
 - `essential` → `UI_TESTING=essential`: after the change reaches the dev/test infobase, check only the important new or changed user-visible behaviour automatically; this is the default for a missing or empty setting.
 - `on` or `auto` → `UI_TESTING=auto`: run every applicable UI scenario automatically during verification when the authorized dev/test environment and a test route are ready.
 - `manual` → `UI_TESTING=manual`: run only on an explicit UI-test request; an invalid setting also acts as `manual`.
-- `off` → `UI_TESTING=off`: do not run UI tests on any route.
+- `off` → `UI_TESTING=off`: disable routine UI execution; the named invocation override below remains scoped to that run.
 - `visible` → `MCP_QA_CLIENT_VISIBLE=true`: a test client the agent starts for QA MCP runs on the person's desktop (default).
 - `hidden` → `MCP_QA_CLIENT_VISIBLE=false`: it runs on a hidden desktop; on an error or a request to show it becomes visible (`content/rules/qa-testclient.md`).
 - Empty or `status` → report the effective state; change nothing.
 - Any other argument → list accepted values; change nothing.
+
+**Managed ITL project:** route execution through `ui-testing-tools.md` and the installed `itl-vanessa-ui-mcp` skill. `visible` / `hidden` configure only the standalone QA client; they do not hide or relaunch the managed Vanessa client, and do not prove QA integration readiness.
 
 ## Apply
 
@@ -31,6 +33,6 @@ Trim whitespace and compare case-insensitively:
 
 Status reports the effective `UI_TESTING` and window values and their source (session override, project setting or default), the available routes — QA MCP (`1c-qa` tools exposed, `TOOL_QA`) and the web client (publication URL, `TOOL_AGENT_BROWSER` / `TOOL_BROWSER`) — and any already-known environment/tool blocker. Do not connect to an infobase, start a test client or open a browser just to display policy.
 
-An explicit natural-language enable/disable request follows this command; mere discussion or quoted examples do not switch policy. A request to run tests once under `manual` does not change the persistent value. Under `off`, a test-run request alone does not enable UI; point to `/uitests essential`, `/uitests on` or `/uitests manual`. An explicit instruction to both enable and run needs no second toggle confirmation, but execution prerequisites still apply.
+An explicit natural-language enable/disable request follows this command; mere discussion or quoted examples do not switch policy. A named one-off UI run uses a session-only invocation override under `manual` or `off`; a generic check does not override `off`. Neither changes the persistent value. A broader current no-UI instruction must be lifted explicitly before any UI run. `/uitests essential|on|manual|off` remains the editor for a persistent choice; target and tool prerequisites still apply.
 
 UI policy is independent of Mode, verification depth and orchestration. `/sdlc` and `/litemode` preserve it. `off` disables only UI execution: the agent must still perform applicable static checks, review and other allowed behavioural verification. It is not a passing UI result or a blanket DoD waiver; criteria that require UI evidence stay unverified unless explicitly waived in scope. Canon: `content/rules/verification-delivery.md → Soft gate D — UI confirmation policy`.

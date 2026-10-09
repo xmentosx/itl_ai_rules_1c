@@ -230,6 +230,20 @@ function ConvertTo-ParameterTable {
     return $table
 }
 
+function Get-ItlManagedProjectRoot {
+    param([string]$StartPath)
+    if ([string]::IsNullOrWhiteSpace($StartPath)) { return $null }
+    $current = [IO.Path]::GetFullPath($StartPath)
+    if (Test-Path -LiteralPath $current -PathType Leaf) { $current = Split-Path -Parent $current }
+    while ($current) {
+        if (Test-Path -LiteralPath (Join-Path $current '.agent-1c/project.json') -PathType Leaf) { return $current }
+        $parent = Split-Path -Parent $current
+        if (-not $parent -or $parent -eq $current) { break }
+        $current = $parent
+    }
+    return $null
+}
+
 function Invoke-Git {
     # git writes advice to stderr on perfectly successful runs - the CRLF
     # warning is the common one - and under $ErrorActionPreference = 'Stop' a
@@ -362,6 +376,14 @@ if ($Object) {
 }
 
 $callArgs = ConvertTo-ParameterTable -Arguments @($ToolArgs) -Parameters $parameters
+
+if ($Preview -and -not $nativeDryRun) {
+    $previewAnchor = if ($dumpRoot) { $dumpRoot } elseif ($Root) { $Root } elseif ($targetPath) { $targetPath } elseif ($Scope.Count -gt 0) { $Scope[0] } else { (Get-Location).Path }
+    $managedRoot = Get-ItlManagedProjectRoot -StartPath $previewAnchor
+    if ($managedRoot) {
+        throw "ITL_METADATA_PREVIEW_UNAVAILABLE: rollback preview may touch a managed worktree or concurrent edits ($managedRoot). No tool was run. Use the ITL-owned edit/apply route and inspect its scoped diff; a preview-only request requires a new explicit apply decision."
+    }
+}
 
 # --------------------------------------------------------------- native dry-run
 if ($Preview -and $nativeDryRun) {

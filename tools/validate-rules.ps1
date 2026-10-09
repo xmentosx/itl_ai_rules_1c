@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Structural validator for the 1c-rules ruleset. Intended for CI and for a
@@ -98,10 +98,23 @@
 param(
     [string]$Root,
     [string]$StandardsDir,
-    [int]$AgentsMaxBytes = 11264,
+    # Exact upstream 20a083e5 AGENTS.md is 11,087 bytes; the mandatory ITL
+    # appendix makes it 13,427 (+2,340, about 632 tokens). The same retained
+    # rules increase the measured full-cycle set 126,288 -> 134,628 bytes and
+    # subagent start set 27,535 -> 30,059. Qualified ROCTUP Gate 3a adds the
+    # read-only, target, provider and NOT_READY safety boundary: the measured
+    # full-cycle set rose 133,815 -> 136,100 bytes (+2,285, about 618 tokens).
+    # c1fb8e6 intake retains provider/schema, essential UI and independent
+    # saved-Vanessa safety boundaries. Compared with the prior qualified 9ec86f75
+    # candidate, full-cycle is 136,393 -> 138,224 bytes (+1,831, ~495 tokens),
+    # subagent start is 29,427 -> 31,370 (+1,943, ~525 tokens). Root remains
+    # 13,554 bytes within its unchanged 14 KiB ceiling. Keep these mandatory
+    # meanings intact; raise only hot 134 -> 136 KiB and start 30 -> 31 KiB.
+    # Provider-specific procedures remain on demand in the installed ITL skill.
+    [int]$AgentsMaxBytes = 14336,
     [int]$RuleMaxBytes = 40960,
-    [int]$HotPathMaxBytes = 126976,
-    [int]$SubagentStartMaxBytes = 28672,
+    [int]$HotPathMaxBytes = 139264,
+    [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
     [int]$RuleDescriptionMaxBytes = 250,
@@ -381,10 +394,22 @@ foreach ($file in $scanned) {
     # indistinguishable from rule names and would be pure noise here. Fully
     # qualified "content/..." paths and Markdown links stay checked everywhere.
     $checkBareRefs = $relPath -match '^(content/(rules|agents|commands)/|AGENTS\.md$)'
+    $fenceCharacter = ''
+    $fenceLength = 0
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
         $lineNo = $i + 1
+        if ($line -match '^\s{0,3}(`{3,}|~{3,})') {
+            $marker = [string]$Matches[1]
+            if (-not $fenceCharacter) {
+                $fenceCharacter = [string]$marker[0]
+                $fenceLength = $marker.Length
+            } elseif ([string]$marker[0] -eq $fenceCharacter -and $marker.Length -ge $fenceLength) {
+                $fenceCharacter = ''
+                $fenceLength = 0
+            }
+        }
 
         foreach ($m in [regex]::Matches($line, $contentRefPattern)) {
             $target = Join-Path $Root ($m.Groups[1].Value -replace '/', '\')
@@ -427,10 +452,12 @@ foreach ($file in $scanned) {
             }
         }
 
-        foreach ($m in [regex]::Matches($line, $mdLinkPattern)) {
-            $target = Join-Path $ownDir ($m.Groups[1].Value -replace '/', '\')
-            if (-not (Test-Path -LiteralPath $target)) {
-                Add-Problem -Level error -File $file.FullName -Line $lineNo -Message ('broken Markdown link: ' + $m.Groups[1].Value)
+        if (-not $fenceCharacter) {
+            foreach ($m in [regex]::Matches($line, $mdLinkPattern)) {
+                $target = Join-Path $ownDir ($m.Groups[1].Value -replace '/', '\')
+                if (-not (Test-Path -LiteralPath $target)) {
+                    Add-Problem -Level error -File $file.FullName -Line $lineNo -Message ('broken Markdown link: ' + $m.Groups[1].Value)
+                }
             }
         }
 

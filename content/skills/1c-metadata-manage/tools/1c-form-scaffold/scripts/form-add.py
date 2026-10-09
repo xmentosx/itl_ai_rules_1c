@@ -458,9 +458,25 @@ def main():
     forms_dir = os.path.join(object_dir, "Forms")
     form_meta_path = os.path.join(forms_dir, f"{form_name}.xml")
 
-    if os.path.exists(form_meta_path):
-        print(f"Форма уже существует: {form_meta_path}", file=sys.stderr)
-        sys.exit(1)
+    form_meta_exists = os.path.isfile(form_meta_path)
+    existing_form_tree = None
+    existing_synonym = None
+    if form_meta_exists:
+        try:
+            existing_form_tree = etree.parse(form_meta_path, etree.XMLParser(remove_blank_text=False))
+            existing_form = existing_form_tree.getroot().find("md:Form", NSMAP)
+            existing_name = existing_form.find("md:Properties/md:Name", NSMAP) if existing_form is not None else None
+            existing_type = existing_form.find("md:Properties/md:FormType", NSMAP) if existing_form is not None else None
+            existing_synonym = existing_form.find(
+                "md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", NSMAP
+            ) if existing_form is not None else None
+            if existing_form is None or existing_name is None or existing_name.text != form_name or \
+               existing_type is None or existing_type.text != "Managed" or existing_synonym is None:
+                raise ValueError("name, form type or Russian synonym node differs")
+            uuid.UUID(existing_form.get("uuid", ""))
+        except (OSError, etree.XMLSyntaxError, ValueError, TypeError) as exc:
+            print(f"Существующие метаданные формы несовместимы с запросом: {form_meta_path} ({exc})", file=sys.stderr)
+            sys.exit(1)
 
     form_dir = os.path.join(forms_dir, form_name)
     form_ext_dir = os.path.join(form_dir, "Ext")
@@ -514,7 +530,11 @@ def main():
         '</MetaDataObject>'
     )
 
-    write_text_with_bom(form_meta_path, form_meta_xml)
+    if form_meta_exists:
+        existing_synonym.text = synonym
+        save_xml_with_bom(existing_form_tree, form_meta_path)
+    else:
+        write_text_with_bom(form_meta_path, form_meta_xml)
 
     # --- 3b. Form.xml ---
 
@@ -765,7 +785,7 @@ def main():
     obj_dir_name = os.path.dirname(object_path)
     obj_base_name = os.path.splitext(os.path.basename(object_path))[0]
 
-    print("Created:")
+    print("Updated:" if form_meta_exists else "Created:")
     print(f"  Metadata: {obj_dir_name}\\{obj_base_name}\\Forms\\{form_name}.xml")
     print(f"  Form:     {obj_dir_name}\\{obj_base_name}\\Forms\\{form_name}\\Ext\\Form.xml")
     print(f"  Module:   {obj_dir_name}\\{obj_base_name}\\Forms\\{form_name}\\Ext\\Form\\Module.bsl")

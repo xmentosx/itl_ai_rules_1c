@@ -5,6 +5,15 @@ argumentHint: "[<path-to-snapshot.dt>|nodata]"
 
 # /restore-testbase — actualize the test infobase from the snapshot
 
+**ITL managed project (`.agent-1c/project.json`):** do not execute this
+standalone DT/load/session-termination sequence. The branch infobase and its
+recovery belong to the installed ITL helper. Use the named branch's
+`/itl-reset-branch` only when its documented reset target matches the requested
+restore; otherwise report `ITL_LIFECYCLE_HELPER_REQUIRED` and the missing
+data-baseline capability without touching the base. A user request to preview
+or diagnose does not authorize reset. The standalone procedure below applies
+only outside managed ITL projects.
+
 Bring the test infobase defined in `.dev.env` to the **effective snapshot**: a data baseline from a `.dt` (optional) plus the current configuration sources from git — main configuration and every extension from `EXTENSION_NAMES`. Use it when the test base drifted (broken by experiments, stale data, wrong config state) and you want a reproducible state before the next develop-deploy cycle.
 
 First resolve the project and full-snapshot inventory via `content/rules/extension-workspace.md`, including when `EXTENSION_NAMES` is empty. Preflight their source identities/completeness before a destructive data restore. A `.dt` may bring its own extension state: verify relevant installed/active extensions after restore and before claiming the requested runtime snapshot. Do not silently remove extras. Preserve `EXTENSION_NAME` as the ordinary single-target default; it cannot narrow this full restore.

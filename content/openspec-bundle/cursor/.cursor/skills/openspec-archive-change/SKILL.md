@@ -10,6 +10,22 @@ metadata:
   generatedBy: "1.13.1"
 ---
 
+<!-- itl:openspec-integration-v2:start -->
+<!-- itl:project-skill-preflight -->
+<!-- itl:caveman-response-style -->
+## ITL project contract for OpenSpec archive
+
+Before this phase in a managed ITL project, read project-root `AGENTS.md` and `USER-RULES.md`, then load the on-demand OpenSpec, product-documentation, and subject skills they route to. Confirm 1C facts through the required MCP provider before broad repository traversal; record material sources and conflicts in the change artifacts. Unavailable required evidence makes the dependent conclusion provisional, not silently verified.
+
+In a managed ITL project, use the OpenSpec CLI pinned to the installed workflow checkout: resolve its absolute Node executable and JS entrypoint through the ITL runtime, and provision the selected pin with the existing `provision-openspec-cli` action if missing. Do not select a global `openspec` from PATH or run `openspec update` to regenerate these adapted files. Before any planning write, call the ITL `openspec-context` action and require its local root to equal this checkout. `OPEN_SPEC_EXTERNAL_STORE_DEFERRED` stops the dependent phase before any direct `--store`, artifact write, sync or archive move; preserve the external binding and documents, and continue only after an explicit local selection or a later qualified release. For a local new change or archive, use the ITL pinned `openspec-new-change` or `openspec-archive-change` action; agent-authored artifacts and sync use only the resolved local paths. A standalone rules-only project without ITL state follows the upstream OpenSpec CLI workflow and its own installation.
+
+An existing authorization for this phase and selected change remains valid across its steps. Do not repeat an approval request solely because an upstream step says to confirm. Ask only when a new material choice, explicit waiver, or unaccepted risk actually requires the user's decision; continue independent work while that decision is pending.
+
+Archive only after local sync and validation of the selected change and its spec delta. In a managed project, use the ITL pinned `openspec-archive-change` action instead of a direct move or an unqualified CLI.
+
+Caveman follows the project skill: explicit session force first; otherwise `CAVEMAN=auto` by default, with session level `full` by default. Auto classifies the current verb; it does not impose a permanent style on all OpenSpec phases. Shorten only working commentary. Keep artifacts, exact technical text, evidence, safety warnings, and mandatory reports complete.
+<!-- itl:openspec-integration-v2:end -->
+
 Archive a completed change in the experimental workflow.
 
 **Store selection:** If the user names a store (a store is a standalone OpenSpec repo registered on this machine) or the work lives in one, run `openspec store list --json` to discover registered store ids, then pass `--store <id>` on the commands that read or write specs and changes (`new change`, `status`, `instructions`, `list`, `show`, `validate`, `archive`, `doctor`, `context`, `schemas`, `view`). Once selected, treat `--store <id>` as sticky for the rest of the workflow. Every unscoped example of those commands below is shorthand: before running it, append the flag. For example, run `openspec status --change "<name>" --json --store "<id>"`, not the unscoped form shown below. Other commands do not take the flag. Hints printed by commands already carry the flag; keep it on follow-ups. Without a store, commands act on the nearest local `openspec/` root.

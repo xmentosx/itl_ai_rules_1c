@@ -145,6 +145,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\..\..\1c-metadata-manage\tools\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'repo-ops.ps1'
+
 # --- .dev.env (self-contained copy of the DevEnv contract: nearest file walking
 # up, '' when absent, quotes stripped, never throws) ---
 function Find-DevEnvFile {

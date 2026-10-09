@@ -2302,12 +2302,21 @@ def _(work):
 
 @case("docs: the skill documents the Python runtime for the shipped commands only")
 def _(work):
-    path = os.path.join(REPO_ROOT, "content", "skills", "1c-metadata-manage", "SKILL.md")
+    skill_root = os.path.join(REPO_ROOT, "content", "skills", "1c-metadata-manage")
+    path = os.path.join(skill_root, "SKILL.md")
     with open(path, "rb") as handle:
-        text = handle.read().decode("utf-8-sig")
+        skill_text = handle.read().decode("utf-8-sig")
+    # Upstream routes runtime selection on demand. Retain the full supported
+    # inventory and the no-unshipped-port contract at its mandatory owner.
+    assert_true(
+        "Before selecting a Linux/macOS runtime, using a Python port, or resolving a missing runtime, "
+        "read [runtime-selection.md](docs/runtime-selection.md)" in skill_text,
+        "SKILL.md must route runtime selection before a port or fallback is selected")
+    with open(os.path.join(skill_root, "docs", "runtime-selection.md"), "rb") as handle:
+        runtime = handle.read().decode("utf-8-sig")
     for stem in PORTED_COMMANDS:
-        assert_true(f"{stem}.py" in text,
-                    f"SKILL.md does not name the ported entry point {stem}.py")
+        assert_true(f"{stem}.py" in runtime,
+                    f"runtime-selection.md does not name the ported entry point {stem}.py")
     # The honest half: a tool with no Python peer must not be advertised with one.
     unported = sorted(
         entry for entry in os.listdir(TOOLS_DIR)
@@ -2321,8 +2330,8 @@ def _(work):
             if not name.endswith(".ps1"):
                 continue
             promised = name[:-4] + ".py"
-            assert_true(promised not in text,
-                        f"SKILL.md promises {promised}, which does not exist under {entry}")
+            assert_true(promised not in runtime and promised not in skill_text,
+                        f"the routed skill promises {promised}, which does not exist under {entry}")
 
 
 @case("packaging: install ships Python ports and optional workflows, tracks them, and they run",

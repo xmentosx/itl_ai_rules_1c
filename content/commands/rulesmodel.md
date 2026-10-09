@@ -14,7 +14,7 @@ Parameters, classes and defaults — `content/rules/dev-standards-env.md §1`; D
 
 The command edits **only** the `AGENT_MODEL` line in `.dev.env` — never other keys, never other files. Rewrite the `AGENT_MODEL=` line in place, or append `AGENT_MODEL=<slug>` at the end; if `.dev.env` is missing, run the installer (`install.ps1 init`) instead of creating a partial file — until then apply the profile for the current session only.
 
-> **`AGENT_MODEL` ≠ `SUBAGENT_MODEL_*`.** This command sets which model **you** run on, so the ruleset can adapt to its documented behaviour. The models that **subagents** run on are `SUBAGENT_MODEL_CODING` / `_ANALYSIS` / `_LIGHT`, configured by `/economymode models` and consumed by the installer. If the user asks to "change the model" meaning subagent tiers, route them there instead and say so in one line.
+> **`AGENT_MODEL` is separate from subagent models.** This command sets which model **you** run on. Subagent tiers come from the executing client's `modelTiersByClient` entry, configured by `/economymode models` and consumed by the installer. If the user means subagent tiers, route them there instead.
 
 ## Argument parsing (normalization is your job, not a script's)
 
@@ -59,7 +59,7 @@ Read `.dev.env` and report, without editing anything:
 - the `AGENT_MODEL` value (or no profile when the file / key is absent or the value is unrecognised) and which profile file it resolves to;
 - whether that value matches the model you are actually running — on a mismatch, say which profile you are applying and recommend `/rulesmodel auto`;
 - the profile's recommended effort / verbosity settings, and the 2–3 headline behaviour deltas currently in force;
-- for orientation only, the subagent tier models (`SUBAGENT_MODEL_CODING` / `_ANALYSIS` / `_LIGHT`) with a pointer to `/economymode models` — do not change them here.
+- for orientation only, the selected client's `modelTiersByClient` values with a pointer to `/economymode models` — do not change them here.
 
 ## off
 
@@ -70,4 +70,4 @@ Read `.dev.env` and report, without editing anything:
 
 - **The profile layer never weakens a hard gate and never overrides the model-agnostic prompting baseline** — precedence and the baseline are `model-adaptation.md §4` and `model-adaptation.md §5`. A profile tunes verbosity, narration, planning depth, delegation eagerness and self-invented extra passes — nothing else.
 - The command asks the user only when the input is unsupported or ambiguous; a recognised name is resolved silently. Asking inside this explicit configuration flow is fine — the never-ask policy applies to regular tasks, not to an invoked configuration command.
-- Never edit `SUBAGENT_MODEL_*`, `ORCHESTRATION`, `VERIFICATION_DEPTH`, `CAVEMAN` or any other key here, and never rewrite a rule file to "bake in" a profile — the layer is selected by the `.dev.env` value, not by editing rules.
+- Never edit `modelTiersByClient`, `ORCHESTRATION`, `VERIFICATION_DEPTH`, `CAVEMAN` or any other setting here, and never rewrite a rule file to "bake in" a profile — the layer is selected by the `.dev.env` value, not by editing rules.

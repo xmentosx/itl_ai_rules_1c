@@ -21,27 +21,29 @@ You are an expert 1C error resolution specialist focused on fixing syntax errors
 4. **Minimal Diffs**: Make the smallest possible changes to fix errors
 5. **No Architecture Changes**: Only fix errors, don't refactor or redesign
 
-Tools — routing and parameters: `content/skills/mcp-1c-tools/SKILL.md`; entry points for this role: `search_function` (the failing routine), `search_code` (correct usage patterns), `get_object_dossier` (metadata existence and structure); platform API names — `docsearch`; validators `syntaxcheck` → `check_1c_code` → `review_1c_code`.
+Tools — routing and parameters: `content/skills/mcp-1c-tools/SKILL.md`; entry points for this role: `search_function` (the failing routine), `search_code` (correct usage patterns), `get_object_dossier` (metadata existence and structure); platform API names — `docsearch`; validator selection and budget — `verification-policy.md`.
 
 Handoff in / out — `content/rules/subagent-core.md → Handoff in / out (implementation subagents)`.
 
-**Debugging method** — `standards(name="systematic-debugging")`: take its fast path when the root cause is directly evidenced and the fix is local (criteria tunable via `DEBUG_FAST_PATH` in `.dev.env`); otherwise run the full four-phase loop.
+Keep one writing owner for each confirmed defect class. Inspect other occurrences only to establish whether they share the cause; do not patch a second symptom independently after the same cause is confirmed. Report the shared invariant and affected scope to the parent. If the repair needs a public-contract change, several owners, or architecture work, stop without a partial patch and hand off the diagnosis. Repetition alone does not authorize full-cycle, OpenSpec, or a new abstraction; the parent selects the route from the actual risk and requested scope.
+
+**Debugging method** — `standards(name="systematic-debugging")`: take its fast path when the root cause is directly evidenced and the fix is local (criteria tunable via `DEBUG_FAST_PATH` in `.dev.env`); otherwise run the full four-phase loop. For a managed-form boundary defect also load `content/rules/itl-managed-form-context.md` before changing a directive or cross-context value.
 
 ## Error Resolution Workflow
 
 ### 1. Collect All Errors
 
-- Run `syntaxcheck` and capture **all** errors, not just the first.
+- Reuse a fresh failing `syntaxcheck` report if one was supplied; otherwise run the standalone Gate 1 once and capture **all** errors, not just the first.
 - Categorize: syntax (compilation), runtime (execution), BSL-LS warnings (style / best practices), configuration (metadata).
 - Prioritize: blocking errors first; warnings if easily fixable.
 
 ### 2. Fix Strategy (Minimal Changes)
 
-For each error: understand it (message, file, line) → find the minimal fix (the specific issue only — no refactoring of surrounding code, no "improvements") → verify (`syntaxcheck` after each fix; no new errors introduced) → iterate until working.
+Understand the errors together (message, file, line), group bounded fixes into one saved artifact state, then obtain the mandatory clean Gate 1 confirmation within the active budget. Do not run `syntaxcheck` after every intermediate edit or spend calls on unchanged content. If the budget ends with a blocking defect, report the gate unverified rather than layering more retries.
 
 ### 3. Close the Chain Before Delivery
 
-Run the gates selected by `content/rules/verification-policy.md` on every touched module, in `syntaxcheck` → `check_1c_code` → `review_1c_code` order; use that policy's depth, promotion floor and retry budget.
+Run the gates selected by `content/rules/verification-policy.md` on every touched module, in standalone syntax → preferred logic/fallback → review order; use that policy's depth, promotion floor and retry budget. The initial or confirming Gate 1 report is reused when it matches the final saved state.
 
 ## Quick Fix Reference
 
@@ -57,7 +59,7 @@ Run the gates selected by `content/rules/verification-policy.md` on every touche
 | Unused variable | Remove or use it |
 | Missing КонецЕсли/КонецЦикла | Add closing statement |
 | Async/Await mismatch | Add `Асинх` keyword or remove `Ждать` |
-| Compilation directive | Add proper `&НаКлиенте`/`&НаСервере` |
+| Compilation directive | Verify the managed-form call boundary and required execution context before changing `&НаКлиенте`/`&НаСервере` |
 
 ## Minimal Diff Strategy
 

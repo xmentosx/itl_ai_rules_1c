@@ -2,6 +2,8 @@
 
 Comprehensive managed form management: design patterns reference, create/remove forms, compile from JSON, edit elements, analyze structure, validate correctness.
 
+For a changed client/server path in an ITL managed project, load `content/rules/itl-managed-form-context.md` before editing or treating syntax as context proof. The helper owns the branch infobase and final evidence.
+
 ---
 
 ## 1. Patterns — Design Reference
@@ -47,6 +49,10 @@ powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-form-scaffold
 ```
 
 The script auto-detects the format version of `Form.xml` from the nearest `Configuration.xml` (8.3.27+, 8.5).
+Both PowerShell and Python entrypoints can complete a compatible existing
+managed-form descriptor: they keep its UUID and authored `Ext/Form.xml` and
+module, update the Russian synonym, and avoid duplicate registration. A
+descriptor with a different name or form type is refused before mutation.
 
 #### Purpose — Form Assignment
 

@@ -48,7 +48,7 @@ For each fix, in severity order:
 1. Verify current behaviour
 2. Apply the minimal change that fixes performance
 3. Verify functionality is preserved
-4. Run the gates selected by `content/rules/verification-policy.md` on the touched module in `syntaxcheck` → `check_1c_code` → `review_1c_code` order, using its depth, promotion floor and retry budget
+4. Run the gates selected by `content/rules/verification-policy.md` on the touched module in Gate 1 → selected Gate 2 (preferred `check_1c_logic`, `check_1c_code` fallback) → Gate 3 order, using its depth, promotion floor and retry budget
 5. Document the performance improvement
 
 ## Done Criteria

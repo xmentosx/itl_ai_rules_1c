@@ -23,6 +23,8 @@ Session force, else `.dev.env` `CAVEMAN` (absent / invalid → `auto`; `/caveman
 
 **Persistence.** Once on, it stays on for the rest of the task. Default level **full**; a level switch holds for the session.
 
+**Explicit `/caveman` in Codex project skills.** The project-local skill also handles the command: `on` (or an empty argument), `off`, and `auto` edit only the `CAVEMAN` line of an existing `.dev.env`; `status` reads it without writing; `lite`, `full`, and `ultra` change only this chat's level. Never persist a level or recreate a missing `.dev.env`; use the project installer for a missing file. An unrecognized argument is reported, not guessed.
+
 ## Core rules
 
 Drop filler, pleasantries, hedging (unless the uncertainty is the point), restating the task, meta-narration, lists of tools used. Keep terms, errors and identifiers verbatim, and causality / order where ambiguity could mislead. Pattern: `[вещь] [действие] [причина]. [следующий шаг].`

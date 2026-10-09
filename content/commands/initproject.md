@@ -6,6 +6,10 @@ argumentHint: "[from-ib|from-cf <file.cf>|from-dt <file.dt>]"
 
 # /initproject — one-time 1C project initialization
 
+## Managed ITL project
+
+If the project is being initialized or operated through ITL (`.agent-1c/project.json` exists, or the user selected the ITL bootstrap), use the host ITL bootstrap/continuation only. It owns source mode, first dump, worktrees, infobases, dependencies, checkpoint and recovery; this command must not create a second source tree, test base or first Git commit. A missing managed marker during an in-progress bootstrap is not permission to switch to this standalone procedure. The standalone steps below apply only when the user chose a rules-only project without ITL lifecycle ownership.
+
 Produce the working layout every other full-cycle command relies on: main-configuration sources in `{EXPORT_PATH}`, extension sources in `{EXTENSIONS_PATH}\<Name>\`, a git repository with the first snapshot commit, and a filled `.dev.env`. Run it once per project; after that use `/loadfrom1cbase`, `/update1cbase`, `/deploy-and-test`, `/restore-testbase`.
 
 Read `content/rules/extension-workspace.md`: one project and settings file, separate source roots per target, separate binary output. For a new empty Designer project with no established path choices, persist `EXPORT_PATH=src/cf` and `EXTENSIONS_PATH=src/cfe`; retain existing configured layouts. Do not create a separate project/settings copy per extension. If MCP setup is part of the request, map these roots to the discovered base graph `project_id` and verified extension layers via `content/rules/multi-contour-search.md`; a directory layout alone does not establish index coverage.

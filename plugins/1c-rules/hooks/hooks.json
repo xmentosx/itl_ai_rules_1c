@@ -1,5 +1,5 @@
 {
-  "description": "Run install.ps1 for 1C projects. ensure never auto-updates and skips non-1C or CLI-config directories.",
+  "description": "Ensure standalone 1C rules; inspect ITL-managed projects without session-time installation or update.",
   "hooks": {
     "SessionStart": [
       {

@@ -208,6 +208,7 @@ structural_only_types = (
     "CommonTemplate", "CommonPicture", "SessionParameter", "SettingsStorage", "FilterCriterion",
     "FunctionalOption", "FunctionalOptionsParameter", "Language", "Style", "StyleItem",
     "WSReference", "XDTOPackage", "DocumentNumerator", "Sequence",
+    "Form", "Template", "IntegrationService",
 )
 
 # GeneratedType categories by type

@@ -43,6 +43,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo 'content/skills/1c-metadata-manage/tools/1c-db-ops/scripts/install-files-update.ps1') -Destination $scriptPath
     [void][IO.Directory]::CreateDirectory((Join-Path $work 'tools/_common'))
     Copy-Item -LiteralPath (Join-Path $repo 'content/skills/1c-metadata-manage/tools/_common/DevEnv.ps1') -Destination (Join-Path $work 'tools/_common/DevEnv.ps1')
+    Copy-Item -LiteralPath (Join-Path $repo 'content/skills/1c-metadata-manage/tools/_common/Assert-ItlLifecycleOwnership.ps1') -Destination (Join-Path $work 'tools/_common/Assert-ItlLifecycleOwnership.ps1')
     Write-Text (Join-Path $toolDir 'db-dump-xml.ps1') @'
 param($ConfigDir, $Mode, $Format, $V8Path, $InfoBasePath, $InfoBaseServer, $InfoBaseRef, $UserName, $Password, $Extension)
 $PSBoundParameters | Export-Clixml -LiteralPath 'last-call.xml'
