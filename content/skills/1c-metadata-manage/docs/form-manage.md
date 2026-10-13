@@ -200,7 +200,7 @@ Only when `form-compile` reports an unknown key or rejects a construct — open 
 
 ### Verification
 
-`1c-form-validate <OutputPath>` (section 6) and `1c-form-info <OutputPath>` (section 5); MCP evidence set per `content/rules/tooling-playbooks.md`: `get_xsd_schema` / `verify_xml` with `object_type="Форма"`.
+`1c-form-validate <OutputPath>` (section 6) and `1c-form-info <OutputPath>` (section 5); MCP evidence set per `content/rules/tooling-playbooks.md`: start from `get_xsd_schema` / `verify_xml` with `object_type="Форма"`. Schema/input compatibility and routing or generated-coverage failures follow `content/rules/verification-gates.md → Gate 5`; a matching root alone does not prove coverage of nested elements.
 
 ---
 

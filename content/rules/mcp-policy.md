@@ -45,7 +45,7 @@ Load `content/rules/tool-policy.md` before selecting a provider; it owns `TOOL_*
 | `invalid_argument` naming a missing template / index / operation | graph | The lane is closed for this session: take the documented fallback in one step (`1c-meta-info`, `1c-impact`) |
 | `lane_disabled`, a tool absent from `tools/list`, `degraded: true` | graph | Closed lane: change lanes, do not rephrase; `list_graph_capabilities` once if the state is unclear |
 | `tabular_part_columns_not_indexed`, `form_not_indexed` warnings | graph, code | One call to the named fallback (`get_metadata_details(..., sections="tabular_parts")`, `search_forms`); no further graph attempts |
-| `timeout` (`error.code`) | graph, checker | Do not resend: narrow the query, lower `max_items`, or switch to a structural tool; a first-call `fetch failed` is a transport reconnect — repeat that one call once |
+| `timeout` (`error.code`) / transport `fetch failed` | graph, checker | Preserve request/input identity, raw reply and dispatched-call count. Completion stays unknown until documented status/recovery evidence resolves it; reconnect or availability expiry alone does not. Do not automatically replay the unknown call. A later narrowed query, structural fallback or bounded validator recovery follows its owner and retains the earlier unresolved result |
 | `not_found`, `outcome: "not_found"`, empty `items` with a ready generation | docs, ssl, graph, code | A finished negative answer: reformulate once if wording can help, then the next lane; with no freshness evidence report «inconclusive», not «absent» |
 | `ambiguous_name` with candidates | ssl, docs | Refine by signature or fetch the intended `doc_id`; never pick an overload silently |
 | `stale_cursor`, `invalid_cursor` | ssl, graph | Restart that search without the cursor, keeping the same verified scope and query; do not mix pages from different generations |
@@ -56,7 +56,7 @@ Load `content/rules/tool-policy.md` before selecting a provider; it owns `TOOL_*
 | `project_not_registered`, `refresh_capability_unavailable` | graph | Operator matter: report, do not register projects or force refreshes from the agent |
 | `mutation_auth_required` | templates | For gated `add_template` / `plugin_reload`, repair the operator connection; never print tokens or retry blindly. Current `remember` is ungated; if an older deployment rejects it, record that observed contract and use the memory fallback |
 | `provenance.index` = `absent` / `building` / `failed` | syntax | Read the boundary (syntax and local rules only); never wait, restart or reconfigure |
-| `status: invalid` with `errors` | code `verify_xml` | Fix the XML, one confirming `verify_xml` |
+| `status: invalid` with `errors` | code `verify_xml` | Follow `verification-gates.md → Gate 5`: establish schema/input compatibility before treating diagnostics as XML defects; preserve the raw result and unverified gate on a routing/coverage mismatch |
 | Blocking `error` / `critical` from a validator | syntax, checker | Fix, then the confirmation budget of `verification-policy.md`; after the budget the gate failed and the artifact is unverified |
 | HTTP 401 / 403, tools not exposed | data, any | The server is unavailable in this session: say so once, use the documented degradation, never synthesise its output |
-| Untyped prose error | any | Treat as `timeout`-class: one reformulation, then the next lane, and name the text in the delivery |
+| Untyped prose error | any | Preserve and name the raw text; do not invent a response code or pass. Unusable Gate 2/3 output follows `verification-ai-evidence.md`; otherwise retain unknown completion and use the documented fallback without blind chaining or replay |
