@@ -26,7 +26,7 @@ Load `content/rules/tool-policy.md` before selecting a provider; it owns `TOOL_*
 
 ### B. Limits and non-determinism
 
-1. **Verification budget.** One clean pass per validator on the latest artifact state; a blocking defect needs a fix and a clean confirming run within the depth budget; never a run against unchanged content or a loop for style noise; budget exhausted without a clean pass = gate failed, artifact unverified. Canon (blocking severities, 2 / 3 call limits, pure-XML case, promotion-trigger budget) — `content/rules/verification-policy.md → Validator budget`.
+1. **Verification budget.** One clean pass per validator on the latest artifact state; a blocking defect needs a fix and a clean confirming run within the authorized budget; never a run against unchanged content or a loop for style noise; budget exhausted without a clean pass = gate failed, artifact unverified. Canon (blocking severities, default 2 / 3 call limits, explicit task grants, pure-XML case, promotion-trigger budget) — `content/rules/verification-policy.md → Validator budget`.
 2. **AI-based MCP tools are non-deterministic.** `ask_1c_ai`, `rewrite_1c_code`, `modify_1c_code`, `answer_metadata_question` produce drafts, not authority; re-validate their output with the chain above before delivery.
 
 ### C. Call discipline and server answers

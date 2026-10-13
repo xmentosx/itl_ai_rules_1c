@@ -35,7 +35,8 @@ unusable response; assess that finding. Missing substantiation for a substantive
 blocking claim is an unresolved finding, not permission to discard the response.
 
 For Gates 2/3 only, allow one recovery call for an unusable response per validator
-and validation unit within the existing total call budget (standard: 2; full: 3).
+and validation unit within the current authorized call budget (default standard:
+2; full: 3; extensions follow `verification-policy.md → Task grants for additional AI calls`).
 Record `reason=unsupported-result`, the unusable call ID, unchanged input hashes
 and remaining allowance before the recovery call. This explicit policy authorizes
 that bounded unchanged-code recovery; another user confirmation is unnecessary.
@@ -47,8 +48,11 @@ documented status/recovery route, not an automatic duplicate execution.
 If the recovered response is still unusable, or the budget is exhausted, report
 the gate as unverified with its artifacts and concrete next action. Do not report
 the tool as unavailable when it is exposed but returned unusable evidence. An
-additional call needs an explicit, bounded user decision; do not loop for green
-text. A real defect found on the last available call still needs correction and
+additional allocation follows `verification-policy.md → Task grants for additional AI calls`:
+an applicable explicit task grant permits a finite next block without another
+numeric question; otherwise obtain a bounded user decision. Allocation alone
+does not authorize another unchanged-input recovery; do not loop for green text.
+A real defect found on the last available call still needs correction and
 fresh confirmation; exhaustion does not waive either requirement.
 
 ## Assess substantive findings
