@@ -11,16 +11,21 @@ function New-ForkTestRoot {
 function Invoke-WindowsPowerShellFile {
     param(
         [Parameter(Mandatory = $true)][string]$FilePath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
+        [string[]]$Arguments = @()
     )
 
     $previousPreference = $ErrorActionPreference
+    $previousConsoleEncoding = [Console]::OutputEncoding
     $ErrorActionPreference = "Continue"
     try {
+        $utf8 = [Text.UTF8Encoding]::new($false)
+        [Console]::OutputEncoding = $utf8
+        $OutputEncoding = $utf8
         $output = @(& powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $FilePath @Arguments 2>&1)
         $exitCode = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousPreference
+        [Console]::OutputEncoding = $previousConsoleEncoding
     }
     return [pscustomobject]@{
         ExitCode = $exitCode

@@ -19,7 +19,9 @@ Describe 'AI validation evidence retained through upstream verification split' -
         $evidence.Count | Should -Be 1
         $body = Get-Content -LiteralPath (Join-Path $script:VerificationProject $evidence[0].Name) -Raw -Encoding UTF8
         $body | Should -Match 'complete raw response'
-        $body | Should -Match 'standard: 2; full: 3'
+        $body | Should -Match 'standard:\s*2; full:\s*3'
+        $body | Should -Match 'extensions follow'
+        $body | Should -Match 'Task grants for additional AI calls'
         $gate = Get-Content -LiteralPath (Join-Path $script:VerificationProject '.codex/rules/verification-gates.md') -Raw -Encoding UTF8
         $gate | Should -Match 'verification-ai-evidence.md'
         $gate | Should -Match 'Gate 2/3 responses'

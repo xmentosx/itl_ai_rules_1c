@@ -22,6 +22,28 @@ BeforeAll {
 }
 
 Describe "ITL lifecycle ownership guard" -Tag "Fast" {
+    It "round-trips a Unicode path and argument through the shared child runner" {
+        $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("itl transport Кириллица " + [guid]::NewGuid().ToString("N"))
+        try {
+            New-Item -ItemType Directory -Path $tempRoot | Out-Null
+            $scriptPath = Join-Path $tempRoot "проверка пути.ps1"
+            $body = @'
+param([string]$Value)
+$utf8 = [Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+[Console]::WriteLine($PSCommandPath)
+[Console]::WriteLine($Value)
+'@
+            [IO.File]::WriteAllText($scriptPath, $body, [Text.UTF8Encoding]::new($false))
+            $value = "Аргумент с пробелами и кириллицей"
+            $result = Invoke-WindowsPowerShellFile -FilePath $scriptPath -Arguments @('-Value', $value)
+            $result.ExitCode | Should -Be 0
+            $result.Output | Should -Be ($scriptPath + "`n" + $value)
+        }
+        finally { Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }
+    }
+
     It "blocks the new Python web mutation peers before touching Apache" -ForEach @('publish', 'unpublish', 'stop') {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("itl-python-web-Кириллица " + [guid]::NewGuid().ToString('N'))
         try {
@@ -59,15 +81,12 @@ Describe "ITL lifecycle ownership guard" -Tag "Fast" {
         try {
             New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot ".agent-1c") | Out-Null
             Set-Content -LiteralPath (Join-Path $tempRoot ".agent-1c\project.json") -Encoding UTF8 -Value "{}"
-            $stdout = Join-Path $tempRoot "stdout.txt"
-            $stderr = Join-Path $tempRoot "stderr.txt"
-            $result = Start-Process -FilePath "powershell" -WorkingDirectory $tempRoot -ArgumentList (@(
-                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $ToolsRoot $Path)
-            ) + @($Arguments)) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Push-Location -LiteralPath $tempRoot
+            try {
+                $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $ToolsRoot $Path) -Arguments @($Arguments)
+            } finally { Pop-Location }
             $result.ExitCode | Should -Not -Be 0
-            $output = (Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) +
-                (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue)
-            $output | Should -Match "ITL_LIFECYCLE_HELPER_REQUIRED"
+            $result.Output | Should -Match "ITL_LIFECYCLE_HELPER_REQUIRED"
         }
         finally {
             Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -83,13 +102,12 @@ Describe "ITL lifecycle ownership guard" -Tag "Fast" {
             Set-Content -LiteralPath (Join-Path $tempRoot ".agent-1c\project.json") -Encoding UTF8 -Value "{}"
             Copy-Item -LiteralPath (Join-Path $ToolsRoot "_common\Assert-ItlLifecycleOwnership.ps1") -Destination (Join-Path $installedTools "_common\Assert-ItlLifecycleOwnership.ps1")
             Copy-Item -LiteralPath (Join-Path $ToolsRoot "1c-web-ops\scripts\web-stop.ps1") -Destination (Join-Path $installedTools "1c-web-ops\scripts\web-stop.ps1")
-            $stderr = Join-Path $outsideRoot "stderr.txt"
-            $process = Start-Process -FilePath "powershell" -WorkingDirectory $outsideRoot -ArgumentList @(
-                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
-                (Join-Path $installedTools "1c-web-ops\scripts\web-stop.ps1")
-            ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardError $stderr
-            $process.ExitCode | Should -Not -Be 0
-            (Get-Content -LiteralPath $stderr -Raw) | Should -Match "ITL_LIFECYCLE_HELPER_REQUIRED"
+            Push-Location -LiteralPath $outsideRoot
+            try {
+                $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $installedTools "1c-web-ops\scripts\web-stop.ps1")
+            } finally { Pop-Location }
+            $result.ExitCode | Should -Not -Be 0
+            $result.Output | Should -Match "ITL_LIFECYCLE_HELPER_REQUIRED"
         }
         finally {
             Remove-Item -LiteralPath $tempRoot, $outsideRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -100,14 +118,11 @@ Describe "ITL lifecycle ownership guard" -Tag "Fast" {
         $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("non-itl-" + [guid]::NewGuid().ToString("N"))
         try {
             New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
-            $stderr = Join-Path $tempRoot "stderr.txt"
-            $stdout = Join-Path $tempRoot "stdout.txt"
-            $process = Start-Process -FilePath "powershell" -WorkingDirectory $tempRoot -ArgumentList @(
-                "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File",
-                (Join-Path $ToolsRoot "1c-db-ops\scripts\db-create.ps1"), "-V8Path", (Join-Path $tempRoot "missing")
-            ) -Wait -PassThru -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-            $output = (Get-Content -LiteralPath $stdout -Raw -ErrorAction SilentlyContinue) +
-                (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue)
+            Push-Location -LiteralPath $tempRoot
+            try {
+                $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $ToolsRoot "1c-db-ops\scripts\db-create.ps1") -Arguments @('-V8Path', (Join-Path $tempRoot 'missing'))
+            } finally { Pop-Location }
+            $output = $result.Output
             $output | Should -Not -Match "ITL_LIFECYCLE_HELPER_REQUIRED"
             $output | Should -Match "1C executable not found"
 
