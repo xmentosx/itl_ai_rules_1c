@@ -35,24 +35,24 @@ unusable response; assess that finding. Missing substantiation for a substantive
 blocking claim is an unresolved finding, not permission to discard the response.
 
 For Gates 2/3 only, allow one recovery call for an unusable response per validator
-and validation unit within the current authorized call budget (default standard:
-2; full: 3; extensions follow `verification-policy.md → Task grants for additional AI calls`).
+and validation unit, subject to explicit user limits in
+`verification-policy.md → Necessary AI calls and user limits`.
 Record `reason=unsupported-result`, the unusable call ID, unchanged input hashes
-and remaining allowance before the recovery call. This explicit policy authorizes
+and any explicit remaining user allowance before the recovery call. This policy authorizes
 that bounded unchanged-code recovery; another user confirmation is unnecessary.
-It does not reset the budget or add a call. An already authorized recovery counts.
+It does not reset call history or extend an explicit user limit. A prior recovery counts.
 Keep normal ordering and serial calls; do not split a unit or switch to overlapping
 snippets to obtain more attempts. Transport uncertainty follows the tool's
 documented status/recovery route, not an automatic duplicate execution.
 
-If the recovered response is still unusable, or the budget is exhausted, report
+If the recovered response is still unusable, or an explicit user limit prevents continuation, report
 the gate as unverified with its artifacts and concrete next action. Do not report
 the tool as unavailable when it is exposed but returned unusable evidence. An
-additional allocation follows `verification-policy.md → Task grants for additional AI calls`:
-an applicable explicit task grant permits a finite next block without another
-numeric question; otherwise obtain a bounded user decision. Allocation alone
-does not authorize another unchanged-input recovery; do not loop for green text.
-A real defect found on the last available call still needs correction and
+necessary continuation follows `verification-policy.md → Necessary AI calls and user limits`
+without a separate numeric-budget question. Diagnose a repeated unusable result
+and change the relevant input, context or failed prerequisite before a new check;
+do not renew the unchanged-input recovery or loop for green text.
+A real defect found on the last explicitly permitted call still needs correction and
 fresh confirmation; exhaustion does not waive either requirement.
 
 ## Assess substantive findings
@@ -61,7 +61,7 @@ Record one disposition for every finding:
 
 | Disposition | Required treatment |
 |---|---|
-| `confirmed-defect` | Correct within authorized scope; obtain fresh applicable confirmation within the remaining budget. |
+| `confirmed-defect` | Correct within authorized scope; obtain fresh applicable confirmation under the task's explicit user limits. |
 | `disproven-finding` | Retain a concrete contradiction and an allowed decision below; do not apply a harmful or unnecessary suggested edit. |
 | `unsupported-claim` | Evidence is insufficient to confirm or disprove it; a blocking claim remains open. |
 | `inherited-or-out-of-scope` | Record provenance and scope; this does not automatically discharge a blocker or authorize unrelated changes. |

@@ -237,8 +237,8 @@ Select the SDLC QA profile via `/sdlc lite|standard|full` (`/litemode` remains a
 
 | Value | Meaning |
 |---|---|
-| `full` | All three validators on touched BSL at every task path; up to 3 calls total per validator after blocking fixes. |
-| `standard` (default / empty) | Full-cycle: all three selected gates. Quick-fix-eligible edit: Gate 1 + Gate 2 (preferred `check_1c_logic`, `check_1c_code` fallback); Gate 3 on explicit request. One mandatory confirmation after a blocking fix (2 calls total). |
+| `full` | All three validators on touched BSL at every task path; confirm blocking fixes and review the strategy after 3 calls per validator. The checkpoint does not require a numeric-budget question. |
+| `standard` (default / empty) | Full-cycle: all three selected gates. Quick-fix-eligible edit: Gate 1 + Gate 2 (preferred `check_1c_logic`, `check_1c_code` fallback); Gate 3 on explicit request. Confirm blocking fixes and review the strategy after 2 calls; necessary continuation follows verification-policy.md. |
 | `lite` | Full-cycle: Gates 1–2 with the same Gate 2 provider preference. Quick-fix-eligible edit: Gate 1 only; Gate 3 on explicit request. |
 
 **Safety floor:** `syntaxcheck` is always run at every level, and any change on a promotion-trigger path (transactions, public `Экспорт` contracts, wired metadata, RLS, subscriptions / scheduled jobs — `verification-policy.md → Triage details`) is full-cycle at every level: it runs the full-cycle gates of that level with the `full` retry budget and never drops to the quick-fix set. Gates 4 (impact) / 5 (XML) are unaffected.

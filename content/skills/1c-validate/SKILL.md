@@ -7,7 +7,7 @@ allowed-tools: mcp__1c-syntax-checker-mcp__syntaxcheck_file, mcp__1c-syntax-chec
 
 # 1c-validate — the validator chain
 
-Order for touched BSL: standalone `syntaxcheck_file` → preferred `check_1c_logic` (fallback `check_1c_code`) → `review_1c_code`, selecting only the gates required by `VERIFICATION_DEPTH` and task path within `content/rules/verification-policy.md → Validator budget` (one clean pass on the latest state; after a blocking fix one confirmation at `standard`, up to two at `full`; never a run on unchanged content). Gate 3 explicitly requested at `lite` follows Gate 1 even if Gate 2 is unselected. Pure metadata XML without BSL: `verify_xml` once. Which gates a change needs — `content/rules/verification-gates.md`.
+Order for touched BSL: standalone `syntaxcheck_file` → preferred `check_1c_logic` (fallback `check_1c_code`) → `review_1c_code`, selecting only the gates required by `VERIFICATION_DEPTH` and task path under `content/rules/verification-policy.md → Validator budget`. Obtain one clean pass on the latest state and fresh confirmation after blocking fixes. Default 2/3 counts are diagnostic checkpoints; necessary continuation needs no special AI grant or numeric-budget question. Preserve explicit user limits and the unchanged-input restrictions, including the single unusable-response recovery. Gate 3 explicitly requested at `lite` follows Gate 1 even if Gate 2 is unselected. Pure metadata XML without BSL: `verify_xml` once. Which gates a change needs — `content/rules/verification-gates.md`.
 
 ## Tools and exact arguments
 
