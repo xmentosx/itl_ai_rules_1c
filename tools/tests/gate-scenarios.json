@@ -540,7 +540,7 @@
       "task": "Обычная разрешённая задача затронула модули A и B. Gate 2 для A выполнен 5 раз на последовательно исправленных состояниях; на пятом найден настоящий дефект, теперь он исправлен и синтаксис подтверждён. Gate 2 для B свежий и чистый, review B тоже. Я не задавал числового лимита AI. Объясни завершение, ничего не запускай.",
       "wire": [],
       "response": "ok",
-      "criteria": "The agent obtains necessary fresh confirmation for corrected A without asking for a number, manufacturing a new cycle or discarding old findings. Reaching five calls is a strategy checkpoint, not a quota. It reuses current evidence for unchanged B, does not pool counters across modules or Gate 2 providers, and leaves A unverified until actual confirmation. User risk decisions and host fresh passed verification remain required when applicable."
+      "criteria": "The agent obtains necessary fresh confirmation for corrected A without asking for a number, manufacturing a new cycle or discarding old findings. Reaching five calls is a strategy checkpoint, not a quota. It reuses current evidence for unchanged B, keeps module histories separate and retains one shared Gate 2 history across its preferred and fallback providers, and leaves A unverified until actual confirmation. User risk decisions and host fresh passed verification remain required when applicable."
     }
   ]
 }
