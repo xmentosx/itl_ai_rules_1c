@@ -8,6 +8,58 @@ AfterAll {
 }
 
 Describe 'AI validation evidence retained through upstream verification split' -Tag 'Fast' {
+    It 'requires evidence before an AI finding can block and preserves confirmed defects' {
+        $body = Get-Content -LiteralPath (Join-Path $script:ForkRoot 'content/rules/verification-ai-evidence.md') -Raw -Encoding UTF8
+        $body | Should -Match 'Assess before editing or blocking'
+        $body | Should -Match 'actual versus required result'
+        $body | Should -Match 'concrete potentially critical'
+        $body | Should -Match 'do not relabel a known defect'
+        $body | Should -Match 'authority=policy-mechanical'
+        $body | Should -Match 'do not require user approval'
+        $body | Should -Not -Match 'a blocking claim remains open|blocking when that is the response'
+        $body | Should -Match 'check existing guards and contracts'
+        $body | Should -Match 'changed or missing evidence cannot be reused'
+    }
+
+    It 'routes auto failure to compensation without replay or weakening required and host proof' {
+        $body = Get-Content -LiteralPath (Join-Path $script:ForkRoot 'content/rules/verification-ai-evidence.md') -Raw -Encoding UTF8
+        $body | Should -Match 'Timeout alone does not stop development or delivery'
+        $body | Should -Match 'never automatically replay'
+        $body | Should -Match 'alternatives gather evidence but do not satisfy'
+        $body | Should -Match 'Compensation does not close a confirmed defect'
+        $body | Should -Match 'existing host delivery policy'
+        $body | Should -Match 'alternative evidence\s+does not manufacture a clean AI pass'
+        $body | Should -Not -Match 'No export/delivery eligibility follows'
+        $policy = Get-Content -LiteralPath (Join-Path $script:ForkRoot 'content/rules/verification-policy.md') -Raw -Encoding UTF8
+        $policy | Should -Match 'For Gate 1, re-run that validator'
+        $policy | Should -Match 'explicit user-imposed numeric limit'
+        $policy | Should -Match 'host-owned exhausted\s+repair session'
+    }
+
+    It 'keeps all agent entrypoints on the same adjudication owner' {
+        foreach ($path in @('content/rules/verification-policy.md', 'content/rules/verification-gates.md',
+                'content/rules/mcp-policy.md', 'content/skills/1c-validate/SKILL.md')) {
+            $body = Get-Content -LiteralPath (Join-Path $script:ForkRoot $path) -Raw -Encoding UTF8
+            $body | Should -Match 'verification-ai-evidence.md'
+            $body | Should -Match 'required'
+            $body | Should -Not -Match 'Pass criterion: no `critical` or `error` severity items|Pass criterion: no `error` severity items|One clean pass per validator on the latest artifact state|Obtain one clean pass on the latest state'
+        }
+    }
+
+    It 'retains saved-response decision cases in the existing gate scenario corpus' {
+        $corpus = Get-Content -LiteralPath (Join-Path $script:ForkRoot 'tools/tests/gate-scenarios.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+        $cases = @($corpus.scenarios | Where-Object { $_.id -match '^S(15[6-9]|16[0-7])$' })
+        $cases.Count | Should -Be 12
+        @($cases | Where-Object response -eq 'refused').Count | Should -BeGreaterThan 0
+        @($cases | Where-Object response -eq 'ok').Count | Should -BeGreaterThan 0
+        @($cases | Where-Object response -eq 'unverified').Count | Should -BeGreaterThan 0
+        foreach ($case in $cases) {
+            $case.gate | Should -Be 'G-BUDGET'
+            @($case.wire).Count | Should -Be 0
+            $case.criteria | Should -Match 'evidence|source|proof'
+        }
+    }
+
     It 'installs the disputed-response policy and routes Gate 2/3 to it' {
         $result = Invoke-WindowsPowerShellFile -FilePath (Join-Path $script:ForkRoot 'install.ps1') -Arguments @(
             'init', '-ProjectRoot', $script:VerificationProject, '-Source', $script:ForkRoot,
@@ -25,6 +77,9 @@ Describe 'AI validation evidence retained through upstream verification split' -
         $gate = Get-Content -LiteralPath (Join-Path $script:VerificationProject '.codex/rules/verification-gates.md') -Raw -Encoding UTF8
         $gate | Should -Match 'verification-ai-evidence.md'
         $gate | Should -Match 'Gate 2/3 responses'
+        $body | Should -Match 'Timeout alone does not stop development or delivery'
+        $body | Should -Match 'alternatives gather evidence but do not satisfy'
+        $gate | Should -Match 'no assessed applicable blockers'
     }
 
     It 'upgrades the installed r36 approval barrier without losing quality rules or user restrictions' {

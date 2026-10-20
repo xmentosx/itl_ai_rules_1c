@@ -29,9 +29,9 @@ It runs only missing or stale gates and MUST NOT repeat a validator against unch
 evidence; the final editor becomes the new owner. The same rule applies to `verify_xml` and
 impact-analysis evidence.
 
-Collect edits into one coherent closing snapshot. MUST NOT call `check_1c_logic`, `check_1c_code`, or `review_1c_code` after intermediate edits; call selected AI validators only after the current module set is saved and Gate 1 passed. One call covers one unit of work (the saved file or a bounded related file set). After a blocking finding, repair the artifact and obtain fresh confirmation under the necessary-continuation and explicit-user-limit contract in `verification-policy.md`. The Code Checker server serializes its AI operations: do not send multiple calls to the same Code Checker server via `Promise.all`. Independent non-checker lookups may still be batched.
+Collect edits into one coherent closing snapshot. MUST NOT call `check_1c_logic`, `check_1c_code`, or `review_1c_code` after intermediate edits; call selected AI validators only after the current module set is saved and Gate 1 passed. One call covers one unit of work (the saved file or a bounded related file set). Assess AI findings before correction or blocking under `verification-ai-evidence.md`; confirmed defects need correction and fresh applicable proof. The Code Checker server serializes its AI operations: do not send multiple calls to the same Code Checker server via `Promise.all`. Independent non-checker lookups may still be batched.
 
-For Gate 2/3 responses that are unusable or contain disputed findings, load
+For Gate 2/3 responses with findings or failed validation, load
 `content/rules/verification-ai-evidence.md`. It owns raw-response preservation,
 bounded recovery subject to explicit user limits, finding disposition and the
 exception for one recovery call on unchanged input. A transport failure is not
@@ -55,18 +55,18 @@ The gate descriptions below state the `full` behaviour — the strictest level. 
 ### Gate 2 — Logic & performance (`check_1c_logic` / `check_1c_code`)
 
 - When selected by `verification-policy.md` for the active depth and task path, run on every touched module after Gate 1 passes — never before, otherwise the AI checker drowns in syntax noise. Prefer `check_1c_logic` when it is exposed; use the upstream-compatible `check_1c_code` fallback when it is not. Both occupy the same Gate 2 slot and retry budget. Read the exposed schema for `check_1c_logic` instead of guessing an argument name; `check_1c_code` accepts exactly one of `code` or `files`.
-- Pass criterion: no `critical` or `error` severity items.
-- `warning` items: triage. Inside-scope warnings (introduced by your change) — fix. Pre-existing warnings outside your scope — leave alone (Surgical Changes).
+- Pass criterion: no assessed applicable blockers under `verification-ai-evidence.md`; retain provider severity separately. Report adjudicated findings as such, not as a clean tool response.
+- `warning` items: assess source applicability and evidence first. Fix confirmed inside-scope defects; style suggestions and unsupported claims do not force edits. Pre-existing warnings outside your scope — leave alone (Surgical Changes), retaining material risks under the evidence policy.
 - AI non-determinism rule: if either Gate 2 provider returns inconsistent results across runs on the **same** code, do not loop on it. Preserve and assess each response under `verification-ai-evidence.md`; take the strictest substantiated unresolved result, fix what is fixable, and document the rest. An unusable response has only the bounded recovery described there.
 
 ### Gate 3 — Style & ITS compliance (`review_1c_code`)
 
 - When selected by the same depth matrix, run on every touched module after the last earlier selected gate passes. An explicit Gate 3 request at `lite` does not force an otherwise unselected Gate 2.
-- Pass criterion: no `error` severity items.
+- Pass criterion: no assessed applicable blockers under `verification-ai-evidence.md`, not merely absence of provider-labelled `error`.
 - `warning` items: same triage rule as Gate 2.
 - For specific warnings that are intentional and justified: add a `//BSLLS:<rule>` suppression with a 1-line explanation, per `standards(name="dev-standards-code-style") → "Formatting"`. Blanket suppressions without justification are forbidden.
 
-### Graceful degradation for Gates 1–3 — when a validator is not exposed
+### Graceful degradation for Gates 1–3
 
 Apply `TOOL_SYNTAX` / `TOOL_CHECKER` (`content/rules/mcp-policy.md → Tool availability`) at the active depth. An unavailable `required` validator blocks its gate. For `auto` absence/failure or `off`, use the compensation below and report the actual reason; policy never produces a passing verdict:
 
@@ -78,7 +78,7 @@ Apply `TOOL_SYNTAX` / `TOOL_CHECKER` (`content/rules/mcp-policy.md → Tool avai
    - **Quick-fix** — correctness and edge cases of the changed fragment; plus locks / transactions when the edit sits near transactional code. That is enough — do not run the full checklist on a 10-line fix.
    - **Full-cycle** — the full list: style, readability, correctness, edge cases, security, concurrency / locks / transactions, BSL-LS compliance.
    - Always consider whether an external transaction already exists (e.g. an object-write transaction) before opening a new one.
-   - Findings follow `verification-policy.md → Validator budget` (a blocking defect needs a clean confirming run on the changed state; style noise does not start another loop; missing confirmation = unverified; default checkpoints allow necessary continuation).
+   - Findings follow `verification-ai-evidence.md → Assess substantive findings` and `Confirm a correction`: a confirmed defect remains blocking until corrected and freshly confirmed; style noise does not start another loop. For AI timeouts/failed validation, use its policy-dependent continuation without duplicate execution.
 3. `auto`/`off` allow delivery with these limitations; `required` leaves the dependent verification incomplete. A transactional / metadata / public-API change without Gate 2 needs a follow-up validation run.
 
 Skipping a gate without recording it under Risks is a defect — the same rule as Gate 4's graceful degradation below.
