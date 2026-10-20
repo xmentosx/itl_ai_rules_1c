@@ -6,6 +6,13 @@ argumentHint: "[interval-minutes]"
 
 # /installfilesupdatescript — schedule the MCP source refresh
 
+**ITL managed project (`.agent-1c/project.json`):** do not register this
+standalone scheduled dump. ITL owns source snapshots, branch identity and MCP
+refresh; the bundled `install-files-update.ps1` refuses managed scope. Report
+`ITL_LIFECYCLE_HELPER_REQUIRED` and use the project's `/itl*` source/MCP route
+for the requested contour. The standalone installer below applies only outside
+managed ITL projects.
+
 Create a project-local PowerShell launcher and register a recurring Windows Task Scheduler task. Every run reads the connection from the project's `.dev.env`, exports the main configuration or `EXTENSION_NAME` through the bundled `db-dump-xml.ps1`, checks the result, and refreshes the **verified MCP source directory**. Installation is explicitly requested by invoking this command; do not stop at producing instructions or ask again to register the task.
 
 This is an infobase → dedicated Designer XML snapshot operation. It never loads files into the infobase. A full snapshot is staged on every run, so deleted metadata does not leave stale files in the published directory. No BSL is generated. Read `content/rules/getconfigfiles.md` and `content/skills/1c-metadata-manage/docs/db-manage.md` for the export contract.

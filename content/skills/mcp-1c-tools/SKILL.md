@@ -24,7 +24,7 @@ Load the skill for the operation, not this whole catalogue. Each skill lists the
 | Templates as the base | `content/skills/1c-templates-memory/SKILL.md` | templates |
 | Memory recall / save (independent entry point) | `content/rules/project-memory.md` | cognee, openviking, templates |
 | Run a query or fragment in the live infobase, last event-log error | `content/skills/1c-live-ib/SKILL.md` | data |
-| Check behaviour in the 1C interface (thin client): forms, fields, tables, commands, messages | `content/skills/1c-qa-testing/SKILL.md` + `content/rules/qa-testclient.md` | qa |
+| Check behaviour in the 1C interface (thin client): forms, fields, tables, commands, messages | `content/rules/ui-testing-tools.md`; standalone QA: `content/skills/1c-qa-testing/SKILL.md` + `content/rules/qa-testclient.md` | managed Vanessa UI or distinct qa |
 | Create / edit / remove metadata, forms, roles, DCS, MXL, infobases | `content/skills/1c-metadata-manage/SKILL.md` | scripts, not MCP |
 | Live 1C:EDT workspace (`USE_EDT=true` only) | `docs/edt-mcp.md`, `content/rules/edt-workflow.md` | edt |
 

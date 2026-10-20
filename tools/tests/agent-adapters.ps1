@@ -67,7 +67,7 @@ try {
 
     $clients = @(
         @{ Id = 'zcode'; Dir = '.zcode'; Mcp = '.zcode/config.json' },
-        @{ Id = 'mimocode'; Dir = '.mimocode'; Mcp = 'mimocode.json' },
+        @{ Id = 'mimocode'; Dir = '.mimocode'; Mcp = '.mimocode/mimocode.json' },
         @{ Id = 'kimi'; Dir = '.kimi-code'; Mcp = '.kimi-code/mcp.json' },
         @{ Id = 'cline'; Dir = '.cline'; Mcp = '' },
         @{ Id = 'command-code'; Dir = '.commandcode'; Mcp = '.mcp.json' }
@@ -179,7 +179,7 @@ try {
     $null = Invoke-Installer $project @('add', '-Tool', 'command-code')
     $null = Invoke-Installer $project @('remove')
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $project '.ai-rules.json'))) 'Full remove left manifest'
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $project 'mimocode.json'))) 'Full remove left MiMo config'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $project '.mimocode/mimocode.json'))) 'Full remove left MiMo config'
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $project '.zcode/config.json'))) 'Full remove left ZCode config'
     Pass 'multi-client ownership, add and full removal'
 
@@ -193,11 +193,11 @@ try {
     }
     $project = Join-Path $Work 'mimo-jsonc'
     $jsonc = '// user override' + "`n" + '{"model":"user-model"}'
-    Write-Fixture (Join-Path $project 'mimocode.jsonc') $jsonc
+    Write-Fixture (Join-Path $project '.mimocode/mimocode.jsonc') $jsonc
     $null = Invoke-Installer $project @('init')
     $manifest = Read-Json (Join-Path $project '.ai-rules.json')
     Assert-True ($manifest.tools[0] -eq 'mimocode') 'MiMo JSONC detection'
-    Assert-True ((Get-Content -LiteralPath (Join-Path $project 'mimocode.jsonc') -Raw) -eq $jsonc) 'MiMo JSONC overwritten'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $project '.mimocode/mimocode.jsonc') -Raw) -eq $jsonc) 'MiMo JSONC overwritten'
     Pass 'MiMo JSONC discovery and preservation'
     Write-Host "Passed: $script:Passed"
 }

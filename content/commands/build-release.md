@@ -5,6 +5,14 @@ argumentHint: "[<version>] [--no-tag]"
 
 # /build-release — release artifacts from the git snapshot
 
+**ITL managed project (`.agent-1c/project.json`):** the installed
+`/itl-result` route owns CF/CFE materialization and its exact branch artifact
+proof. Do not run the standalone base loader, dump scripts, version bump,
+changelog commit or tag steps below as a combined release command. First
+check whether `/itl-result` supports the requested target set and source
+revision; report any missing release capability for a separate decision.
+The standalone procedure below applies only outside managed ITL projects.
+
 Build real binary artifacts from the **committed** sources of the selected targets: `.cf` for main, `.cfe` for each named extension, with an optional version bump, `CHANGELOG.md` entry and git tag. Resolve targets through `content/rules/extension-workspace.md`: an explicit main/extension task wins; a requested full snapshot uses main plus `EXTENSION_NAMES`; without a task restriction, a populated list selects that snapshot, otherwise use the single-target default. An extension-only build must not materialize one extension and then dump the unrelated main `.cf`. The command ends at artifacts + tag; it never deploys to production itself (see the checklist at the end).
 
 ## Step 0. Check `.dev.env` parameters

@@ -59,7 +59,7 @@ Before removing ANYTHING:
 - [ ] Not part of the public API; dependent code reviewed; affected functionality verified
 
 After each change:
-- [ ] Applicable validators pass on every touched module in `syntaxcheck` → `check_1c_code` → `review_1c_code` order; gate selection, promotion floor and retry budget — `content/rules/verification-policy.md`
+- [ ] Applicable validators pass on every touched module in Gate 1 → selected Gate 2 (preferred `check_1c_logic`, `check_1c_code` fallback) → Gate 3 order; gate selection, promotion floor and retry budget — `content/rules/verification-policy.md`
 - [ ] No new errors introduced; the change is documented
 
 ## Refactoring Report Format

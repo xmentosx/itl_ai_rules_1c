@@ -44,7 +44,7 @@ Full-cycle: review is required unless the user explicitly prohibits it; otherwis
 
 ### Soft gate D — UI confirmation policy
 
-Behaviour needs expected-vs-actual evidence (Gate 3a or UI), not static checks/review alone. `/uitests` sets `UI_TESTING`: `essential` / empty = the important new or changed user-visible behaviour, automatically once the change is on the dev/test base; `auto` = every applicable scenario automatically; `manual` = explicit request; `off` = disabled. Routes: QA MCP first, the web client (`INFOBASE_PUBLISH_URL`) as fallback. Canon: `dev-standards-env.md`; routes and drivers: `ui-testing-tools.md`. Unconfirmed essential DoD scenarios stay unverified (`sdd-integrations.md`).
+Behaviour needs expected-vs-actual evidence (Gate 3a or UI), not static checks/review alone. `/uitests` sets `UI_TESTING`: `essential` / empty = the important new or changed user-visible behaviour, automatically once the change is on the dev/test base; `auto` = every applicable scenario automatically; `manual` = explicit request; `off` = no routine UI execution, with a named invocation override subject to the broader current no-UI scope. Routes: the installed Vanessa UI route for managed ITL projects; QA MCP first and the web client (`INFOBASE_PUBLISH_URL`) as fallback for standalone projects. Canon: `dev-standards-env.md`; routes and drivers: `ui-testing-tools.md`. Unconfirmed essential DoD scenarios stay unverified (`sdd-integrations.md`). Saved Vanessa suites remain independently governed by `ITL_VANESSA_TESTING`; neither policy nor interactive UI evidence substitutes for fresh helper-owned completion/export evidence.
 
 ## Delivery summary — what the user sees
 

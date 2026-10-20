@@ -137,9 +137,11 @@ Explicit editor: `/uitests essential|on|manual|off|status` (`content/commands/ui
 | `essential` (default / empty) | Once the change is on the dev/test infobase (load + DB update), check automatically **only the important new or changed user-visible behaviour**: the main scenario of each new or changed form, command, document, report or workflow, plus the case the task is about. No regression sweep, no cosmetic or refactoring-only checks; non-visual results go to Gate 3a / `1c-data-mcp`; the rest on request. |
 | `auto` | Every applicable UI scenario runs automatically in the verification phase / after each successful deploy. |
 | `manual` | UI tests run **only on an explicit user request**; the pipeline and the verification phase never trigger them. `/deploy-and-test` Steps 1–3 still run; Step 4 is skipped unless requested. |
-| `off` | UI testing is disabled on every route. A run request alone does not enable it; point to `/uitests essential`, `/uitests on` or `/uitests manual`. An explicit enable-and-run instruction satisfies the switch without a second confirmation; execution gates still apply. |
+| `off` | Routine UI execution is disabled even with an available route. A generic check does not enable it. An explicitly named one-off UI run may override this setting for that invocation only; it does not edit `.dev.env`. A broader current no-UI instruction still forbids the run until the user lifts it; target and provider prerequisites remain. |
 
-Resolve `off` first: it blocks UI regardless of routes and starts no setup questionnaire. Loading the change for a check follows `INFOBASE_ROLE` and `/update1cbase` / `/deploy-and-test`. The route supplies **where**: QA MCP — the test client of `INFOBASE_PATH`; web — `INFOBASE_PUBLISH_URL`. An automatic run with no available route is skipped and affected criteria stay unverified with that reason; for an explicitly requested run, ask for the missing prerequisite and continue independent work.
+Resolve the current task's explicit scope and broader no-UI instruction before the project value. `off` without a permitted named invocation override blocks routine UI and starts no setup questionnaire. Loading the change for a check follows `INFOBASE_ROLE` and `/update1cbase` / `/deploy-and-test`. The route supplies **where**: QA MCP — the test client of `INFOBASE_PATH`; web — `INFOBASE_PUBLISH_URL`. An automatic run with no available route is skipped and affected criteria stay unverified with that reason; for an explicitly requested run, ask for the missing prerequisite and continue independent work.
+
+**Managed ITL projects:** use the managed route of `ui-testing-tools.md` and the installed `itl-vanessa-ui-mcp` skill, under its existing target/provider/guard contract. The independent `ITL_VANESSA_TESTING` switch owns saved Vanessa suites; `UI_TESTING` neither disables nor enables them. Standalone QA client integration remains separate and unqualified.
 
 **Route and tool** — `ui-testing-tools.md`: QA MCP → web client → `Windows-MCP` for windows outside the client. `MCP_QA_CLIENT_VISIBLE` (`/uitests visible|hidden`) sets the test-client window, never `UI_TESTING` — `qa-testclient.md → Visible or hidden window`.
 
@@ -169,26 +171,26 @@ Missing, empty or invalid values are `unknown`, not proof that EDT is absent. On
 | `TOOL_SSL` | `1c-ssl-mcp`: БСП APIs |
 | `TOOL_SYNTAX` | `1c-syntax-checker-mcp`: syntax validation |
 | `TOOL_CHECKER` | `1c-code-check-mcp`: code checks, reviews, AI/ITS tools |
-| `TOOL_DATA` | `1c-data-mcp`: live-IB checks |
+| `TOOL_DATA` | `1c-data-mcp` and qualified ITL branch-local ROCTUP data checks under Gate 3a; `off` excludes both |
 | `TOOL_EDT` | EDT-MCP; workflow still requires `USE_EDT=true` |
 | `TOOL_AGENT_BROWSER` | agent-browser, MCP and CLI |
 | `TOOL_BROWSER` | Active client's built-in browser tools and saved UI test runners |
 | `TOOL_WINDOWS_MCP` | Windows-MCP desktop automation |
 | `TOOL_QA` | `1c-qa` (QA MCP): UI checks in the 1C thin client |
 | `TOOL_UI_TEST` | Optional `MCP_Test` / `1C Visual UI Test` |
-| `TOOL_CONVERSION` | `1c-kd20` (KD20): «Конвертация данных» 2.0 exchange rules and read-only EnterpriseData checks; installed separately |
+| `TOOL_CONVERSION` | `1c-kd20`: «Конвертация данных» 2.0 exchange rules and read-only EnterpriseData checks; installed separately |
 
 Examples: `TOOL_COGNEE=off` excludes Cognee while other memory providers remain eligible; `TOOL_SYNTAX=required` blocks syntax verification when its tool is missing; `TOOL_AGENT_BROWSER=off` selects an eligible browser fallback without an installation question. No key switches off the shipped metadata/IB/repository procedures. `rtk` remains a user-global shell proxy managed by `/install-rtk`, not project tool routing.
 
 ### Subagent model parameters
 
-Consumed by the **installer** when rendering subagent files (source agents declare an abstract `modelTier: coding | analysis | light` instead of a concrete model — see `content/rules/subagents.md → Model-tier routing`). At task time, `SUBAGENT_MODEL_ANALYSIS` also controls reviewer eligibility (`content/rules/subagents.md → Reviewer model gate`); empty / missing means review subagents are disabled unless the user explicitly selects a model for that invocation. Other agents retain the defaults below. On first install the installer offers a benchmark-based profile (`Balanced` / `Economy` / `Quality`, from <https://onec-llm-bench.lovable.app/>) that fills all three values; any of them may still be overridden or left empty.
+The **installer** renders source `modelTier: coding | analysis | light` from the executing client's `modelTiersByClient` entry: `.agent-1c/project.json → aiRules.modelTiersByClient` for ITL projects, `.ai-rules.json → modelTiersByClient` for standalone projects. The `analysis` tier enables reviewer dispatch only when a concrete model is explicitly selected and actually rendered or passed as a supported invocation override (`content/rules/subagents.md → Reviewer model gate`). Legacy single-client `SUBAGENT_MODEL_*` in `.dev.env` are migration inputs; they never supply ids to a newly attached client. An empty tier inherits that client's default without enabling reviewers.
 
 | Parameter | Effect | Class | Behavior when empty |
 |---|---|---|---|
-| `{SUBAGENT_MODEL_CODING}` | Concrete model for tier `coding` (code / metadata authorship, architecture design: `1c-developer`, `1c-metadata-manager`, `1c-architect`, `1c-performance-optimizer`, `1c-refactoring`) | Defaulted | Empty = the model field is omitted from installed agent files; the AI client uses its default model. **Never ask at task time**; re-render via `install.ps1 update` after editing. |
-| `{SUBAGENT_MODEL_ANALYSIS}` | Concrete model for tier `analysis` (planning / analysis / review / testing / docs: `1c-planner`, `1c-analytic`, `1c-arch-reviewer`, `1c-code-reviewer`, `1c-doc-writer`, `1c-tester`) | Defaulted | Installer: same as above; legacy 2-tier files with no key fall back to `SUBAGENT_MODEL_CODING`. Dispatch: inherited / fallback models do not enable review subagents — apply the reviewer model gate. |
-| `{SUBAGENT_MODEL_LIGHT}` | Concrete model for tier `light` (small bounded read-only tasks: repo scouting, search, impact lists, mechanical checks: `1c-explorer`) | Defaulted | Same as above |
+| `modelTiersByClient.<client>.coding` | Concrete model for code / metadata authorship and architecture | Defaulted | Omit the model field; use this client's default. Re-render after editing. |
+| `modelTiersByClient.<client>.analysis` | Concrete model for planning, review, testing and docs | Defaulted | Omit the field; reviewers also remain disabled without explicit model selection. |
+| `modelTiersByClient.<client>.light` | Concrete model for bounded read-only exploration | Defaulted | Omit the field; ITL routine needs an explicit per-client light model. |
 
 These three describe the models **subagents** run on. The model the **parent agent** runs on is a different parameter — `AGENT_MODEL` below — and the two never affect each other.
 
@@ -209,12 +211,12 @@ Selects the behaviour profile applied to the model that actually executes this r
 
 #### `ORCHESTRATION` — orchestrator economy mode
 
-Controls how eagerly the parent agent delegates execution to subagents. It is **Defaulted** — missing file / missing key / empty / invalid value resolves to `standard`, and the agent **must not** ask for the value at task time. The canonical editor of this key is the `/economymode` slash command (`on` / `off` / `models`); manual edits are allowed but not required. Inside that command's explicit flow, asking the user which per-tier models to use (`SUBAGENT_MODEL_*`) **is** allowed — an invoked configuration command is not "task time"; the never-ask policy for regular tasks stays intact.
+Controls how eagerly the parent agent delegates execution to subagents. It is **Defaulted** — missing file / missing key / empty / invalid value resolves to `standard`, and the agent **must not** ask for the value at task time. The canonical editor is `/economymode` (`on` / `off` / `models`). Inside its explicit flow, asking which models to use for the selected attached client **is** allowed; regular tasks do not ask.
 
 | Value | Meaning |
 |---|---|
 | `standard` (default / empty) | Regular delegation policy from `subagents.md`: delegate when the task is large enough to justify the overhead, execute directly otherwise. |
-| `economy` | Orchestrator economy mode (`content/rules/orchestrator-economy.md`): the parent keeps decisions, specs, and verification; reading and writing are delegated to subagents per tier. Model selection is unaffected — models still come from `SUBAGENT_MODEL_*` by tier. |
+| `economy` | Orchestrator economy mode (`content/rules/orchestrator-economy.md`): the parent keeps decisions, specs, and verification; reading and writing are delegated to subagents per tier. Models still come from the executing client's `modelTiersByClient` entry. |
 
 ### Process-tuning parameters
 
@@ -231,13 +233,13 @@ Consumed by the triage and debugging rules at task time. All are **Defaulted** �
 
 #### `VERIFICATION_DEPTH` — static code-verification depth
 
-Select the SDLC QA profile via `/sdlc lite|standard|full` (`/litemode` remains an alias). `VERIFICATION_DEPTH` tunes Gates 1–3 for **low-risk** edits; missing / empty / invalid = `standard`, never ask at task time. Preserve `UI_TESTING` at every depth; use `/uitests` to change it. Canonical semantics — `verification-policy.md → "Verification depth levels"`.
+Select the SDLC QA profile via `/sdlc lite|standard|full` (`/litemode` remains an alias). `VERIFICATION_DEPTH` tunes Gates 1–3 for every task path; promotion-trigger edits take the full-cycle column at the active depth and its full retry budget. Missing / empty / invalid = `standard`, never ask at task time. Preserve `UI_TESTING` at every depth; use `/uitests` to change it. Canonical semantics — `verification-policy.md → "Verification depth levels"`.
 
 | Value | Meaning |
 |---|---|
-| `full` | All three validators on every change; up to 3 calls total per validator after blocking fixes. Always applied to promotion-trigger paths regardless of this setting. |
-| `standard` (default / empty) | Full-cycle: all three validators. Quick-fix-eligible edit: `syntaxcheck` + `check_1c_code`; `review_1c_code` on a promotion trigger or explicit request. One mandatory confirmation after a blocking fix (2 calls total). |
-| `lite` | Full-cycle: `syntaxcheck` + `check_1c_code`. Quick-fix-eligible edit: `syntaxcheck` only. `review_1c_code` on a promotion trigger or explicit request. |
+| `full` | All three validators on touched BSL at every task path; confirm blocking fixes and review the strategy after 3 calls per validator. The checkpoint does not require a numeric-budget question. |
+| `standard` (default / empty) | Full-cycle: all three selected gates. Quick-fix-eligible edit: Gate 1 + Gate 2 (preferred `check_1c_logic`, `check_1c_code` fallback); Gate 3 on explicit request. Confirm blocking fixes and review the strategy after 2 calls; necessary continuation follows verification-policy.md. |
+| `lite` | Full-cycle: Gates 1–2 with the same Gate 2 provider preference. Quick-fix-eligible edit: Gate 1 only; Gate 3 on explicit request. |
 
 **Safety floor:** `syntaxcheck` is always run at every level, and any change on a promotion-trigger path (transactions, public `Экспорт` contracts, wired metadata, RLS, subscriptions / scheduled jobs — `verification-policy.md → Triage details`) is full-cycle at every level: it runs the full-cycle gates of that level with the `full` retry budget and never drops to the quick-fix set. Gates 4 (impact) / 5 (XML) are unaffected.
 

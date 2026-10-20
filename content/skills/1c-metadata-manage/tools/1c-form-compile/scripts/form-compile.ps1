@@ -5044,6 +5044,17 @@ function Emit-Button {
 		X "$inner<Type>$btnType</Type>"
 	}
 
+	# Match the editor's platform order; preserve compiler-only properties below.
+	if ($el.visible -eq $false -or $el.hidden -eq $true) { X "$inner<Visible>false</Visible>" }
+	if ($null -ne $el.userVisible) { Emit-XrFlag -tag 'UserVisible' -val $el.userVisible -indent $inner }
+	if ($el.representation) {
+		$btnRepr = if ("$($el.representation)" -eq 'TextPicture') { 'PictureAndText' } else { "$($el.representation)" }
+		X "$inner<Representation>$btnRepr</Representation>"
+	}
+	if ($el.defaultButton -eq $true) { X "$inner<DefaultButton>true</DefaultButton>" }
+	if ($el.enabled -eq $false -or $el.disabled -eq $true) { X "$inner<Enabled>false</Enabled>" }
+	if ($el.readOnly -eq $true) { X "$inner<ReadOnly>true</ReadOnly>" }
+
 	# CommandName
 	if ($el.command) {
 		X "$inner<CommandName>Form.Command.$($el.command)</CommandName>"
@@ -5073,11 +5084,6 @@ function Emit-Button {
 	# DataPath — привязка команды кнопки к контексту (Объект.Ref, Items.X.CurrentData.Поле)
 	if ($el.path) { X "$inner<DataPath>$($el.path)</DataPath>" }
 
-	$btnAuto = -not ($el.command -or $el.commandName -or $el.stdCommand)
-	Emit-Title -el $el -name $name -indent $inner -auto:$btnAuto
-	Emit-CommonFlags -el $el -indent $inner
-
-	if ($el.defaultButton -eq $true) { X "$inner<DefaultButton>true</DefaultButton>" }
 	# Check (пометка toggle-кнопки командной панели) — платформа эмитит только true.
 	# Ключ 'checked' (не 'check': 'check' — тип-ключ CheckBoxField, был бы конфликт диспетчера типов)
 	if ($el.checked -eq $true) { X "$inner<Check>true</Check>" }
@@ -5085,9 +5091,8 @@ function Emit-Button {
 	# Picture
 	Emit-CommandPicture -pic $el.picture -elemLt $el.loadTransparent -indent $inner
 
-	if ($el.representation) {
-		X "$inner<Representation>$($el.representation)</Representation>"
-	}
+	$btnAuto = -not ($el.command -or $el.commandName -or $el.stdCommand)
+	Emit-Title -el $el -name $name -indent $inner -auto:$btnAuto
 
 	if ($el.locationInCommandBar) {
 		X "$inner<LocationInCommandBar>$($el.locationInCommandBar)</LocationInCommandBar>"
@@ -6202,6 +6207,13 @@ function Emit-Commands {
 		# Доступность команды по ролям (после ToolTip, до Action)
 		if ($null -ne $cmd.use) { Emit-XrFlag -tag 'Use' -val $cmd.use -indent $inner }
 
+		# Shortcut and Picture precede Action in the platform sequence.
+		if ($cmd.shortcut) {
+			X "$inner<Shortcut>$($cmd.shortcut)</Shortcut>"
+		}
+
+		Emit-CommandPicture -pic $cmd.picture -elemLt $cmd.loadTransparent -indent $inner
+
 		if ($cmd.action) {
 			X "$inner<Action>$($cmd.action)</Action>"
 		}
@@ -6223,14 +6235,9 @@ function Emit-Commands {
 			X "$inner<AssociatedTableElementId xsi:type=`"xs:string`">$(Esc-Xml "$cmdTable")</AssociatedTableElementId>"
 		}
 
-		if ($cmd.shortcut) {
-			X "$inner<Shortcut>$($cmd.shortcut)</Shortcut>"
-		}
-
-		Emit-CommandPicture -pic $cmd.picture -elemLt $cmd.loadTransparent -indent $inner
-
 		if ($cmd.representation) {
-			X "$inner<Representation>$($cmd.representation)</Representation>"
+			$cmdRepr = if ("$($cmd.representation)" -eq 'PictureAndText') { 'TextPicture' } else { "$($cmd.representation)" }
+			X "$inner<Representation>$cmdRepr</Representation>"
 		}
 
 		X "$indent`t</Command>"

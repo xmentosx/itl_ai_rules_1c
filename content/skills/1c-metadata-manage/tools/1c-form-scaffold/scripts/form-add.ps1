@@ -329,9 +329,26 @@ $objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.Path, $null).TrimE
 $formsDir = Join-Path $objectDir "Forms"
 $formMetaPath = Join-Path $formsDir "$FormName.xml"
 
-if (Test-Path $formMetaPath) {
-	Write-Error "Форма уже существует: $formMetaPath"
-	exit 1
+$formMetaExists = Test-Path -LiteralPath $formMetaPath -PathType Leaf
+if ($formMetaExists) {
+	$formMetaDoc = New-Object System.Xml.XmlDocument
+	$formMetaDoc.PreserveWhitespace = $true
+	$formMetaDoc.Load($formMetaPath)
+	$formMetaNs = New-Object System.Xml.XmlNamespaceManager($formMetaDoc.NameTable)
+	$formMetaNs.AddNamespace('md', 'http://v8.1c.ru/8.3/MDClasses')
+	$formMetaNs.AddNamespace('v8', 'http://v8.1c.ru/8.1/data/core')
+	$existingForm = $formMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Form', $formMetaNs)
+	$existingName = $formMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Form/md:Properties/md:Name', $formMetaNs)
+	$existingType = $formMetaDoc.SelectSingleNode('/md:MetaDataObject/md:Form/md:Properties/md:FormType', $formMetaNs)
+	$existingSynonym = $formMetaDoc.SelectSingleNode("/md:MetaDataObject/md:Form/md:Properties/md:Synonym/v8:item[v8:lang='ru']/v8:content", $formMetaNs)
+	$existingUuid = if ($existingForm) { $existingForm.GetAttribute('uuid') } else { '' }
+	$parsedUuid = [guid]::Empty
+	if (-not $existingName -or $existingName.InnerText -cne $FormName -or
+		-not $existingType -or $existingType.InnerText -cne 'Managed' -or
+		-not $existingSynonym -or -not [guid]::TryParse($existingUuid, [ref]$parsedUuid)) {
+		Write-Error "Существующие метаданные формы несовместимы с запросом: $formMetaPath"
+		exit 1
+	}
 }
 
 $formDir = Join-Path $formsDir $FormName
@@ -385,7 +402,16 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+if ($formMetaExists) {
+	$existingSynonym.InnerText = $Synonym
+	$formMetaSettings = New-Object System.Xml.XmlWriterSettings
+	$formMetaSettings.Encoding = $encBom
+	$formMetaSettings.Indent = $false
+	$formMetaWriter = [System.Xml.XmlWriter]::Create($formMetaPath, $formMetaSettings)
+	try { $formMetaDoc.Save($formMetaWriter) } finally { $formMetaWriter.Close() }
+} else {
+	[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+}
 
 # --- 3b. Form.xml ---
 
@@ -650,7 +676,7 @@ $objFileName = [System.IO.Path]::GetFileName($ObjectPath)
 $objDirName = Split-Path $ObjectPath -Parent
 $objBaseName = [System.IO.Path]::GetFileNameWithoutExtension($ObjectPath)
 
-Write-Host "Created:"
+Write-Host $(if ($formMetaExists) { 'Updated:' } else { 'Created:' })
 Write-Host "  Metadata: $objDirName\$objBaseName\Forms\$FormName.xml"
 Write-Host "  Form:     $objDirName\$objBaseName\Forms\$FormName\Ext\Form.xml"
 Write-Host "  Module:   $objDirName\$objBaseName\Forms\$FormName\Ext\Form\Module.bsl"

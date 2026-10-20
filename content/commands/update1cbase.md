@@ -5,6 +5,10 @@ argumentHint: "[full|partial|git|all]"
 
 # /update1cbase — load repository into an infobase
 
+## Managed ITL project
+
+If `.agent-1c/project.json` exists, stop this standalone procedure here. Run the host ITL preflight/state reconciliation, require a managed `itldev/*` branch and a proven branch infobase, then delegate the selected load to the matching ITL lifecycle helper (`update-dev-branch-base` for the current branch). The helper owns source identity, locks, snapshot, load/check/apply, rollback, retries and verification invalidation. Never use the source infobase, infer a target from `.dev.env` alone, or run the Designer/`ibcmd` examples below. If the helper cannot express the requested mode, report `ITL_LIFECYCLE_HELPER_REQUIRED` with the exact missing capability and stop that operation; do not fall through. Only a project without managed ITL state follows the remaining standalone instructions.
+
 Load the configuration (`/LoadConfigFromFiles`) from the current repository directory into the infobase defined in `.dev.env`, then update the database structure (`/UpdateDBCfg`). With the `all` argument (or an explicit "with extensions" request) the command loads the **full snapshot** — main configuration plus every extension from `EXTENSION_NAMES` — see "Full-snapshot mode" at the end.
 
 Read `content/rules/getconfigfiles.md → Configuration file synchronization contract`. A partial load is a first-class branch of this update procedure: **load → checks → database apply → requested directory refresh**. Do not stop after importing files or merely offer the database update when the user has already requested it.

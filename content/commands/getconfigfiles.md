@@ -4,6 +4,10 @@ description: Extract configuration objects from infobase to files for editing
 
 # /getconfigfiles — extract configuration objects from an infobase
 
+## Managed ITL project
+
+If `.agent-1c/project.json` exists, stop this standalone procedure here. Run host ITL preflight/state reconciliation; require a managed `itldev/*` branch, a proven branch infobase and an explicit selected-object set. Delegate the transactional partial dump to the ITL lifecycle helper. It owns the dirty-destination guard, selected-object list, snapshot, state/fingerprint, rollback and verification invalidation. Never run the standalone rule or Designer/`ibcmd` below against a managed project; an unsupported selection receives `ITL_LIFECYCLE_HELPER_REQUIRED` and the host continuation. Only a project without managed ITL state follows the standalone instructions below.
+
 The full procedure — parameters, `repoobjects.txt`, the `ibcmd` / Designer tool selection, the PowerShell templates, and the log check — is owned by the rule **`getconfigfiles.md`**. Read it from the canonical rules directory (source: `content/rules/getconfigfiles.md`) and follow it exactly; do not improvise flags that are not in the rule.
 
 Quick facts (details and templates — in the rule):

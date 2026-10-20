@@ -83,22 +83,23 @@ After installation you should already see, depending on which tools are active:
 …plus matching `openspec-{propose,apply-change,archive-change,explore,sync-specs,update-change}/SKILL.md`
 folders under each tool's `skills/` directory. Restart your IDE for the
 slash commands to take effect.
+Slash-command spelling is client-specific; `/opsx*` is not a universal
+invocation syntax. Codex selects the project skill by name, while clients
+without a native bundle follow the natural-language route.
 
-### Refreshing to a newer OpenSpec version (optional)
+### CLI and bundle version in an ITL project
 
-The bundled snapshot is updated together with `1c-rules` releases. If you
-want to jump ahead to a newer OpenSpec CLI version without waiting for the
-next `1c-rules` release, install the official CLI once and run it inside
-the project — it will overwrite the bundled files in place:
-
-```bash
-npm install -g @fission-ai/openspec@latest
-openspec update      # refresh slash commands and SKILLs to the current CLI version
-```
-
-This is purely optional. After a subsequent `1c-rules` update, the bundled
-snapshot's version takes over again (unless you've marked the affected files
-as user-modified, in which case `1c-rules` preserves your edits).
+The five native bundles are generated from the pinned OpenSpec 1.13.1 CLI and
+adapted by the downstream overlay. Kimi, Qwen, Command Code, Cline, ZCode,
+MiMo Code and Pi use the natural-language OpenSpec route where their runtime
+has no qualified native bundle; `bundleSkipped` in `.ai-rules.json` makes that
+absence visible. A managed ITL project resolves the exact CLI and Node pair
+from its installed workflow checkout and uses the existing
+`provision-openspec-cli` action when the executable is missing. Do not run
+`openspec update` or install `@fission-ai/openspec` globally to mutate the
+managed client files. The pinned CLI and bundle are upgraded together with
+the workflow package. A standalone rules-only project without ITL state may
+follow upstream OpenSpec CLI installation and update instructions separately.
 
 ## Workflow (default core profile)
 
@@ -108,10 +109,13 @@ as user-modified, in which case `1c-rules` preserves your edits).
 
 1. **propose** — AI creates `proposal.md`, delta `specs/`, `design.md`, and
    `tasks.md`. Full-cycle artifacts define an observable Definition of Done
-   (DoD), with acceptance criteria and tasks for testing and review.
+   (DoD), with acceptance criteria and a chosen verification route. It does
+   not add unit, regression or acceptance test suites by default.
 2. **apply** — AI implements, executes verification scenarios, reviews the final change, fixes
    blocking findings and reconciles DoD with evidence. Testing and review
-   are required for full-cycle unless explicitly waived by the user; waivers
+   are required for full-cycle unless explicitly waived by the user; this is
+   a requirement for evidence, not a requirement to retain a new test file.
+   Waivers
    are recorded separately from passes. CLI `all_done` / checked tasks alone
    do not establish completion. Missing verification keeps DoD incomplete.
 3. **archive** — after checking DoD evidence, completed changes merge into `specs/` and the change folder

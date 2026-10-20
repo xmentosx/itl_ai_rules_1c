@@ -12,7 +12,7 @@ Creates or removes a template (layout) of specified type and registers/unregiste
 |-----------|:--------:|---------|-------------|
 | ObjectName | yes | — | Object name, or absolute / relative path to the object's `.xml` file; alias `ProcessorName` |
 | TemplateName | yes | — | Template name |
-| TemplateType | yes | — | Type: HTML, Text, SpreadsheetDocument, BinaryData |
+| TemplateType | yes | — | Type: HTML, Text, SpreadsheetDocument, BinaryData, DataCompositionSchema |
 | Synonym | no | = TemplateName | Template synonym |
 | SrcDir | no | `src` | Source directory |
 
@@ -31,6 +31,11 @@ powershell.exe -NoProfile -File skills/1c-metadata-manage/tools/1c-template-mana
 A relative XML path is resolved from the current directory, then from `SrcDir`. The descriptor and content are created beside that XML under `<ObjectName>/Templates/`; `SrcDir` is not required for an existing XML path. Name-only calls retain EPF lookup and lookup in configuration object-type folders under `SrcDir`.
 
 `meta-edit add-template` is refused before any mutation in both runtimes; use this scaffold and select `TemplateType` explicitly. This scaffold currently ships as PowerShell only.
+
+If the descriptor already exists with the same name, type and a valid UUID,
+the scaffold updates its Russian synonym without replacing that UUID or an
+authored `Ext/Template.*` payload. An incompatible descriptor stops before
+mutation. A repeated call does not duplicate the parent `ChildObjects` entry.
 
 ### Type Mapping
 

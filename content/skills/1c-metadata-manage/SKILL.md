@@ -7,6 +7,8 @@ description: "Create, edit, validate and remove 1C metadata — catalogs, docume
 
 Use this skill when the task involves **1C metadata structure** (creating, editing, validating, or removing configuration objects, forms, reports, layouts, roles, extensions, or databases).
 
+For a managed-form path crossing client/server code in an ITL project, first load `content/rules/itl-managed-form-context.md`; form syntax and XML validation do not prove that runtime boundary.
+
 ## Hard rule
 
 The gate itself — every metadata-XML mutation and every infobase operation goes through this skill (dispatch below → domain doc → PowerShell tools) or the `1c-metadata-manager` subagent, hand-editing is a defect, repository-bound projects add the `1c-repository-manage` lock / commit discipline, EDT-format trees (`.mdo` / `.form`, never fed to these tools) route per `content/rules/edt-workflow.md` — is owned by `AGENTS.md → Skills and Subagents`; this skill's own canon is only the exceptions:
@@ -40,6 +42,8 @@ On Windows use the shipped `.ps1` entry points. Before selecting a Linux/macOS r
 `tools/_common/Invoke-1CEdit.ps1` accepts logical addresses, emits a unified diff and can preview its own script writes. Before using the wrapper, read [edit-preview.md](docs/edit-preview.md) for arguments, rollback boundaries and `METADATA_PREVIEW` modes.
 
 Default `auto`: preview DSL generation or a tool/operation new to this project; ordinary edits apply immediately. Native deletion gates (`-DryRun`, then `-Force`) and validation always remain. Direct tool invocation is valid; name a preview on `Metadata tooling:` only when it ran. Do not stash or commit another person's changes to force a preview.
+
+In an ITL managed worktree, rollback preview refuses before mutation unless the tool has its own non-writing `-DryRun`. Use the ITL-owned edit route and inspect its scoped diff. An explicit preview-only request never becomes an apply automatically.
 
 ## Dispatch Strategy
 

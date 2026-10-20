@@ -29,36 +29,44 @@ It runs only missing or stale gates and MUST NOT repeat a validator against unch
 evidence; the final editor becomes the new owner. The same rule applies to `verify_xml` and
 impact-analysis evidence.
 
+Collect edits into one coherent closing snapshot. MUST NOT call `check_1c_logic`, `check_1c_code`, or `review_1c_code` after intermediate edits; call selected AI validators only after the current module set is saved and Gate 1 passed. One call covers one unit of work (the saved file or a bounded related file set). Assess AI findings before correction or blocking under `verification-ai-evidence.md`; confirmed defects need correction and fresh applicable proof. The Code Checker server serializes its AI operations: do not send multiple calls to the same Code Checker server via `Promise.all`. Independent non-checker lookups may still be batched.
+
+For Gate 2/3 responses with findings or failed validation, load
+`content/rules/verification-ai-evidence.md`. It owns raw-response preservation,
+bounded recovery subject to explicit user limits, finding disposition and the
+exception for one recovery call on unchanged input. A transport failure is not
+an unusable substantive response and follows the tool's own recovery route.
+
 
 ## Hard gates — run on every full-cycle change
 
-You MUST run all five gates in order. Each gate has an explicit pass / fail criterion and an explicit retry budget. When a required validator is not exposed in the current session, follow the graceful-degradation subsections (after Gate 3 and inside Gate 4) instead of silently skipping. **Gates 3a and 6 are conditional** — each runs only when its own trigger fires and its prerequisite (an exposed server, or a reachable platform + infobase) is present; neither ever replaces Gates 1–3.
+Assess all five gates in order and run each one selected by the active task path, `VERIFICATION_DEPTH`, and its own trigger. Record a gate outside that scope as not applicable, never passed. When a selected validator is not exposed, follow graceful degradation instead of silently skipping. **Gates 3a and 6 are conditional** on their own triggers and prerequisites; neither replaces selected Gates 1–3.
 
 The gate descriptions below state the `full` behaviour — the strictest level. When `VERIFICATION_DEPTH` is `standard` or `lite`, Gates 1–3 are modulated per `verification-policy.md → "Verification depth levels"`, promotion-trigger paths included: they are full-cycle and keep the `full` retry budget, but their gates follow the active depth.
 
 ### Gate 1 — Syntax (`syntaxcheck`)
 
 - Run `syntaxcheck` on every touched `.bsl` module. No exceptions.
-- **Check the saved file, not pasted text.** The default form of this gate is `syntaxcheck_file`: save the module, then check it by path (optionally narrowed with `lines` to the edited procedure). Reading a module into the prompt only to paste its body back into `syntaxcheck` buys the same answer for the price of the whole module. Code text is the fallback for two cases only — the file tool is not exposed in this session, or the code has no file yet (a fragment just generated). A fragment checked as text still gets its Gate 1 evidence by path once it is written to the module: the gate is evidence about what will be loaded into the infobase, and that is the on-disk state.
-- Pass criterion: zero `error` items. `warning` items are reviewed in Gate 3.
+- **Check the saved file, not pasted text.** Run standalone `syntaxcheck` / `syntaxcheck_file` on every touched `.bsl` module. The default form is `syntaxcheck_file`: save the module, then check it by path (optionally narrowed with `lines` to the edited procedure). Reading a module into the prompt only to paste its body back into `syntaxcheck` buys the same answer for the price of the whole module. Code text is the fallback for two cases only — the file tool is not exposed in this session, or the code has no file yet (a fragment just generated). A fragment checked as text still gets its Gate 1 evidence by path once it is written to the module: the gate is evidence about what will be loaded into the infobase, and that is the on-disk state.
+- Pass criterion: zero `error` items. Triage `warning` items; use Gate 3 when selected, otherwise review them against the local rule and report any unresolved warning. A Code Checker syntax section cannot close Gate 1.
 - **What a clean pass proves depends on `provenance.index`.** Without a full-configuration index — `absent`, `building` or `failed`, and *any* text-mode `syntaxcheck` call, which the index never answers — the server keeps `UnresolvedMethodCall`, `UnresolvedField` and `QueryToMissingMetadata` switched off, so the gate is evidence for syntax and local rules only and cross-module resolution stays an open question for Gate 4 and a configuration-level test. On a `syntaxcheck_file` call answered with `index: ready` those three checks are part of the evidence. **An index-less server passes Gate 1 exactly as before** — the mode is an optional addition, its absence is the ordinary state, not a validator failure and not a graceful-degradation case (the validator *is* exposed), so it needs no Risk line. `building` is likewise read, never waited for: indexing a configuration runs for hours while the container keeps answering, so never hold a check or a delivery for it. Read the field in the answer you actually got; never infer the mode from a container name, and never restart or reconfigure the container to obtain it — that is an operator decision. Detail — `content/skills/mcp-1c-tools/docs/1c-syntax-checker-mcp.md → Validation boundary`.
-- Retry budget — `verification-policy.md → Validator budget`: an `error` is blocking; after the fix obtain a clean confirming run on the changed module within that budget, otherwise Gate 1 fails. Gates 2 and 3 use the same policy with their own blocking severities.
+- Retry policy — `verification-policy.md → Validator budget`: an `error` is blocking; after the fix obtain a clean confirming run on the changed module. Default checkpoints do not block necessary confirmation or require a numeric-budget question; missing current evidence leaves Gate 1 unverified. Gates 2 and 3 use the same policy with their own blocking severities and explicit user limits.
 
-### Gate 2 — Logic & performance (`check_1c_code`)
+### Gate 2 — Logic & performance (`check_1c_logic` / `check_1c_code`)
 
-- Run on every touched module. Always after Gate 1 passes — never before, otherwise the AI checker drowns in syntax noise.
-- Pass criterion: no `critical` or `error` severity items.
-- `warning` items: triage. Inside-scope warnings (introduced by your change) — fix. Pre-existing warnings outside your scope — leave alone (Surgical Changes).
-- AI non-determinism rule: if `check_1c_code` returns inconsistent results across runs on the **same** code, do not loop on it. Take the strictest result, fix what is fixable, document the rest.
+- When selected by `verification-policy.md` for the active depth and task path, run on every touched module after Gate 1 passes — never before, otherwise the AI checker drowns in syntax noise. Prefer `check_1c_logic` when it is exposed; use the upstream-compatible `check_1c_code` fallback when it is not. Both occupy the same Gate 2 slot and retry budget. Read the exposed schema for `check_1c_logic` instead of guessing an argument name; `check_1c_code` accepts exactly one of `code` or `files`.
+- Pass criterion: no assessed applicable blockers under `verification-ai-evidence.md`; retain provider severity separately. Report adjudicated findings as such, not as a clean tool response.
+- `warning` items: assess source applicability and evidence first. Fix confirmed inside-scope defects; style suggestions and unsupported claims do not force edits. Pre-existing warnings outside your scope — leave alone (Surgical Changes), retaining material risks under the evidence policy.
+- AI non-determinism rule: if either Gate 2 provider returns inconsistent results across runs on the **same** code, do not loop on it. Preserve and assess each response under `verification-ai-evidence.md`; take the strictest substantiated unresolved result, fix what is fixable, and document the rest. An unusable response has only the bounded recovery described there.
 
 ### Gate 3 — Style & ITS compliance (`review_1c_code`)
 
-- Run on every touched module after Gate 2 passes.
-- Pass criterion: no `error` severity items.
+- When selected by the same depth matrix, run on every touched module after the last earlier selected gate passes. An explicit Gate 3 request at `lite` does not force an otherwise unselected Gate 2.
+- Pass criterion: no assessed applicable blockers under `verification-ai-evidence.md`, not merely absence of provider-labelled `error`.
 - `warning` items: same triage rule as Gate 2.
 - For specific warnings that are intentional and justified: add a `//BSLLS:<rule>` suppression with a 1-line explanation, per `standards(name="dev-standards-code-style") → "Formatting"`. Blanket suppressions without justification are forbidden.
 
-### Graceful degradation for Gates 1–3 — when a validator is not exposed
+### Graceful degradation for Gates 1–3
 
 Apply `TOOL_SYNTAX` / `TOOL_CHECKER` (`content/rules/mcp-policy.md → Tool availability`) at the active depth. An unavailable `required` validator blocks its gate. For `auto` absence/failure or `off`, use the compensation below and report the actual reason; policy never produces a passing verdict:
 
@@ -70,27 +78,29 @@ Apply `TOOL_SYNTAX` / `TOOL_CHECKER` (`content/rules/mcp-policy.md → Tool avai
    - **Quick-fix** — correctness and edge cases of the changed fragment; plus locks / transactions when the edit sits near transactional code. That is enough — do not run the full checklist on a 10-line fix.
    - **Full-cycle** — the full list: style, readability, correctness, edge cases, security, concurrency / locks / transactions, BSL-LS compliance.
    - Always consider whether an external transaction already exists (e.g. an object-write transaction) before opening a new one.
-   - Findings follow `verification-policy.md → Validator budget` (a blocking defect needs a clean confirming run on the changed state; style noise does not start another loop; budget exhausted = unverified).
+   - Findings follow `verification-ai-evidence.md → Assess substantive findings` and `Confirm a correction`: a confirmed defect remains blocking until corrected and freshly confirmed; style noise does not start another loop. For AI timeouts/failed validation, use its policy-dependent continuation without duplicate execution.
 3. `auto`/`off` allow delivery with these limitations; `required` leaves the dependent verification incomplete. A transactional / metadata / public-API change without Gate 2 needs a follow-up validation run.
 
 Skipping a gate without recording it under Risks is a defect — the same rule as Gate 4's graceful degradation below.
 
-### Gate 3a — Live-IB smoke check (conditional, `1c-data-mcp`)
+### Gate 3a — Live-IB smoke check (conditional, qualified data provider)
 
-Gate 3a supplies narrowly scoped evidence from a dev/test infobase. When eligible `1c-data-mcp` tools are available, the agent selects focused behavioural checks needed to resolve a concrete correctness question; UI policy, verification depth and orchestration do not disable them. Distinguish **query parsing**, **metadata resolution**, and **result correctness**: these are separate checks. A clean `vcvalidatequery` result proves parsing only; it does not close the metadata or result questions left by static validation.
+Gate 3a supplies narrowly scoped evidence from a dev/test infobase. When eligible `1c-data-mcp` tools or a qualified ITL branch-local ROCTUP read-only query capability are available, the agent selects focused behavioural checks needed to resolve a concrete correctness question; UI policy, verification depth and orchestration do not disable them. Distinguish **query parsing**, **metadata resolution**, and **result correctness**: these are separate checks. A clean `vcvalidatequery` / legacy `validatequery` result proves parsing only; it does not close the metadata or result questions left by static validation. ROCTUP is equivalent only for the exact check its exposed capability actually performs, not for every `1c-data-mcp` operation.
 
 **Triggers — run when all of the following hold:**
 
 1. The change authored or modified 1C **query text** (module code, DCS scheme, dynamic list), a self-contained side-effect-free BSL function whose result the static validators cannot confirm, **or** the agent identifies a concrete behavioural result / boundary case requiring a read-only check. State the expected outcome before execution; do not add unrelated test runs.
-2. The required `1c-data-mcp` capability is exposed in this session and allowed by tool policy (`vcvalidatequery`, `vcexecutequery` or `vcexecutecode`, as applicable).
+2. `TOOL_DATA` permits the provider and the required capability is exposed in this session: `1c-data-mcp` (`vcvalidatequery` / legacy `validatequery`, `vcexecutequery` or `vcexecutecode`, as applicable), or the managed `itl-roctup-data` facade (`get_metadata` / bounded `execute_query` for a query check). `TOOL_DATA=off` excludes both providers; `required` without an eligible provider leaves the dependent check blocked.
 3. The connected infobase is a development / test base (`INFOBASE_ROLE`). **On a production infobase this gate is not run** — record the skip and move on.
 
 **Execution:**
 
-- **Query parsing → `vcvalidatequery`.** Pass criterion: `"нет ошибок"`. This parses the query and discovers parameter names; it does **not** execute it, verify that tables / fields exist, check parameter values or evaluate RLS (`content/skills/mcp-1c-tools/docs/1c-data-mcp.md`).
-- **Metadata references / runtime resolution.** Reuse current metadata lookups to confirm referenced tables, fields and types; those lookups alone do not prove the whole query resolves at runtime. If runtime resolution is the open question, use a bounded read-only `vcexecutequery` against a dev/test IB with the relevant current metadata / extensions and representative safe parameter values; record that state and the technical user's rights. A successful run proves resolution only for that tested query and context.
-- **Result correctness → expected-value comparison.** For a query, compare returned rows / values against the stated scenario; for a pure function use a **read-only** `vcexecutecode` fragment returning the value via `Результат`. `"ошибок нет"` without an expected-value comparison proves absence of a runtime exception only. A run under the technical user does not prove RLS behaviour for other users.
+- **Query parsing → the exposed provider-specific parse tool (`vcvalidatequery` or legacy `validatequery`).** Read its actual schema and result contract; a successful parsing verdict, such as `"нет ошибок"` in the legacy response, proves only parsing. This parses the query and discovers parameter names; it does **not** execute it, verify that tables / fields exist, check parameter values or evaluate RLS (`content/skills/mcp-1c-tools/docs/1c-data-mcp.md`).
+- In a managed branch prefer its qualified, bounded ROCTUP query route when it can answer the current question; use the legacy web provider when ROCTUP is unavailable or explicitly required. ROCTUP `execute_query` has no separate parsing-tool verdict. A successful empty result is not an error; distinguish the provider's error response from zero rows.
+- **Metadata references / runtime resolution.** Reuse current metadata lookups to confirm referenced tables, fields and types; those lookups alone do not prove the whole query resolves at runtime. If runtime resolution is the open question, use a bounded read-only `vcexecutequery` or qualified ROCTUP `execute_query` against the exact dev/test IB with the relevant current metadata / extensions and representative safe parameter values. For ROCTUP, first narrow objects with `get_metadata` and follow the installed `itl-roctup-1c-data` skill's limits and facade route. A successful run proves resolution only for that tested query and context.
+- **Result correctness → expected-value comparison.** For a query, compare returned rows / values against the stated scenario, including when ROCTUP `execute_query` is used; for a pure function use a **read-only** `vcexecutecode` fragment returning the value via `Результат`. ROCTUP `execute_code` is not an automatic substitute: it requires the user's explicit request for that exact operation under the installed skill and a separate verified side-effect boundary. Unknown side effects leave the pure-function check unverified. `"ошибок нет"` without an expected-value comparison proves absence of a runtime exception only. A run under the technical user does not prove RLS behaviour for other users.
 - **Mutations are out of scope for this gate.** No `Записать()` / `Удалить()` / `НачатьТранзакцию` / register movements — the read-only discipline and the consent rules of `content/skills/mcp-1c-tools/docs/1c-data-mcp.md → Safety and discipline` apply unchanged. If confirming the change requires a mutation, that is a task for `1c-tester` against a test base, not for this gate.
+- **Evidence and readiness.** Record exact branch/infobase target, provider and exposed capability identity, query/parameters or fragment, relevant loaded state, technical user's rights, expected outcome and actual result. ROCTUP `get_metadata` alone is metadata evidence, not a successful query or expected-value check. `ITL_INFOBASE_APPLICATION_NOT_READY` leaves the dependent check unverified with the supported helper continuation. Run a configuration-loading helper and retry only when that mutation for the exact target is already authorized; read permission never grants it.
 - **Budget:** one call per applicable tool / artifact state; run only the checks needed to close an open question. Re-run after a relevant artifact or test-state change only — the no-change-repeat rule (`mcp-policy.md → C.1`) applies.
 
 **Failure is blocking for the artifact,** the same as a Gate 1 `error`: fix the query / fragment and re-run once against the changed state.
@@ -135,6 +145,8 @@ When XML was edited:
 - **Execution-path check.** Metadata mutations (new objects, attributes, tabular sections, forms, layouts) must have gone through the `1c-metadata-manage` skill / `1c-metadata-manager` subagent — hard gate per `AGENTS.md → Skills and Subagents`. If hand edits were used, this gate passes only when the exception is one of those documented in `SKILL.md → Hard rule` **and** is stated in the delivery summary (`Metadata tooling: hand-edit — <exception>`); additionally cross-check `metadata-xml-workarounds.md` for the recurring traps (LineNumber, PagesGroupExtInfo, Page.enabled, UID uniqueness). Hand-edited metadata without a stated documented exception is a gate failure — the same class as a skipped validator.
 - For `Form.xml` edits: schema validity is necessary but not sufficient — whether the form loads cleanly is platform evidence. When the change reaches an infobase, Gate 6 (`/CheckConfig` on the loaded configuration) supplies it; otherwise record under **Risks**: *"Form load not verified on the platform — open `<form>` in Configurator / run `/CheckConfig` before release."* Never claim the form opens without that evidence.
 
+**Schema/input compatibility.** Retain the input path/hash, root expanded name (namespace + local name), selected object type, and returned schema or its identity with the raw validator reply. Before acting on diagnostics, check that the schema route covers this input shape. A different root/namespace or demonstrated missing generated coverage is a tooling gap: use only a documented compatible route, or report the exact gap to the schema owner. Never guess type aliases, rewrite valid input to fit an unrelated schema, suppress genuine diagnostics, or claim a pass. A matching root alone does not establish nested coverage. When compatibility is established, fix actual XML defects and confirm through `verify_xml`; local structural checks and native applicability evidence keep their own coverage and do not silently replace a required schema gate.
+
 **EDT-format sources (`USE_EDT=true`, MDO tree).** `verify_xml` does not apply to `*.mdo` / `*.form`. The equivalent evidence is EDT's own validation — `revalidate_objects` on the changed objects → `get_project_errors` / `get_problem_summary` — recorded in the delivery summary exactly as `verify_xml` evidence is. The execution-path check is unchanged in spirit: the mutation must have gone through EDT (EDT-MCP, the EDT UI, or a confirmed export/import round trip), and a hand-edited `*.mdo` is a gate failure with no documented exception. Canon — `content/rules/edt-workflow.md → Validation`. Gates 1–3 on BSL are unaffected: modules are plain `.bsl` in both formats. The same substitution applies to Gate 6 below: EDT's validation and `update_database` are that project's applicability evidence, and the batch ladder must not run as a second deployment owner in the same run.
 
 ### Gate 6 — Platform batch check (only when the change reaches an infobase)
@@ -144,7 +156,22 @@ Gates 1–5 read source. They cannot answer the question the platform answers: d
 1. **An extension is about to be applied** to an infobase — by `/deploy-and-test`, `/update1cbase`, `/restore-testbase`, `/build-release`, or a `db-ops` load. A `&Вместо` / `&ИзменениеИКонтроль` interceptor naming a method that no longer exists in the vendor original passes Gates 1–5 untouched: the source is well-formed and the XML is schema-valid. Only `/CheckCanApplyConfigurationExtensions` sees it.
 2. **The main configuration is about to be loaded and applied**, and the change touched metadata or module code that the MCP validators did not cover (a whole-snapshot deploy, a large refactor, a release build).
 
+In a managed ITL project, the existing load/check/apply helper owns this trigger.
+A small partial CF quick-fix with complete current saved-input/raw MCP validation
+coverage does not automatically select the full ladder. Coverage must match every
+relevant saved BSL/XML input, the current artifact and target, and the actual
+provider/capability identity. Full, unknown, deleted, uncovered or stale inputs
+retain the platform route. A generic successful test
+receipt or an agent's declared `passed` is not MCP coverage. Supply the exact
+operation-local evidence through the helper's verification-evidence input; do
+not create a second loader or edit managed runtime state to bypass the check.
+
 Execution and pass criterion — `content/rules/designer-batch-checks.md`: first bind the current artifact to the checked configuration, then the ladder (`/CheckModules` → `/CheckCanApplyConfigurationExtensions` → `/CheckConfig`), stop at the first failure, and the **three-signal verdict** (process exit code + `/DumpResult` + `/Out` diagnostics). Success phrases neutralize only their own fragment, never other diagnostics on the same line. Warnings fail this gate — `-WarningsAsErrors` will reject the same content at apply time.
+
+Only managed ITL main-CF structural findings may use the bound legacy continuation
+in `designer-batch-checks.md`. The helper retains native failure and reports the
+assessment explicitly; this is not a clean Gate 6 pass. Compilation and extension
+applicability remain blocking, including warnings.
 
 Evidence includes the artifact fingerprint and source-to-IB match, target configuration / extension,
 platform / modes, process exit code, log path and `/DumpResult` code. Reuse it only while the

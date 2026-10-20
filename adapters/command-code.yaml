@@ -70,3 +70,6 @@ mcp:
   target: ".mcp.json"
   schema: mcpServers-claude
   format: json
+  merge: true
+  mergeKey: mcpServers
+  mergeServers: true

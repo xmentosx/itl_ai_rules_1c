@@ -31,6 +31,18 @@ class WebError(Exception):
         self.code = code
 
 
+def assert_itl_lifecycle_ownership(operation):
+    """Leave managed publication and process state with the ITL host helper."""
+    for start in (Path.cwd(), Path(__file__).resolve().parent):
+        for root in (start, *start.parents):
+            if (root / '.agent-1c' / 'project.json').is_file():
+                raise WebError(
+                    f"ITL_LIFECYCLE_HELPER_REQUIRED: web-{operation}.py cannot run directly "
+                    f"inside managed ITL project '{root}'. Use the matching /itl* bridge "
+                    "or host lifecycle helper.", 2
+                )
+
+
 def require(condition, message, code=2):
     if not condition:
         raise WebError(message, code)
@@ -595,6 +607,8 @@ def main(operation, argv=None):
         parser.add_argument("-Force", "--force", dest="Force", action="store_true")
     args = parser.parse_args(argv)
     try:
+        if operation in ('publish', 'unpublish', 'stop'):
+            assert_itl_lifecycle_ownership(operation)
         {"publish": publish, "info": info, "stop": stop, "unpublish": unpublish}[operation](args)
         return 0
     except WebError as error:

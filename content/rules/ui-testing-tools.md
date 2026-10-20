@@ -10,6 +10,16 @@ category: tooling
 
 Whether a UI check runs at all is gated by `UI_TESTING` — canon: `dev-standards-env.md → "UI_TESTING — UI-testing mode"`. This file answers **which route** drives the check once it is allowed, and the **mandatory preflight** before the first browser action.
 
+## Managed ITL route
+
+When `.agent-1c/project.json` exists, use the installed `itl-vanessa-ui-mcp` skill for the allowed interactive check on the proven current `itldev/*` branch infobase. It owns the exact target, call-scoped guard, client and cleanup; do not duplicate its launch or lease procedure. Check the important new or changed visible behaviour at `essential`, with an expected/actual trace. Policy alone authorizes neither deployment nor a repeated test-fix loop. A broader no-UI instruction takes precedence; a named invocation override remains one-off.
+
+`TOOL_QA=required` specifically requires the physical `1c-qa` provider. Vanessa does not satisfy it. Standalone QA client launch/attachment, its processor installation and `qa-testclient.ps1` are not integrated into the ITL guards; leave that dependent route unverified with this prerequisite. Do not auto-install a service, start a second client, or bypass the helper to obtain it. Otherwise follow the managed Vanessa skill and effective provider policy. An unavailable allowed route leaves automatic criteria unverified; an explicitly permitted named run blocks only on its missing prerequisite while independent work continues.
+
+Saved Vanessa suites are separate: `ITL_VANESSA_TESTING` and the helper own their execution and final evidence, including when their stored mode is off. `UI_TESTING=essential` does not enable them, and `manual` does not disable them. Interactive UI evidence never substitutes for the fresh final helper assessment.
+
+The route order below applies to projects without managed ITL state.
+
 ## Route order (hard)
 
 1. **QA MCP (`1c-qa`)** — the main route for checks in the 1C interface. It drives the thin client's forms through the platform testing model and reads structured state. Eligible when `TOOL_QA` is not `off` and its `qa_*` / `ui_*` tools are exposed; it needs the project infobase (`INFOBASE_PATH`, `INFOBASE_ROLE`), not a web publication. Load `content/skills/1c-qa-testing/SKILL.md` and `content/rules/qa-testclient.md` (starting the test client, visible / hidden window, screenshots, data confirmation).

@@ -5,6 +5,8 @@ description: "1C configuration repository (хранилище) — status, histo
 
 # 1C Repository Manage — Configuration Repository Skill
 
+In a managed ITL project (`.agent-1c/project.json` exists), repository synchronization and locks are owned by the host workflow. Stop this standalone skill route and use the matching `/itl*` operation or host lifecycle helper, preserving its proven branch infobase and lock state. `repo-ops.ps1` refuses direct use in that scope with `ITL_LIFECYCLE_HELPER_REQUIRED`; an unsupported operation is reported with the host continuation, never rebuilt as an ad-hoc Designer call. The standalone procedure below applies only without managed ITL state.
+
 Use this skill when the project's configuration is **bound to a 1C configuration repository (хранилище конфигурации)** or the task explicitly concerns one.
 
 ## Activation — the master switch

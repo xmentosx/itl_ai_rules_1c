@@ -68,13 +68,16 @@ function Run-Case([string]$Name, [scriptblock]$Body) {
 $work = Join-Path $env:TEMP ("1c-rules-mp-" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
 try {
-    Run-Case 'source walks up to this checkout' {
+    Run-Case 'explicit init resolves this checkout while ensure stays read-only' {
         $oneC = Join-Path $work 'cf-project'
         New-Item -ItemType Directory -Path $oneC | Out-Null
         Set-Content -LiteralPath (Join-Path $oneC 'Configuration.xml') -Value '<MetaDataObject/>' -Encoding ASCII
-        $plan = Read-Plan -Command ensure -Tool cursor -ProjectRoot $oneC
-        Assert-Eq $plan.action 'init' 'expected first-install init'
-        Assert-Eq $plan.reason 'first-install' 'reason'
+        $ensure = Read-Plan -Command ensure -Tool cursor -ProjectRoot $oneC
+        Assert-Eq $ensure.action 'skip' 'session ensure must not install'
+        Assert-Eq $ensure.reason 'explicit-install-required' 'ensure reason'
+        $plan = Read-Plan -Command init -Tool cursor -ProjectRoot $oneC
+        Assert-Eq $plan.action 'init' 'explicit first install'
+        Assert-Eq $plan.reason 'explicit' 'init reason'
         $sourceNorm = [System.IO.Path]::GetFullPath($plan.source).TrimEnd('\', '/').ToLowerInvariant()
         $repoNorm = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\', '/').ToLowerInvariant()
         Assert-Eq $sourceNorm $repoNorm 'source should be the repo root'
@@ -106,14 +109,17 @@ try {
         Assert-Eq $plan.reason 'already-installed' 'already installed reason'
     }
 
-    Run-Case 'missing host tool becomes add' {
+    Run-Case 'missing host tool requires explicit add' {
         $proj = Join-Path $work 'add-tool'
         New-Item -ItemType Directory -Path $proj | Out-Null
         Set-Content -LiteralPath (Join-Path $proj 'Configuration.xml') -Value '<MetaDataObject/>' -Encoding ASCII
         Set-Content -LiteralPath (Join-Path $proj '.ai-rules.json') -Value '{"tools":["claude-code"]}' -Encoding ASCII
-        $plan = Read-Plan -Command ensure -Tool cursor -ProjectRoot $proj
+        $ensure = Read-Plan -Command ensure -Tool cursor -ProjectRoot $proj
+        Assert-Eq $ensure.action 'skip' 'session ensure must not attach a client'
+        Assert-Eq $ensure.reason 'explicit-client-add-required' 'ensure reason'
+        $plan = Read-Plan -Command add -Tool cursor -ProjectRoot $proj
         Assert-Eq $plan.action 'add' 'should add cursor'
-        Assert-Eq $plan.reason 'missing-tool' 'add reason'
+        Assert-Eq $plan.reason 'explicit' 'add reason'
         Assert-Eq $plan.tool 'cursor' 'tool id'
     }
 

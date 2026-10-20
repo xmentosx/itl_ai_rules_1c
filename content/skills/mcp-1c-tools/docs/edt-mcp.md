@@ -4,6 +4,8 @@ Live access to a running **1C:EDT** instance and its workspace: the in-memory mo
 
 > Load this file only when the project uses EDT (`.dev.env` `USE_EDT=true`) **and** EDT-MCP tools are actually exposed in the current session. A client-config entry or a responding `/health` endpoint proves the plugin, not the session. Process rules for EDT projects — `content/rules/edt-workflow.md`; this file is the server-side catalog.
 
+In a managed ITL project, apply `edt-workflow.md → Managed ITL boundary` before enabling or calling mutating EDT tools. A live EDT workspace is not authority to bypass the registered worktree, branch infobase, helper locks or recovery.
+
 This server is **conditional**, unlike the 1C MCP bundle: it exists only on a workstation where EDT is installed, running, and holding the project workspace. A closed EDT means the tools disappear, not that the project changed.
 
 ## Parameters — ask the server, not this file

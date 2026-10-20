@@ -1,4 +1,7 @@
 # OpenSpec project configuration.
+# Keep a real mapping key: OpenSpec 1.13.1 warns when this file contains only comments.
+schema: spec-driven
+
 # Optional in OpenSpec v1.0+. Provides project-wide context to AI assistants
 # when working with specs and change proposals.
 #

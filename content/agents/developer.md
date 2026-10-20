@@ -38,7 +38,7 @@ Handoff in / out — `content/rules/subagent-core.md → Handoff in / out (imple
 4. Metadata facts and attribute types — `get_object_dossier` / `get_metadata_details`; available members of a context — `bsl_scope_members`.
 5. Before designing a specialized capability (crypto, СЛАУ, data analysis, bus, bots, …) — `content/skills/mcp-1c-tools/docs/1C-docs-mcp.md → "Platform capability discovery"`; БСП reuse — `ssl_search`.
 6. Still unclear — ask (inherited `CONFUSION`); otherwise design with DRY and the project rules, then write the code.
-7. Validate every touched module with the gates selected by `content/rules/verification-policy.md`, in `syntaxcheck` → `check_1c_code` → `review_1c_code` order; use that policy's depth, promotion floor and retry budget.
+7. Validate every touched module with the gates selected by `content/rules/verification-policy.md`, in standalone syntax → preferred logic/fallback → review order; use that policy's depth, promotion floor and retry budget.
 8. When callers, metadata or forms are affected — `trace_call_chain` for routine callers, `trace_impact` / `graph_dependencies` for object dependencies.
 9. Internal review (`standards(name="dev-standards-code-style") §8`), fix, and report in the structure below.
 
@@ -46,7 +46,7 @@ Handoff in / out — `content/rules/subagent-core.md → Handoff in / out (imple
 
 Role-specific, on top of the inherited scope rules and the ordered hard gates of `content/rules/verification-gates.md`:
 
-- [ ] `syntaxcheck` passes on every touched module; applicable `check_1c_code` / `review_1c_code` gates ran within the selected budget and substantive findings are fixed
+- [ ] standalone `syntaxcheck` passes on every touched module; selected Gate 2 (preferred logic/fallback) and Gate 3 ran within the budget, or were recorded as not applicable; substantive findings are fixed
 - [ ] Imports, variables, and procedures that **your** changes made unused are removed (pre-existing dead code untouched)
 - [ ] Module regions, headers, and project code style (`standards(name="dev-standards-code-style")`) are preserved
 - [ ] Impact on callers / metadata / forms was considered when the change is more than a local edit
@@ -67,7 +67,7 @@ Role-specific, on top of the inherited scope rules and the ordered hard gates of
 
 ## Validators
 
-| Artifact | syntaxcheck | check_1c_code | review_1c_code |
+| Artifact | syntaxcheck | Gate 2 provider | review_1c_code |
 |----------|-------------|---------------|----------------|
 | `path/Module.bsl` | [result, N runs] | [result, N runs] | [result, N runs] |
 

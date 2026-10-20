@@ -1,0 +1,61 @@
+# Downstream requirement ledger — `c1fb8e6` candidate
+
+This candidate is rebuilt directly from audited upstream commit
+`c1fb8e687be5b9d71d5a05c6f5d32cf6a6919dcb`. It preserves the reviewed downstream
+requirements from the preceding `20a083e5` adaptation at
+`9ec86f75343ba4eded66e2085f097ff4baab7d67`, with each intersecting upstream
+change reviewed separately. The installed release baseline remains
+`itl-main-410951e7-r36` at `451c5a52e5b614c67406445d4af4b636da043aec`.
+No earlier downstream branch is merged or rebased onto the intake. A candidate
+and its focused checks are not a published release or live-client qualification;
+downstream release revisions remain globally monotonic.
+
+The workflow schema-3 path ledger maps every upstream or downstream path to one
+requirement below and pins upstream, baseline, and result SHA-256 values. An
+unchanged `carry-forward` path remains byte-equivalent to its qualified baseline; any changed
+path requires an explicit reviewed `resolved` decision.
+
+| ID | Decision | Current treatment | Verification |
+|---|---|---|---|
+| ITL-FORM-COMMAND-ADVISORY-001 | `rewrite` | Report absent/empty command Action as advisory; prohibit mandatory repair and dummy handlers/bindings. Retain structural errors and user-visible diagnostics, including blocking invalid Representation with a one-error budget. | `FormCommandAdvisory.Tests.ps1`, `MetadataWriterContracts.Tests.ps1`, host lifecycle warning propagation, real PM5 form replay |
+| ITL-INFRA-001 | `keep` | Preserve fork policy, local Full gate, exact qualification record, immutable publication tooling, and whitespace validation of the complete upstream-to-release diff. | `ReleaseTooling.Tests.ps1`, Full gate |
+| ITL-INFRA-002 | `keep` | Require an immutable upstream ref/SHA and atomic release branch/tag publication. | publish `-WhatIf`, ancestry checks |
+| ITL-INFRA-003 | `keep` | On pushed releases, fast-forward `origin/main` to the audited upstream snapshot in the same atomic push as the immutable release branch/tag. | `ReleaseTooling.Tests.ps1`, remote ancestry preflight |
+| ITL-INSTALL-001 | `rewrite` | Preserve installer protocol `1.1`, complete pre-write plan, rollback-friendly ownership, and root-boundary checks. Adopt upstream preservation of root and `.opencode` `opencode.json`/`opencode.jsonc` as project-owned configuration: retain exact bytes and retire legacy installer ownership. Host MCP reading/writing of multiple layers has its separate architecture checkpoint. | installer/layout tests and upstream OpenCode preservation tests |
+| ITL-INSTALL-ENTRY-001 | `rewrite` | Retain clean adapter entry files such as `CLAUDE.md` while rebuilding the update manifest, preventing a pristine first update from being mislabeled `userModified`. | Claude init/update byte-idempotence regression |
+| ITL-INSTALL-REMOVE-001 | `rewrite` | Map Kilo cleanup to `.kilo` plus legacy `.kilocode` without executing the upstream orphan `else`; preserve non-empty RTK-owned `.kilocode/rules`. | full Kilo remove regression |
+| ITL-INSTALL-DEVENV-001 | `rewrite` | Treat the root `.dev.env` as project-owned runtime state: never delete it during full or client-scoped removal, and normalize legacy manifest entries without changing dotenv bytes or recorded drift. | legacy full/scoped remove and metadata-backfill regressions |
+| ITL-MANIFEST-001 | `rewrite` | Record the exact attached client set and per-client ownership. Preserve other attached clients and shared surfaces during add, update and scoped removal; reconcile the final placement set before writes. In managed projects the host owns client attachment and target selection. | multi-client final-set, add/update/remove and ownership tests |
+| ITL-ADAPTER-002 | `rewrite` | Kimi, Qwen, Command Code, Cline, Pi, ZCode and MiMo Code use current project-local surfaces; preserve provider-specific MCP shapes, user entries and read-only role restrictions. Cline project MCP and pinned Pi MCP extension override stale upstream assumptions. | registered adapter layout, merge, ownership and runtime tests |
+| ITL-LAYOUT-OLD-001 | `drop` | Do not replay the old shared Codex+Kilo layout or old `.kilocode` layout patches. Use each current native adapter. | real-path inventory tests |
+| ITL-CODEX-001 | `rewrite` | Codex commands and OpenSpec skills are project-local `.agents/skills`; never write `~/.codex/prompts`. | Codex inventory and user-scope guard |
+| ITL-CODEX-OPSX-001 | `rewrite` | Keep all six upstream `openspec-*` phases canonical. Codex uses project-local `.agents/skills` without duplicate legacy `opsx-*` skills; other clients retain their native command/skill surfaces. Retire only unchanged owned legacy artifacts and preserve modified copies. Repairs retain input EOL and UTF-8 BOM; a no-op retains exact bytes. Untracked or user-modified copies are not taken over through `Force`. | six-phase inventory, legacy retirement, LF/CRLF with/without BOM repair/no-op, ownership and overlay idempotence tests |
+| ITL-KILO-001 | `rewrite` | Use `.kilo` native paths, inject `USER-RULES.md` through `.kilo/kilo.json`, and block adjacent `.kilo/kilo.jsonc`. | Kilo config tests |
+| ITL-ADAPTER-001 | `rewrite` | Preserve each registered client's native layout, including OpenCode singular `agent/command`, and multi-client canonical shared placement. Installed ITL projects attach only host-supported clients through the existing lifecycle owner. | registered client and multi-client adapter matrices |
+| ITL-CONTEXT-001 | `keep` | Preserve the compact router and on-demand detail. | context/link tests |
+| ITL-MCP-002 | `keep` | Preserve delegated MCP ownership and required/optional server handling; route branch-delta source to the worktree first while keeping untouched baseline search bounded MCP-first. | delegated MCP and search-routing tests |
+| ITL-OPENSPEC-001 | `rewrite` | Use the project-pinned OpenSpec CLI `1.13.1` and all six canonical phases. Resolve the host local context and exact runtime before managed artifact operations; preserve an existing approved plan and fresh-check contract. External storage remains explicitly deferred. Caveman changes working commentary only, retaining complete artifacts, safety, checks and reports. | native overlay, six-phase/local-context and natural-contract tests |
+| ITL-GRILLING-001 | `rewrite` | Add the Matt Pocock grilling, explicit grill-me, docs-writing grill-with-docs, and domain-modeling family; preserve frontier rounds and inline glossary/ADR capture while routing facts through project evidence and handing implementation planning back to direct/OpenSpec. | `GrillingSkills.Tests.ps1` and registered client layout tests |
+| ITL-QUICKFIX-001 | `rewrite` | Keep `QUICKFIX_MAX_LINES=40`; apply upstream quick-fix/full-cycle classification exactly; keep full-cycle direct by default and select OpenSpec only for explicit or value-adding formal agreement; keep final evidence governed by effective ITL modes. | `R8Policy.Tests.ps1` and workflow overlay/docs tests |
+| ITL-COMMANDS-001 | `rewrite` | Publish the explicit allowlist, suppress four generic MCP/update commands, and route the four legacy 1C commands through ITL state reconciliation. | command-surface tests |
+| ITL-VERIFY-001 | `rewrite` | Adopt upstream `UI_TESTING=essential` default and important-behavior UI criteria. Host ITL owns independent saved Vanessa/event-log modes and fresh-check/partial-evidence semantics. `essential` uses the qualified managed UI route; it does not start the optional scenario repair loop. Preserve named one-off overrides without changing persistent settings, and respect a wider explicit no-UI restriction. Physical `TOOL_QA=required` is not satisfied by Vanessa. | `R8Policy.Tests.ps1`, `QaManagedRoute.Tests.ps1`, workflow mode matrix; live UI/provider qualification is separate |
+| ITL-ECONOMY-001 | `rewrite` | Keep upstream orchestration with independent `modelTiersByClient` maps, coding-tier authorship and the explicit analysis-model reviewer gate. Empty tiers inherit the executing client's default; another client's legacy ids never supply a new map. Re-render through the pinned owner and retain host-generated routine agents. | economy/model-tier, multi-client and reviewer-gate contract tests |
+| ITL-DOCTOR-001 | `rewrite` | Restore `/doctor` as a read-only command whose ITL checks are script-owned. | read-only policy tests |
+| ITL-EVOLVE-001 | `rewrite` | Restore `/evolve` with per-entry approval, `USER-RULES` precedence, protected ITL gates, and rollback ownership. | evolve policy tests |
+| ITL-CAVEMAN-001 | `rewrite` | Adopt upstream `CAVEMAN=on|auto|off` with empty/invalid default `auto` and session level `full`. Session force takes precedence; levels remain session-only. Explicit project commands edit only `CAVEMAN` in an existing dotenv and do not recreate a missing file. Preserve Caveman integration in planning phases without shortening evidence or artifacts. | Caveman default/session/persistence-scope, planning integration and policy tests |
+| ITL-METADATA-001 | `rewrite` | Preserve metadata safety, transactional form/template tools, UUID and Template verification, and supported extension load paths. Propagate the real `cf-edit` validator exit code; align compiler button/command property order and representation aliases with upstream while retaining existing common flags and layout behavior. Accept upstream web extension-publication defaults behind the existing lifecycle guard. | `WorkflowHardening.Tests.ps1`, `MetadataWriterContracts.Tests.ps1`, retained metadata/UUID/form/web regressions; platform load acceptance is separate |
+| ITL-FORM-ROUTING-001 | `rewrite` | Treat structural edits of an existing `Form.xml` as specialized-tool work whenever `1c-form-edit` supports the operation; retain manual XML only for literal corrections and unsupported repairs with an explicit reason. Drop this delta when upstream adopts an equivalent operation-based rule. | `R8Policy.Tests.ps1`, workflow overlay contract |
+| ITL-UPSTREAM-ANCHORS-001 | `rewrite` | Keep the compact root contract while exposing the exact upstream cross-reference anchors `Skills and Subagents`, `A.7`, `A.8`, and `A.9`. | `R8Policy.Tests.ps1`, workflow overlay tests |
+| ITL-LIFECYCLE-DB-001 | `rewrite` | In projects marked by `.agent-1c/project.json`, fail direct DB, mutating web and QA test-client scripts with `ITL_LIFECYCLE_HELPER_REQUIRED` before process or state changes; use the existing host lifecycle/UI owner. Outside managed projects retain upstream behavior. | `ItlLifecycleGuard.Tests.ps1`, `QaManagedRoute.Tests.ps1` |
+| ITL-RETRY-001 | `rewrite` | Keep `/update1cbase` and `/deploy-and-test` as host-helper bridges while preserving the addressable upstream `Update retry loop` contract. | `R8Policy.Tests.ps1`, bridge policy tests |
+| ITL-CLAUDE-MIGRATION-001 | `rewrite` | Install Claude on-demand rules under `.claude/rules-1c`; remove clean managed legacy copies and preserve modified copies through `legacyArtifacts.preservedProject`. | installer and layout tests |
+| ITL-MEMORY-001 | `rewrite` | In managed ITL projects retain project-root memory and project-scoped Templates MCP; Cognee/OpenViking require a separately qualified project-scoped integration. Adopt upstream provider selection outside managed projects, preserving eligibility, fallback and `Captured during work` behavior. | layout/policy tests |
+
+| ITL-AI-REVIEW-EVIDENCE-001 | `rewrite` | Preserve exact AI evidence, allow one in-budget unsupported-result recovery, and distinguish mechanically disproven findings from unresolved claims and authorized risk decisions. No fabricated clean pass, harmful appeasement edit or waiver of other gates. | ValidatorExecutionPolicy tests and real single-client installation coverage; retained branch11 case assessment remains required |
+
+Upstream additions retained without a downstream replacement include the
+`verification-*` rules, development process, project memory, `LLM-RULES.md`,
+economy/lite/CAVEMAN surfaces, template/platform discovery rules, EPF tools,
+and the common platform executable resolver. `USER-RULES.md` and ITL
+lifecycle/safety gates take precedence over project-local `LLM-RULES.md`;
+only explicit `/evolve` may change that file, one approved entry at a time.

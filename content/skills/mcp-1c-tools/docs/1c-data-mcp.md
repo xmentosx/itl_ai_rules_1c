@@ -1,4 +1,14 @@
-# 1c-data-mcp — tool catalog
+# Live infobase data — provider routing and 1c-data-mcp catalog
+
+## Select the actual provider
+
+In an ITL-managed `itldev/*` branch, prefer the callable `itl-roctup-data` facade and `.agents/skills/itl-roctup-1c-data/SKILL.md`. It owns the exact branch/infobase scope, call-scoped guard, attachment and owned cleanup; do not launch its backend or call private HTTP directly. Start with filtered `get_metadata`, then bounded read-only `execute_query` (default limit at most 100). Use the known inner name with `call_tool` and only intended fields in `argumentsJson`; use `resolve_tool` only for an unknown name/schema. A configured entry alone is not callability. Do not publish a branch merely to gain query access.
+
+Use the legacy web Branch Data MCP only when ROCTUP is unavailable or this task explicitly needs the intentionally published channel. Inspect the actual exposed schema: the ITL XML provider exposes `validatequery`; the newer HTTP provider exposes `vcvalidatequery`. Never rename a callable legacy tool or supply guessed argument names. The catalog below describes the HTTP provider's `querytext` / `bslcode` contract; a provider's actual schema wins. A ROCTUP `execute_query` result is execution evidence, never a separate parser pass. Record the exact dev/test target, provider, query/parameter scope, expected result and observed result; metadata lookup alone proves neither execution nor correctness. Distinguish a tool/query error from a successful empty result, and report an ambiguous empty answer as unverified.
+
+The same `TOOL_DATA` policy applies to both routes. Query authorization does not authorize `execute_code`, restart, writes or raw lifecycle operations. Current managed scope and recovery remain with the ITL skill; HTTP publication/setup is a separate explicitly authorized lifecycle action.
+
+## HTTP provider
 
 Execution of BSL code, queries and event-log inspection **inside the project's live infobase** via the HTTP service `hs/mcp` published on that infobase (tools from [comol/mcp_designer_tools](https://github.com/comol/mcp_designer_tools), loaded into the *Конструктор MCP серверов для 1С* on the IB side).
 
@@ -20,7 +30,7 @@ Argument names are exactly `querytext` and `bslcode`. OneMCP from 01.10.2026 ref
 Use these tools **only** when the answer must come from the live infobase — i.e. the verification cannot be done by reading the configuration dump, by static MCP analyzers, or by platform / БСП docs:
 
 - "Does this BSL fragment actually run in this IB right now?" → `vcexecutecode`.
-- "Does this query parse?" — quick smoke test → `vcvalidatequery`.
+- "Does this query parse?" — quick smoke test → the actually exposed `validatequery` / `vcvalidatequery` parser; do not infer parsing from another tool's execution.
 - "Does this query return what I think it returns against current data?" → `vcexecutequery`.
 - "What error did the IB log for that failing scenario I just reproduced?" → `vcloggetlasterror`.
 
@@ -32,10 +42,10 @@ Do **not** use `1c-data-mcp` as a replacement for `syntaxcheck` / `check_1c_code
 
 `vcexecutecode` and `vcexecutequery` run arbitrary code and queries against the **connected infobase** with whatever rights the technical IB user from `default.vrd` has. Treat every call as a write-capable action and obey the following:
 
-- **Read-only first.** Default to `vcvalidatequery` → `vcexecutequery` for queries; default to a non-mutating fragment for `vcexecutecode` (`ЗначениеЗаполнено`, `ПолучитьФункциональнуюОпцию`, `НайтиПоНаименованию`, `Метаданные.НайтиПоПолномуИмени`, type checks, format checks). Confirm read-only intent explicitly in the prompt to the tool.
+- **Read-only first.** Use an exposed provider parser before a query when applicable, then bounded read-only execution. Managed branches use metadata-first ROCTUP; the HTTP route uses `validatequery` / `vcvalidatequery` → `vcexecutequery`. Default to a non-mutating fragment for `vcexecutecode` (`ЗначениеЗаполнено`, `ПолучитьФункциональнуюОпцию`, `НайтиПоНаименованию`, `Метаданные.НайтиПоПолномуИмени`, type checks, format checks). Confirm read-only intent explicitly in the prompt to the tool.
 - **No mutations without explicit user consent.** Before any `Записать()` / `Удалить()` / `НачатьТранзакцию` / `Выполнить("УДАЛИТЬ ...")` / direct register movement via `vcexecutecode` — ask the user, name the affected object, and have a rollback plan (transaction wrap with explicit `ОтменитьТранзакцию`, or a IB copy). On production IBs — refuse and request a copy IB.
 - **No secrets in arguments.** `bslcode` and `querytext` are sent over HTTP and may end up in logs. Do not embed passwords, tokens, personal data, or production user credentials in the code / query text — load them inside the IB via `ЗначениеХранилища` / БСП secret storage instead.
-- **Do not pipe AI output blindly.** Output of `rewrite_1c_code`, `modify_1c_code`, `ask_1c_ai` is non-deterministic. Validate query strings with `vcvalidatequery` first; validate BSL fragments with `syntaxcheck` first; only then consider `vcexecutequery` / `vcexecutecode` against the live IB.
+- **Do not pipe AI output blindly.** Output of `rewrite_1c_code`, `modify_1c_code`, `ask_1c_ai` is non-deterministic. Validate query strings with the actually exposed parser first; validate BSL fragments with `syntaxcheck` first; only then consider execution against the live IB. If no parser is exposed, follow `verification-gates.md → Gate 3a` and record that parsing was unverified.
 - **`vcloggetlasterror` window is fixed.** It always looks 24 hours back and returns only level `Ошибка`, only the single most recent record. For older errors, narrower filters (by user / metadata / event), or higher levels (`Предупреждение`, `Информация`) — fall back to the Configurator's `ОтчетПоЖурналуРегистрации` or to a custom `ВыгрузитьЖурналРегистрации` call wrapped in `vcexecutecode`.
 
 ## Notes on `vcexecutecode` return value

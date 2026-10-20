@@ -103,6 +103,9 @@ param(
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+. (Join-Path $PSScriptRoot '..\..\_common\Assert-ItlLifecycleOwnership.ps1')
+Assert-ItlLifecycleOwnership -ScriptName 'db-update.ps1'
+
 # auto/disable are the -File-safe spellings of +/- (ibcmd --dynamic=auto|disable)
 if ($Dynamic -eq "auto") { $Dynamic = "+" }
 elseif ($Dynamic -eq "disable") { $Dynamic = "-" }
