@@ -9,6 +9,8 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 
 Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
 
+Before recommending an option that materially expands behaviour, compatibility, persistent state, or acceptance work, distinguish the direct request, your proposed addition, and any necessary consequence. Compare the simplest useful release with the addition now or in a later delivery; name the affected existing mechanisms and extra verification or environment needs. Do not invent effort estimates. Ask about material trade-offs, not routine technical values; use the existing question and handoff, without a new document or approval round. Approved scope remains binding.
+
 Format a round like so:
 
 ```
