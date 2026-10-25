@@ -61,10 +61,26 @@ Describe "Current upstream hardening contracts" -Tag "Fast" {
     It "keeps managed ITL memory project-scoped in the placed-once root file" {
         $memory = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'memory.md')
         $route = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content\rules\project-memory.md')
-        $memory | Should -Match '(?s)managed ITL project.*project-root file and project-scoped `1c-templates-mcp` memory'
+        $memory | Should -Match '(?s)managed ITL project.*project-root file under all four strict criteria'
         $memory | Should -Match 'Do not route\s+project facts to Cognee or OpenViking'
         $memory | Should -Match 'Outside managed ITL projects'
         $route | Should -Match 'The generic Cognee → OpenViking priority and multi-provider recall below apply outside managed ITL projects'
+    }
+
+    It "qualifies scoped memory conditionally while preserving generic policy and strict root criteria" {
+        $route=Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/rules/project-memory.md')
+        $route | Should -Match 'ITL-SCOPED-MEMORY-V1'
+        $route | Should -Match 'explicit ITL opt-in'
+        $route | Should -Match 'Six destinations'
+        $route | Should -Match 'One fact, one durable write'
+        $route | Should -Match 'private user-local pending'
+        $route | Should -Match 'Old cycles are explicit history'
+        $route | Should -Match 'Preserve TOOL policy, full-cycle/spec versus quick-fix'
+        $route | Should -Match '## Gates \(hard\)'
+        $route | Should -Match 'Promote to `memory.md` only when all four'
+        $route | Should -Match 'Only requested `/evolve`'
+        $route | Should -Match 'Memory: searched'
+        $route | Should -Match 'Outside|outside managed ITL projects'
     }
 
     It "bounds managed-form context checks and coordinates repeated runtime defects" {

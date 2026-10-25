@@ -3,11 +3,13 @@
 This file is the working project memory for AI agents.
 
 In a managed ITL project (`.agent-1c/project.json` exists), keep this
-project-root file and project-scoped `1c-templates-mcp` memory. Do not route
+project-root file under all four strict criteria below. Do not route
 project facts to Cognee or OpenViking without a separately qualified
-project-scoped integration. Outside managed ITL projects, use Cognee-first
-writes (then OpenViking, then templates MCP) and search across eligible
-connected memory providers. Eligibility and fallback rules are in
+project-scoped integration. The optional ITL `scoped-cognee-memory-v1`
+route uses private pending outside Git/reset; global templates memory is
+shared cross-project knowledge. Outside managed ITL projects, use Cognee-first
+writes (then OpenViking, then templates MCP) and search eligible providers.
+Eligibility, scope, correction capture and fallback rules are in
 `content/rules/project-memory.md` (`AGENTS.md → Project memory`).
 There are no permanent entries yet.
 

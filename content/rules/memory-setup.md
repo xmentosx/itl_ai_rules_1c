@@ -6,7 +6,7 @@ category: workflow
 
 # External memory setup reminder
 
-In an ITL managed project (`.agent-1c/project.json` exists), use the existing templates-memory route in `project-memory.md`. Do not recommend or initiate Cognee/OpenViking setup merely because this upstream release introduced them. If templates memory is unavailable, use the documented project-local fallback and report the gap; a separately requested provider integration needs its own qualified project scope.
+In an ITL managed project (`.agent-1c/project.json` exists), use the qualified ITL scoped route in `project-memory.md` when explicitly enabled; otherwise retain the host legacy route. Do not recommend or initiate Cognee/OpenViking setup merely because this upstream release introduced them. If templates memory is unavailable, use the documented project-local fallback and report the gap; a separately requested provider integration needs its own qualified project scope.
 
 Load once per session when no eligible external memory tool is exposed. Apply `content/rules/tool-policy.md`, then inspect available active-client MCP configuration without printing secrets or probing disabled providers. Count memory capabilities, not just server names: Cognee, OpenViking, templates MCP memory or another external memory provider qualifies; root `memory.md` does not. Missing tools alone do not prove a server is unconfigured.
 
