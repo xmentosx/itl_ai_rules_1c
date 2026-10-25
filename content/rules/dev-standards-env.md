@@ -134,7 +134,7 @@ Explicit editor: `/uitests essential|on|manual|off|status` (`content/commands/ui
 
 | Value | Meaning |
 |---|---|
-| `essential` (default / empty) | Once the change is on the dev/test infobase (load + DB update), check automatically **only the important new or changed user-visible behaviour**: the main scenario of each new or changed form, command, document, report or workflow, plus the case the task is about. No regression sweep, no cosmetic or refactoring-only checks; non-visual results go to Gate 3a / `1c-data-mcp`; the rest on request. |
+| `essential` (default / empty) | After dev/test load + DB update, automatically check **only the important new or changed user-visible behaviour** requiring UI evidence under `verification-delivery.md → Soft gate D`: affected controls/states or the principal user path, plus affected agreed-mockup commitments. Internal-only changes use non-UI proof; no regression sweep. |
 | `auto` | Every applicable UI scenario runs automatically in the verification phase / after each successful deploy. |
 | `manual` | UI tests run **only on an explicit user request**; the pipeline and the verification phase never trigger them. `/deploy-and-test` Steps 1–3 still run; Step 4 is skipped unless requested. |
 | `off` | Routine UI execution is disabled even with an available route. A generic check does not enable it. An explicitly named one-off UI run may override this setting for that invocation only; it does not edit `.dev.env`. A broader current no-UI instruction still forbids the run until the user lifts it; target and provider prerequisites remain. |

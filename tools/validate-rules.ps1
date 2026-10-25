@@ -113,7 +113,11 @@ param(
     # Provider-specific procedures remain on demand in the installed ITL skill.
     [int]$AgentsMaxBytes = 14336,
     [int]$RuleMaxBytes = 40960,
-    [int]$HotPathMaxBytes = 139264,
+    # Proportionate acceptance keeps one method-selection / mockup / stopping
+    # contract in verification-delivery, routed from triage. Full-cycle grows
+    # 138,084 -> 141,300 normalized UTF-8 bytes (+3,216; ~804 tokens at bytes/4).
+    # No always-on root or provider procedure changes; allow 136 -> 140 KiB.
+    [int]$HotPathMaxBytes = 143360,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,

@@ -12,7 +12,9 @@ The closing gates themselves live in `verification-gates.md`; delivery-only chec
 
 In an ITL managed project, record `executionPath=quick-fix|full-cycle` and `planningMode=direct|OpenSpec` independently in the working plan or host-owned state; do not invent runtime state. Before a quick fix, name the triggering action, faulty result, expected result and evidence needed **now**. A pre-change failing run is useful only when cheap and diagnostic; never require two complete executable gates merely to reproduce the same defect. Decide separately whether a repeatable regression should be retained for later work. A sufficient one-off proof does not require a saved suite or a mandatory test-plan.md. Resolve effective UI/test policy before invoking a runner: `off` without a named one-off override requires explicit skipped/partial evidence, not a fresh pass; a fresh complete proof remains reusable after that invocation ends. `verificationPolicy=block` still requires the host's full readiness assessment before result or close; `warn` never turns partial evidence into verified completion.
 
-Depth controls validators, not UI confirmation or completion review. `lite` is not a waiver of either; OpenSpec DoD: `sdd-integrations.md`.
+During triage, select behavioural proof proportionate to the changed outcome and unresolved risk using `verification-delivery.md → Soft gate D`. UI confirmation is conditional on interaction or presentation risks; task size, file type and full-cycle classification alone do not require a UI walkthrough.
+
+Depth controls validators, not applicable UI confirmation or completion review. `lite` is not a waiver of either; OpenSpec DoD: `sdd-integrations.md`.
 Standalone Gate 1 syntax evidence from `syntaxcheck` / `syntaxcheck_file` is mandatory for every touched BSL module. A Code Checker syntax section does not close it. Gate 2 prefers `check_1c_logic` when exposed and falls back to `check_1c_code`; this choice does not change the selected depth or the shared Gate 2 call budget.
 
 ## Validator budget
