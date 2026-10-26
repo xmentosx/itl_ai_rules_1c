@@ -117,7 +117,12 @@ param(
     # contract in verification-delivery, routed from triage. Full-cycle grows
     # 138,084 -> 141,300 normalized UTF-8 bytes (+3,216; ~804 tokens at bytes/4).
     # No always-on root or provider procedure changes; allow 136 -> 140 KiB.
-    [int]$HotPathMaxBytes = 143360,
+    # R49 combines the scoped-memory guard with r48: 141,300 -> 143,908
+    # normalized UTF-8 bytes (+2,608, ~652 tokens at bytes/4). Preserve the
+    # qualification/opt-in, private pending and scope/grant boundaries rather
+    # than trimming mandatory policy. Root/start sets are unchanged; allow
+    # 140 -> 141 KiB for this measured composition (476 bytes headroom).
+    [int]$HotPathMaxBytes = 144384,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
