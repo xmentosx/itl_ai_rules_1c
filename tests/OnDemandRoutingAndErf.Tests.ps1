@@ -13,6 +13,11 @@ Describe 'On-demand routing retains managed ITL boundaries' -Tag 'Fast' {
         $memory | Should -Match 'required.*no qualified binding.*stop only the dependent memory operation'
         foreach ($value in @('auto','off','required')) { $policy | Should -Match ([regex]::Escape('`' + $value + '`')) }
         $policy | Should -Match 'Memory.*uses `project-memory.md`'
+        $memory | Should -Match 'defaults on after ready ITL setup'
+        $memory | Should -Match 'Explicit off/disabled persists'
+        $memory | Should -Match 'CHUNKS_LEXICAL.*never run both automatically'
+        $memory | Should -Match 'other required standing/task queries remain'
+
     }
 
     It 'moves the catalog without losing logic validation, ROCTUP or the distinct managed UI route' {

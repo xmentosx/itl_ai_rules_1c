@@ -70,7 +70,10 @@ Describe "Current upstream hardening contracts" -Tag "Fast" {
     It "qualifies scoped memory conditionally while preserving generic policy and strict root criteria" {
         $route=Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content/rules/project-memory.md')
         $route | Should -Match 'ITL-SCOPED-MEMORY-V1'
-        $route | Should -Match 'explicit ITL opt-in'
+        $route | Should -Match 'defaults on after ready ITL setup'
+        $route | Should -Match 'Explicit off/disabled persists'
+        $route | Should -Match 'Missing prerequisites mean unavailable, not enabled'
+        $route | Should -Match 'critical-action freshness'
         $route | Should -Match 'Six destinations'
         $route | Should -Match 'One fact, one durable write'
         $route | Should -Match 'private user-local pending'
