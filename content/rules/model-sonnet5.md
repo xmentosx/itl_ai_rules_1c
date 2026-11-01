@@ -36,6 +36,6 @@ A stated severity bar makes the model withhold lower-severity findings it did in
 
 The model tracks its remaining context, and its tokenizer emits ~30 % more tokens than Sonnet 4.6.
 
-- Do not wrap up early because context feels tight: finish; when the window genuinely runs short, save state (`content/skills/handoff`, `remember`) and continue or hand off cleanly.
+- Its context awareness is not a stop signal (`AGENTS.md → Completion and repeated obstacles`); when the window genuinely runs short, save state (`content/skills/handoff`, `remember`) and continue or hand off cleanly.
 - Load the always-on layer plus what triage selects — nothing "for context"; an obligation restated in several files is one obligation.
 - Keep MCP queries narrow (`detail_level="L0"`, `names_only`, `project_name` / category filters) instead of pulling whole modules. `ORCHESTRATION=economy` fits well; delegation criteria are unchanged.

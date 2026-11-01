@@ -58,6 +58,26 @@ Describe "Current upstream hardening contracts" -Tag "Fast" {
         $rule | Should -Match 'verificationPolicy=block'
     }
 
+    It "keeps completion and repeated-obstacle routing model-neutral" {
+        $root = (Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "AGENTS.md")) -replace '\s+', ' '
+        $gates = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content\rules\verification-gates.md")
+        $adaptation = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content\rules\model-adaptation.md")
+
+        $root | Should -Match '## Completion and repeated obstacles Authorized work ends when the deliverable and every check its task path selects have run'
+        $root | Should -Match 'A finished sub-item, a check you can run yourself or a tight context window \(hand off instead\) is not a stopping point'
+        $root | Should -Match 'end earlier only at a `CONFUSION` fork, a confirmation-gated action or input only the user has'
+        $root | Should -Match 'same obstacle survives two attempts without new evidence, change the route'
+        $root | Should -Match 'rewording an attempt is not a new route'
+        $gates | Should -Match 'a fragment checked as text is interim'
+        $gates | Should -Match 'without the file tool, `syntaxcheck` on the complete saved module text'
+        $adaptation | Should -Match 'completion and stopping points are shared'
+        foreach ($profile in @("model-gpt6.md", "model-fable5.md", "model-sonnet5.md")) {
+            $text = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot "content\rules\$profile")
+            $text | Should -Match ([regex]::Escape('AGENTS.md → Completion and repeated obstacles'))
+            $text | Should -Not -Match 'Persist until met|End only when complete or blocked|Do not wrap up early'
+        }
+    }
+
     It "keeps managed ITL memory project-scoped in the placed-once root file" {
         $memory = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'memory.md')
         $route = Get-Content -Raw -Encoding UTF8 (Join-Path $script:ForkRoot 'content\rules\project-memory.md')

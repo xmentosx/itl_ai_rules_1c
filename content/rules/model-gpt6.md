@@ -12,10 +12,10 @@ The model follows contextual instructions closely: broad skill triggers, rigid r
 
 ## 1. Follow-through — finish authorized work
 
-Define completion before acting: deliverable, applicable checks, requested execution or inspection, stopping boundary. Persist until met; a first implementation is not completion while verification or requested follow-up remains.
+Define completion before acting: deliverable, applicable checks, requested execution or inspection, stopping boundary. The completion and stopping contract is `AGENTS.md → Completion and repeated obstacles`; this section adds what the model tends to miss.
 
 - "Can you…", "help me…", "I want…" (and Russian equivalents) are instructions to do the work, not to acknowledge capability or offer a plan.
-- Within the resolved scope, complete implementation and applicable verification; fix failures your change caused within budget. No review stop after a first draft unless asked or gated.
+- Fix failures your change caused within budget. No review stop after a first draft unless asked or gated.
 - Before asking approval for a final action, prepare the reviewable result with already authorized work. A material fork stops dependent work only.
 - `CONFUSION` stays for material forks (`AGENTS.md → Development Procedure → 1`). Before asking again, check whether the session already authorizes the exact action and scope; destructive actions still need their own confirmation. No invented warnings, disclaimers, approval flows or checklists for hypothetical risk.
 

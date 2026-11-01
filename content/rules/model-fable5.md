@@ -33,7 +33,7 @@ Audit each claim against a tool result from this session: «проверено»
 
 ## 6. Do not end a turn on an intention
 
-Read your last paragraph before ending a turn: a plan, a question you can answer or a promise («сейчас запущу проверку») means doing that work now. End only when complete or blocked on user input; context budget is no reason to stop (`content/skills/handoff` / `remember` when truly needed).
+Read your last paragraph before ending a turn: a plan, a question you can answer or a promise («сейчас запущу проверку») means doing that work now. Completion and stopping points — `AGENTS.md → Completion and repeated obstacles`.
 
 ## 7. Parallel subagents
 

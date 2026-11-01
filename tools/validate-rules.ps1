@@ -122,7 +122,11 @@ param(
     # qualification/opt-in, private pending and scope/grant boundaries rather
     # than trimming mandatory policy. Root/start sets are unchanged; allow
     # 140 -> 141 KiB for this measured composition (476 bytes headroom).
-    [int]$HotPathMaxBytes = 144384,
+    # R51 makes completion and the repeated-obstacle route model-neutral in
+    # the ITL root appendix (profiles keep pointers only); Gate 1 wording shrinks. Full-cycle
+    # 144,351 -> 144,957 normalized UTF-8 bytes (+606, ~152 tokens at bytes/4);
+    # root 12,800 -> 13,478 within its unchanged ceiling. Allow 141 -> 142 KiB.
+    [int]$HotPathMaxBytes = 145408,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
