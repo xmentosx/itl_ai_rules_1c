@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     Structural validator for the 1c-rules ruleset. Intended for CI and for a
@@ -130,10 +130,11 @@ param(
     # content/rules/review-criteria.md is the one owner of scope, 1C criteria,
     # verdict and report, loaded by Soft gate C / Stage 4b in every full-cycle,
     # so it joins the set; Soft gate C, Stage 4b and OpenSpec apply keep only
-    # launch conditions and code-reviewer.md shrinks to its role. Full-cycle
-    # 144,957 -> 154,264 normalized UTF-8 bytes (+9,307, ~2,327 tokens at
-    # bytes/4). Root/start sets are unchanged; allow 142 -> 151 KiB, which also
-    # covers the 264-byte ITL appendix line routing review scope.
+    # launch conditions and code-reviewer.md shrinks to its role; the ITL
+    # appendix adds one 264-byte line routing review scope to get-review-scope.
+    # Full-cycle 144,957 -> 154,528 normalized UTF-8 bytes (+9,571, ~2,393 tokens
+    # at bytes/4); root 13,478 -> 13,742 and subagent start 31,294 -> 31,558 stay
+    # within their unchanged ceilings. Allow 142 -> 151 KiB.
     [int]$HotPathMaxBytes = 154624,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
