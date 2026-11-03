@@ -118,7 +118,7 @@ graph TD
 - [ ] Criterion 2
 ```
 
-Plans are specific (exact paths, procedure and object names), incremental (each step verifiable), minimal (extend rather than rewrite), and pattern-consistent; edge cases and error scenarios are planned, decisions explain *why*.
+Plans are specific (exact paths, procedure and object names), incremental (each step verifiable), minimal (extend rather than rewrite; integration per `tooling-playbooks.md → Writing New Code → Plan check`), and pattern-consistent; edge cases and error scenarios are planned, decisions explain *why*.
 
 ## When Planning 1C Features
 

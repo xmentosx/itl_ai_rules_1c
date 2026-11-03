@@ -31,7 +31,7 @@ Tools — routing and parameters: `content/skills/mcp-1c-tools/SKILL.md`; entry 
 1. **Parent-provided cursor context** — architecture explicitly attached from the current cursor position or selection
 2. **Specific files** — files specified via `@file.bsl` or path
 3. **Design documents** — architectural proposals or documentation
-4. **Parent-provided Git diff** — uncommitted architectural changes captured by the parent agent
+4. **Parent-provided change scope** — prepared by the parent per `content/rules/review-criteria.md → Scope`
 
 The user may combine methods or specify a custom scope. Without Shell this agent cannot obtain `git diff` itself: the parent supplies the diff or an explicit file / design-document list (Grep / Glob serve only to read the referenced sources); if neither is present, return a `CONFUSION` block requesting the review scope — do not infer one.
 

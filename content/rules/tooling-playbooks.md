@@ -38,8 +38,11 @@ Load `content/rules/coding-standards.md` first; forms — `forms.md`; non-trivia
 4. `docinfo` (exact name) / `docsearch` (by description) — built-in functions; `ssl_search` — reusable БСП functions.
 5. Validator chain; then the exposed provider query parser (`validatequery` / `vcvalidatequery`; `docs/1c-data-mcp.md`) for every new / non-trivial query string, especially after AI generation.
 
+**Plan check.** When a plan adds an entry point, metadata object or procedure with business logic, it names the existing handler of the same event and the reuse-search result, and includes tasks for role rights, command interface and update handlers. When the existing architecture blocks the task, including when it forces a workaround or duplication, raise `CONFUSION` before code (`AGENTS.md` §1).
+
 ## Code Review
 
+0. Load `content/rules/review-criteria.md` — scope, criteria, verdict and report.
 1. `search_code` → `codesearch` — pattern compliance.
 2. `trace_impact` → `graph_dependencies` — object-level impact; `trace_call_chain` → `get_method_call_hierarchy` — callers / callees.
 3. `metadatasearch` / `get_metadata_details` — metadata usage; `docinfo` / `docsearch` — method existence.

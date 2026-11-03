@@ -174,10 +174,10 @@ Return: changed files, diff summary against the plan, checks performed, unresolv
 ### reviewer-risk — independent review (`1c-code-reviewer`, **only when the user explicitly asked for a review and the reviewer model gate is satisfied**)
 
 ```text
-Independent review of the current change for bugs, regressions, missing checks, and project-rule
-violations. Review scope: <parent-provided git diff and/or explicit file list>. Do not edit files.
-The reviewer has no Shell and must not infer an absent scope. High-confidence
-findings only, ordered by severity, with file/line references; then residual risk.
+Independent review of the current change by content/rules/review-criteria.md.
+Review scope: <scope prepared per review-criteria.md → Scope: base, file lists and diff
+or paths to read>. Do not edit files. The reviewer has no Shell and must not infer an
+absent scope. Report in the review-criteria.md format.
 ```
 
 ### smoke-check — mechanical post-change verification (`1c-explorer`, light-tier candidate)

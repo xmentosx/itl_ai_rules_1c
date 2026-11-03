@@ -157,4 +157,37 @@ Describe "Phase-specific OpenSpec overlays" -Tag "Fast" {
         $catalog | Should -Match 'pipeline in `subagent-pipeline\.md` applies only when delegation is chosen'
         $pipeline | Should -Match 'Stage 4a — Spec-compliance review'
     }
+
+    It "routes every review entry point to one review-criteria owner without uncommitted-only scope" {
+        $read = { param($relative) Get-Content -LiteralPath (Join-Path $script:ForkRoot $relative) -Raw -Encoding UTF8 }
+        $criteria = & $read 'content\rules\review-criteria.md'
+        foreach ($section in @('## Scope', '## What to check', '## Verdict and confidence', '## Second opinion', '## Report', '## Actions by role', '## Evidence')) {
+            $criteria | Should -Match ([regex]::Escape($section))
+        }
+        $criteria | Should -Match ([regex]::Escape('(`@{u}`) is never a base'))
+        $criteria | Should -Match ([regex]::Escape('A separately requested review: report only'))
+        foreach ($relative in @(
+            'content\rules\verification-delivery.md',
+            'content\rules\subagent-pipeline.md',
+            'content\rules\sdd-integrations.md',
+            'content\rules\tooling-playbooks.md',
+            'content\rules\subagents.md',
+            'content\agents\code-reviewer.md',
+            'content\agents\arch-reviewer.md'
+        )) {
+            $text = & $read $relative
+            $text | Should -Match 'review-criteria\.md' -Because "$relative must route review content to the single owner"
+            $text | Should -Not -Match '(?i)uncommitted (diff|architectural changes)' -Because "$relative must not limit review scope to the uncommitted diff"
+        }
+        $reviewer = & $read 'content\agents\code-reviewer.md'
+        $reviewer | Should -Not -Match '## Confidence Scoring|## Output Format|## Cross-provider Review'
+        $pipeline = & $read 'content\rules\subagent-pipeline.md'
+        $pipeline | Should -Not -Match 'BSL LS warnings via'
+        $playbooks = & $read 'content\rules\tooling-playbooks.md'
+        foreach ($relative in @('content\rules\subagent-pipeline.md', 'content\rules\sdd-integrations.md', 'content\agents\planner.md')) {
+            (& $read $relative) | Should -Match ([regex]::Escape('Writing New Code → Plan check'))
+        }
+        $playbooks | Should -Match ([regex]::Escape('**Plan check.**'))
+        (& $read 'tools\validate-rules.ps1') | Should -Match ([regex]::Escape("'content/rules/review-criteria.md'"))
+    }
 }

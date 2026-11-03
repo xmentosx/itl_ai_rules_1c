@@ -249,6 +249,7 @@ git clone https://github.com/comol/ai_rules_1c.git $env:TEMP\1c-rules
 - `verification-policy.md` — уровни глубины, quick-fix, promotion triggers и quick-fix gate.
 - `verification-gates.md` — синтаксис, логика, стиль, impact-анализ и XML-валидация.
 - `verification-delivery.md` — reproduction, соответствие плану, опциональные review/UI-тесты и итоговый отчёт.
+- `review-criteria.md` — единый контракт ревью изменений для головного агента и ревьюера: объём, критерии 1С (переиспользование, встройка в существующий процесс, готовность для пользователя), вердикт, второе мнение, формат отчёта и действия по роли.
 - `project-memory.md` — отдельный вход для памяти: приоритет записи Cognee → OpenViking → templates MCP, область поиска по сложности задачи, гейты recall-first и correction-capture, строка `Memory:` и локальный fallback. Обычная работа с памятью загружает только это правило и `tool-policy.md`, без общей MCP-политики 1С и скилла шаблонов.
 - `tool-policy.md` — общие значения `TOOL_*=auto/off/required` и проверка фактической доступности инструментов; правила работы с конкретной операцией остаются у её владельца.
 - `platform-solutions.md` — типичные ловушки платформы и проверенные шаблоны решений (включая фоновые задания из внешней обработки через БСП).

@@ -126,7 +126,15 @@ param(
     # the ITL root appendix (profiles keep pointers only); Gate 1 wording shrinks. Full-cycle
     # 144,351 -> 144,957 normalized UTF-8 bytes (+606, ~152 tokens at bytes/4);
     # root 12,800 -> 13,478 within its unchanged ceiling. Allow 141 -> 142 KiB.
-    [int]$HotPathMaxBytes = 145408,
+    # R52 makes the review contract effective without the reviewer subagent:
+    # content/rules/review-criteria.md is the one owner of scope, 1C criteria,
+    # verdict and report, loaded by Soft gate C / Stage 4b in every full-cycle,
+    # so it joins the set; Soft gate C, Stage 4b and OpenSpec apply keep only
+    # launch conditions and code-reviewer.md shrinks to its role. Full-cycle
+    # 144,957 -> 154,264 normalized UTF-8 bytes (+9,307, ~2,327 tokens at
+    # bytes/4). Root/start sets are unchanged; allow 142 -> 151 KiB, which also
+    # covers the 264-byte ITL appendix line routing review scope.
+    [int]$HotPathMaxBytes = 154624,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
@@ -841,7 +849,7 @@ $hotPathFiles = @(
     'AGENTS.md',
     'content/rules/verification-policy.md', 'content/rules/verification-gates.md', 'content/rules/verification-delivery.md',
     'content/rules/tool-policy.md', 'content/rules/mcp-policy.md', 'content/rules/mcp-first-search.md', 'content/rules/coding-standards.md',
-    'content/rules/tooling-playbooks.md', 'content/rules/project-memory.md',
+    'content/rules/tooling-playbooks.md', 'content/rules/review-criteria.md', 'content/rules/project-memory.md',
     'content/skills/mcp-1c-tools/SKILL.md', 'content/skills/1c-code-search/SKILL.md',
     'content/skills/1c-validate/SKILL.md', 'content/skills/1c-templates-memory/SKILL.md'
 )

@@ -45,6 +45,7 @@ The plan must satisfy these acceptance criteria before stage 3:
 - Verification points are attached per module / coherent group (`syntaxcheck`, an MCP query, an assertion, a manual reproduction) — not per every few lines.
 - DoD links acceptance criteria to verification (gates, behavioural confirmation, UI where applicable) and final review tasks; explicit waivers are recorded (`sdd-integrations.md` for OpenSpec).
 - Risks and rollback are explicit, especially for metadata changes (UUID stability, register movements, role grants).
+- New entry points, objects and business-logic procedures satisfy `tooling-playbooks.md → Writing New Code → Plan check`.
 - The plan is approved — see the approval gate below.
 
 **Plan approval gate — scaled by risk.**
@@ -112,14 +113,7 @@ Record the 4a result (checked items, diff-vs-plan verdict). Stage 5's plan-adher
 
 Required for full-cycle unless explicitly prohibited by the user (`verification-delivery.md → Soft gate C`). The parent reviews by default; `1c-code-reviewer` runs only on an explicit review request with the reviewer model gate satisfied (`subagents.md`). Disabling the subagent does not waive this stage. Reuse fresh Stage 3 validator evidence; do not repeat calls against unchanged content.
 
-The reviewer (eligible subagent or parent) checks requirements, correctness and regressions, plus applicable domain concerns:
-
-- anti-patterns from `standards(name="anti-patterns")` and `standards(name="platform-solutions")`;
-- ITS standards via `its_help` → `fetch_its`;
-- BSL LS warnings via `review_1c_code`;
-- query patterns, transactional safety, lock granularity, posting boundaries.
-
-Report `critical` / `major` / `minor` findings (`subagent-core.md → Report vocabulary`). Resolve critical / major issues and confirm affected checks before completion; minor issues are informational.
+The reviewer (eligible subagent or parent) checks and reports by `review-criteria.md`. Resolve critical / major issues and confirm affected checks before completion; minor issues are informational.
 
 ### Stage 5 — Verification gate (parent agent)
 
