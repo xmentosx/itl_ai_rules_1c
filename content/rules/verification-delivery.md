@@ -40,7 +40,7 @@ Checklist (same shape regardless of plan source):
 
 ### Soft gate C — Code review
 
-Full-cycle: review is required unless the user explicitly prohibits it; otherwise only when requested. The parent reviews by `review-criteria.md`. Invoke `1c-code-reviewer` only on explicit request with the reviewer model gate satisfied (`subagents.md`). Fix critical / major findings; report minor ones; a separately requested review only reports (`review-criteria.md → Actions by role`). Reuse fresh evidence. Disabling the subagent does not waive review or MCP gates.
+Full-cycle: review is required unless the user explicitly prohibits it; otherwise only when requested. The parent reviews by `review-criteria.md`. Invoke `1c-code-reviewer` only on explicit request with the reviewer model gate satisfied (`subagents.md`). Fix critical / major findings; minor findings and a separately requested review follow `review-criteria.md → Actions by role`. Reuse fresh evidence. Disabling the subagent does not waive review or MCP gates.
 
 ### Soft gate D — UI confirmation policy
 

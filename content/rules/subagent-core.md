@@ -87,7 +87,7 @@ For CF/CFE context, keep failed, not-run and unknown stages distinct, with no se
 
 ### Report vocabulary
 
-Severity of findings: `critical` (blocks delivery) / `major` (must be addressed or consciously accepted) / `minor` (informational). Status line: implementers report `✅ DONE / ⚠️ PARTIAL / ❌ BLOCKED`; reviewers and the tester report `✅ APPROVE / ⚠️ CONCERNS / ❌ BLOCK`. Each agent keeps its own report skeleton; no other scale is used.
+Severity of findings: `critical` (blocks delivery) / `major` (must be addressed or consciously accepted) / `minor` (non-blocking; fixed or listed by `review-criteria.md → Actions by role`). Status line: implementers report `✅ DONE / ⚠️ PARTIAL / ❌ BLOCKED`; reviewers and the tester report `✅ APPROVE / ⚠️ CONCERNS / ❌ BLOCK`. Each agent keeps its own report skeleton; no other scale is used.
 
 ### Shell and SDD
 

@@ -190,4 +190,21 @@ Describe "Phase-specific OpenSpec overlays" -Tag "Fast" {
         $playbooks | Should -Match ([regex]::Escape('**Plan check.**'))
         (& $read 'tools\validate-rules.ps1') | Should -Match ([regex]::Escape("'content/rules/review-criteria.md'"))
     }
+
+    It "has the parent fix local minor findings in task lines and list the rest with a reason" {
+        $read = { param($relative) Get-Content -LiteralPath (Join-Path $script:ForkRoot $relative) -Raw -Encoding UTF8 }
+        $criteria = & $read 'content\rules\review-criteria.md'
+        $actions = ($criteria -split '## Actions by role', 2)[1]
+        $actions | Should -Match ([regex]::Escape('each `minor` in lines the current task added or changed when the fix is local'))
+        $actions | Should -Match ([regex]::Escape('Recheck the affected scope after any fix'))
+        foreach ($reason in @('`outside the task`', '`needs checks outside the task`', '`judgement call — user decides`')) {
+            $actions | Should -Match ([regex]::Escape($reason))
+        }
+        $actions | Should -Not -Match ([regex]::Escape('list `minor`.'))
+        foreach ($relative in @('content\rules\verification-delivery.md', 'content\rules\subagent-pipeline.md', 'content\rules\subagent-core.md')) {
+            $text = & $read $relative
+            $text | Should -Match ([regex]::Escape('review-criteria.md → Actions by role')) -Because "$relative must route minor handling to the owner"
+            $text | Should -Not -Match '(?i)minor (issues are |\()informational|report minor ones' -Because "$relative must not keep minor findings report-only"
+        }
+    }
 }

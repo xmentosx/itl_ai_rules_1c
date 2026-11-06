@@ -135,7 +135,13 @@ param(
     # Full-cycle 144,957 -> 154,528 normalized UTF-8 bytes (+9,571, ~2,393 tokens
     # at bytes/4); root 13,478 -> 13,742 and subagent start 31,294 -> 31,558 stay
     # within their unchanged ceilings. Allow 142 -> 151 KiB.
-    [int]$HotPathMaxBytes = 154624,
+    # R53 has the parent fix local minor findings in the task's own lines and
+    # list other minor findings with a reason, instead of listing them all;
+    # review-criteria.md owns it and Soft gate C points to it. Full-cycle
+    # 154,528 -> 154,933 normalized UTF-8 bytes (+405, ~101 tokens at bytes/4);
+    # subagent start 31,558 -> 31,618 and root stay within their unchanged
+    # ceilings. Allow 151 -> 152 KiB.
+    [int]$HotPathMaxBytes = 155648,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,

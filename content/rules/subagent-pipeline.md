@@ -113,7 +113,7 @@ Record the 4a result (checked items, diff-vs-plan verdict). Stage 5's plan-adher
 
 Required for full-cycle unless explicitly prohibited by the user (`verification-delivery.md → Soft gate C`). The parent reviews by default; `1c-code-reviewer` runs only on an explicit review request with the reviewer model gate satisfied (`subagents.md`). Disabling the subagent does not waive this stage. Reuse fresh Stage 3 validator evidence; do not repeat calls against unchanged content.
 
-The reviewer (eligible subagent or parent) checks and reports by `review-criteria.md`. Resolve critical / major issues and confirm affected checks before completion; minor issues are informational.
+The reviewer (eligible subagent or parent) checks and reports by `review-criteria.md`. Resolve critical / major issues and confirm affected checks before completion; handle minor issues by `review-criteria.md → Actions by role`.
 
 ### Stage 5 — Verification gate (parent agent)
 

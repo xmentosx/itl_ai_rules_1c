@@ -67,9 +67,9 @@ Per finding: `file:line`, issue, evidence (or the missing evidence), rule, fix o
 
 ## Actions by role
 
-- Parent in full-cycle and OpenSpec apply: fix `critical` / `major`, recheck the affected scope, list `minor`.
-- Subagent: report only.
-- A separately requested review: report only; change code only when the user asks. If this session changed code in the scope, it is a self-review: say so and recommend a separate chat.
+- Parent in full-cycle and OpenSpec apply: fix `critical` / `major`, and each `minor` in lines the current task added or changed when the fix is local (no behaviour, file or object outside the task; no check beyond the task's own). Recheck the affected scope after any fix. List every other `minor` with a reason: `outside the task`, `needs checks outside the task` or `judgement call — user decides`.
+- Subagent: report only; mark each `minor` `local fix` or with a reason above.
+- A separately requested review: report only; change code only when the user asks. Mark `minor` the same way, so «fix them» covers the local ones. If this session changed code in the scope, it is a self-review: say so and recommend a separate chat.
 
 ## Evidence
 
