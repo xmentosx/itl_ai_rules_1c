@@ -207,4 +207,19 @@ Describe "Phase-specific OpenSpec overlays" -Tag "Fast" {
             $text | Should -Not -Match '(?i)minor (issues are |\()informational|report minor ones' -Because "$relative must not keep minor findings report-only"
         }
     }
+
+    It "accepts a project-recorded pass as Gate 1 evidence, bounds Gates 2-3 on a large scope and honours a project range choice" {
+        $read = { param($relative) Get-Content -LiteralPath (Join-Path $script:ForkRoot $relative) -Raw -Encoding UTF8 }
+        $criteria = (& $read 'content\rules\review-criteria.md') -replace '\s+', ' '
+        $scope = (($criteria -split '## Scope', 2)[1] -split '## What to check', 2)[0]
+        $scope | Should -Match ([regex]::Escape('When it asks to choose a range, relay its question and options to the user and rerun with the choice; never choose for them.'))
+        $evidence = ($criteria -split '## Evidence', 2)[1]
+        $evidence | Should -Match ([regex]::Escape('The author''s report is the subject of the review, not evidence'))
+        $evidence | Should -Match ([regex]::Escape('A pass the project recorded and bound to the current content is evidence, not the author''s report.'))
+        $evidence | Should -Match ([regex]::Escape('recommend that check in the development chat rather than starting it here'))
+        $evidence | Should -Match ([regex]::Escape('run them by text on changed procedures chosen by risk'))
+        $evidence | Should -Match ([regex]::Escape('report the rest with a count as «not checked automatically»'))
+        $root = (& $read 'AGENTS.md') -replace '\s+', ' '
+        $root | Should -Match ([regex]::Escape('ITL MCP hosts cannot validate by path (`syntaxcheck_file`, `files`); pass text.'))
+    }
 }

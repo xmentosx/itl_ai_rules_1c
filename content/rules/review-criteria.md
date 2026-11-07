@@ -12,7 +12,7 @@ One owner for what a change review checks and reports, whoever reviews (parent o
 
 Files or a selection named by the user are the scope as given. Otherwise take the change scope in this order:
 
-1. **Project-provided scope** — when the project names how to obtain the review scope, use it and pass it as the explicit scope.
+1. **Project-provided scope** — when the project names how to obtain the review scope, use it and pass it as the explicit scope. When it asks to choose a range, relay its question and options to the user and rerun with the choice; never choose for them.
 2. **User-named base** — `git diff <merge-base>` over tracked files (committed and uncommitted in one command) plus untracked files without ignored ones as a separate list.
 3. Otherwise `CONFUSION` with candidate bases. The branch's own upstream (`@{u}`) is never a base: it shows only unpushed commits.
 
@@ -74,3 +74,6 @@ Per finding: `file:line`, issue, evidence (or the missing evidence), rule, fix o
 ## Evidence
 
 Reuse only tool results the reviewer observed in its own session against unchanged content. The author's report is the subject of the review, not evidence: re-run such claims or mark them unverified.
+
+- **Gate 1.** A pass the project recorded and bound to the current content is evidence, not the author's report. Without it, recommend that check in the development chat rather than starting it here; Gate 1 then rests on the review's own validator calls or is unverified.
+- **Gates 2–3 on a large scope** (marked large by the project, or beyond one context): run them by text on changed procedures chosen by risk (transactions, posting and locks, data writes, privileged mode, public API); report the rest with a count as «not checked automatically».

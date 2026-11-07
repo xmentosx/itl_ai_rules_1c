@@ -141,7 +141,14 @@ param(
     # 154,528 -> 154,933 normalized UTF-8 bytes (+405, ~101 tokens at bytes/4);
     # subagent start 31,558 -> 31,618 and root stay within their unchanged
     # ceilings. Allow 151 -> 152 KiB.
-    [int]$HotPathMaxBytes = 155648,
+    # R54 lets a review use a pass the project recorded on the current content
+    # as Gate 1 evidence, run Gates 2-3 on a large scope by risk-chosen
+    # procedures with the unchecked rest counted, and honour a project range
+    # choice; the ITL appendix adds one line that ITL hosts cannot validate by
+    # path. Full-cycle 154,933 -> 155,696 normalized UTF-8 bytes (+763, ~191
+    # tokens at bytes/4); root 13,742 -> 13,824 and subagent start 31,618 ->
+    # 31,700 stay within their unchanged ceilings. Allow 152 -> 153 KiB.
+    [int]$HotPathMaxBytes = 156672,
     [int]$SubagentStartMaxBytes = 31744,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
