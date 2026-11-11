@@ -111,7 +111,15 @@ param(
     # 13,554 bytes within its unchanged 14 KiB ceiling. Keep these mandatory
     # meanings intact; raise only hot 134 -> 136 KiB and start 30 -> 31 KiB.
     # Provider-specific procedures remain on demand in the installed ITL skill.
-    [int]$AgentsMaxBytes = 14336,
+    # R55: PM5 agents read project-memory in 24 of 25 sessions and used scoped
+    # memory in 4, so the conditional scoped-memory core (when to call
+    # memory_status, recall, remember and retire_note, organization and host
+    # criteria, the Memory line) moves into the always-loaded ITL appendix and
+    # absorbs its former three-line memory bullet. Root 13,824 -> 15,179
+    # normalized UTF-8 bytes (+1,355, about 339 tokens at bytes/4); the core
+    # applies only when the memory_status tool is exposed. Allow 14 -> 15 KiB
+    # (181 bytes headroom). The upstream Project memory section is unchanged.
+    [int]$AgentsMaxBytes = 15360,
     [int]$RuleMaxBytes = 40960,
     # Proportionate acceptance keeps one method-selection / mockup / stopping
     # contract in verification-delivery, routed from triage. Full-cycle grows
@@ -148,8 +156,14 @@ param(
     # path. Full-cycle 154,933 -> 155,696 normalized UTF-8 bytes (+763, ~191
     # tokens at bytes/4); root 13,742 -> 13,824 and subagent start 31,618 ->
     # 31,700 stay within their unchanged ceilings. Allow 152 -> 153 KiB.
-    [int]$HotPathMaxBytes = 156672,
-    [int]$SubagentStartMaxBytes = 31744,
+    # R55 carries the same root growth into both sets that include AGENTS.md,
+    # and project-memory.md names seven destinations, the memory_status index
+    # and the standing limits: 10,995 -> 11,365 (+370). Full-cycle 155,696 ->
+    # 157,421 normalized UTF-8 bytes (+1,725, about 431 tokens at bytes/4);
+    # subagent start 31,700 -> 33,055 (+1,355). Allow 153 -> 154 KiB and
+    # 31 -> 33 KiB.
+    [int]$HotPathMaxBytes = 157696,
+    [int]$SubagentStartMaxBytes = 33792,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
     [int]$RuleDescriptionMaxBytes = 250,

@@ -16,7 +16,11 @@ Describe 'On-demand routing retains managed ITL boundaries' -Tag 'Fast' {
         $memory | Should -Match 'defaults on after ready ITL setup'
         $memory | Should -Match 'Explicit off/disabled persists'
         $memory | Should -Match 'CHUNKS_LEXICAL.*never run both automatically'
-        $memory | Should -Match 'other required standing/task queries remain'
+        # An exact lookup never replaces the task query. The separate standing
+        # query is gone: with a qualified binding memory_status returns the
+        # standing notes (root Scoped project memory section).
+        $memory | Should -Match 'the required task query remains'
+        $memory | Should -Match 'replaces the separate standing query and the Memory line format below'
 
     }
 
