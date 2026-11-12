@@ -119,7 +119,8 @@ param(
     # normalized UTF-8 bytes (+1,355, about 339 tokens at bytes/4); the core
     # applies only when the memory_status tool is exposed. Allow 14 -> 15 KiB
     # (181 bytes headroom). The upstream Project memory section is unchanged.
-    [int]$AgentsMaxBytes = 15360,
+    # R56: root 15,179 -> 15,676 for lifetime, branch evidence and fresh recall.
+    [int]$AgentsMaxBytes = 15800,
     [int]$RuleMaxBytes = 40960,
     # Proportionate acceptance keeps one method-selection / mockup / stopping
     # contract in verification-delivery, routed from triage. Full-cycle grows
@@ -162,7 +163,9 @@ param(
     # 157,421 normalized UTF-8 bytes (+1,725, about 431 tokens at bytes/4);
     # subagent start 31,700 -> 33,055 (+1,355). Allow 153 -> 154 KiB and
     # 31 -> 33 KiB.
-    [int]$HotPathMaxBytes = 157696,
+    # R56: full-cycle 157,421 -> 159,146. Recovery and branch-use details are
+    # on demand. Subagent start 33,055 -> 33,552 fits its existing limit.
+    [int]$HotPathMaxBytes = 159360,
     [int]$SubagentStartMaxBytes = 33792,
     [int]$SkillDescriptionMaxBytes = 300,
     [int]$AgentDescriptionMaxBytes = 250,
