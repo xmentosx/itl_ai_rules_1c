@@ -104,7 +104,7 @@ Describe "Current upstream hardening contracts" -Tag "Fast" {
         $root | Should -Match 'Applies only when the `memory_status` tool is available'
         $root | Should -Match 'Call `memory_status` once at session start and after a `contextChanged`'
         $root | Should -Match '`recall` the topic before designing a 1C change'
-        $root | Should -Match 'never client, project or configuration data'
+        $root | Should -Match 'never client, project or configuration\s+data'
         $root | Should -Match 'Memory: recall N, saved N, updated N, retired N'
         $root | Should -Match '`templatesearch`\s+remains available for code templates'
         $root | Should -Match 'Do not turn on a new shared-memory\s+provider implicitly'
