@@ -64,6 +64,45 @@ $end
         Replace("`r`n", "`n").TrimEnd("`n")
 }
 
+function Update-ApplyBody {
+    param([string]$Text, [string]$Path)
+    $steps = @'
+6. **Work through the approved apply**
+
+   Keep the agreed change, implementation and applicable acceptance in scope. A temporary priority is one step within that scope. On resuming an interrupted turn or after context compression, reconcile the approved artifacts, current changes and actual outcomes (including runs that may have finished without a report). Carry forward applicable evidence and take the next available step without reopening settled decisions. Follow an explicit stop or change of scope immediately.
+
+   Show the active task and make focused changes. Reconcile materially advanced items with their own criteria and current evidence in the tracking artifact. Keep incomplete obligations open. Continue in dependency order through applicable verification and review.
+
+   If a task fails, needs a material clarification or design change, or requires authorization beyond the agreed scope, identify the dependent items and use available permitted recovery. Preserve evidence and continue authorized independent work in the agreed order. Respect CLI-wide blocked states, helper limits and required permissions. Ask for a decision only where one is needed. Keep the affected criteria open and preserve their scope.
+
+7. **Report completion or the remaining blocker**
+
+   Report completed items and overall progress. Suggest archive only after the applicable Definition of Done is satisfied. When no authorized step remains, name the blocker, affected items, and the specific input, decision or recovery needed. A milestone or targeted result is progress within the apply.
+
+'@
+    $pattern = '(?ms)^6\. \*\*(?:Implement tasks \(loop until done or blocked\)|Work through the approved apply)\*\*\n.*?(?=^\*\*Output During Implementation\*\*)'
+    if ([regex]::Matches($Text, $pattern).Count -ne 1) {
+        throw "OPEN_SPEC_APPLY_STEPS_UNRECOGNIZED: $Path"
+    }
+    $Text = [regex]::Replace($Text, $pattern, ($steps.Replace("`r`n", "`n").TrimEnd("`n") + "`n`n"))
+    $Text = $Text.Replace('- If `state: "all_done"`: congratulate, suggest archive',
+        '- If `state: "all_done"`: reconcile the actual evidence with the Definition of Done before reporting completion or suggesting archive. Continue any outstanding authorized acceptance.')
+    $Text = $Text.Replace('All tasks complete! You can archive this change with',
+        'All applicable acceptance criteria are satisfied. You can archive this change with')
+    $Text = [regex]::Replace($Text, '(?ms)^\*\*Output On Pause \(Issue Encountered\)\*\*\n.*?(?=^\*\*Guardrails\*\*)', '')
+    $obsoleteGuardrails = @(
+        'Keep going through tasks until done or blocked',
+        'If task is ambiguous, pause and ask before implementing',
+        'If implementation reveals issues, pause and suggest artifact updates',
+        'Update task checkbox immediately after completing each task',
+        "Pause on errors, blockers, or unclear requirements - don't guess",
+        'When a task needs work beyond what the spec describes, surface the added scope and pause - never silently narrow, defer, or simplify away specified behavior',
+        'Only mark a task `- [x]` when its specified behavior is fully implemented, not when it is partially done or deferred'
+    )
+    foreach ($line in $obsoleteGuardrails) { $Text = $Text.Replace("- $line`n", '') }
+    return $Text
+}
+
 $expected = 0
 $changed = 0
 foreach ($tool in @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode')) {
@@ -90,6 +129,7 @@ foreach ($tool in @('cursor', 'claude-code', 'codex', 'opencode', 'kilocode')) {
         $raw = $originalText.Replace("`r`n", "`n")
         $old = [regex]::Match($raw, '(?s)\n?<!-- itl:openspec-integration-v2:start -->.*?<!-- itl:openspec-integration-v2:end -->\n*')
         if ($old.Success) { $raw = $raw.Remove($old.Index, $old.Length) }
+        if ($phase -eq 'apply') { $raw = Update-ApplyBody -Text $raw -Path $file.FullName }
         $frontmatter = [regex]::Match($raw, '(?s)\A---\n.*?\n---\n')
         $overlay = Get-Overlay -Phase $phase
         if ($frontmatter.Success) {
