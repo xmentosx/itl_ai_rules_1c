@@ -257,6 +257,12 @@ Describe "Fork bootstrap policy" -Tag "Fast" {
             (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash | Should -Be $before
             $manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
             @($manifest.files.'CLAUDE.md'.PSObject.Properties.Name) | Should -Not -Contain "userModified"
+            # Claude Code loads the root rule files only through CLAUDE.md imports.
+            $entry = Get-Content -LiteralPath (Join-Path $projectRoot "CLAUDE.md") -Raw -Encoding UTF8
+            foreach ($import in @("@AGENTS.md", "@USER-RULES.md", "@memory.md", "@LLM-RULES.md")) {
+                $entry | Should -Match ([regex]::Escape($import))
+                Test-Path -LiteralPath (Join-Path $projectRoot $import.TrimStart('@')) -PathType Leaf | Should -BeTrue -Because $import
+            }
         } finally {
             Remove-Item -LiteralPath $testRoot -Recurse -Force -ErrorAction SilentlyContinue
         }

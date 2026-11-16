@@ -75,7 +75,7 @@ Apply `TOOL_SYNTAX` / `TOOL_CHECKER` (`content/rules/mcp-policy.md → Tool avai
 
    **Minimum internal review checklist.** These independent checks remain available when a validator is missing. They do not reproduce a routed standard or prove compliance with standards that were not retrieved through MCP; report that evidence gap and follow `content/rules/help-corpus-retrieval.md` for any required standard.
 
-   - **Quick-fix** — correctness and edge cases of the changed fragment; plus locks / transactions when the edit sits near transactional code. That is enough — do not run the full checklist on a 10-line fix.
+   - **Quick-fix** — the fragment review in `verification-policy.md → Quick-fix gate`; not the full checklist.
    - **Full-cycle** — the full list: style, readability, correctness, edge cases, security, concurrency / locks / transactions, BSL-LS compliance.
    - Always consider whether an external transaction already exists (e.g. an object-write transaction) before opening a new one.
    - Findings follow `verification-ai-evidence.md → Assess substantive findings` and `Confirm a correction`: a confirmed defect remains blocking until corrected and freshly confirmed; style noise does not start another loop. For AI timeouts/failed validation, use its policy-dependent continuation without duplicate execution.

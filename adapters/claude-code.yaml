@@ -83,4 +83,7 @@ mcp:
 
 entry:
   target: "CLAUDE.md"
-  template: "See @AGENTS.md for project instructions.\n"
+  # Claude Code imports only what CLAUDE.md names. The installer always
+  # places the three root rule files, and AGENTS.md ranks them above itself,
+  # so they are imported here instead of relying on a manual read each session.
+  template: "See @AGENTS.md for project instructions.\n\nProject rules that AGENTS.md ranks above itself:\n@USER-RULES.md\n@memory.md\n@LLM-RULES.md\n"
